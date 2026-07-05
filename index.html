@@ -269,7 +269,7 @@
     attribution: 'Esri, Maxar, Earthstar Geographics, GIS User Community', maxZoom:19
   }).addTo(map);
   const streetsLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors', maxZoom:24, subdomains:'abc'
+    attribution: '© OpenStreetMap contributors', maxZoom:22, subdomains:'abc'
   });
   document.getElementById('btnSat').addEventListener('click', ()=>{
     map.removeLayer(streetsLayer); map.addLayer(satLayer);
