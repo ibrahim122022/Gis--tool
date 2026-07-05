@@ -265,11 +265,11 @@
   const map = L.map('map', {zoomControl:false, center:[29.9792, 31.1342], zoom:16, worldCopyJump:true});
   L.control.zoom({position:'topleft'}).addTo(map);
 
-  const satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  const satLayer = L.tileLayer('https://www.google.cn/maps/vt?lyrs=s@189&gl=cn&x={col}&y={row}&z={level}', {
     attribution: 'Esri, Maxar, Earthstar Geographics, GIS User Community', maxZoom:19
   }).addTo(map);
   const streetsLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors', maxZoom:19, subdomains:'abc'
+    attribution: '© OpenStreetMap contributors', maxZoom:24, subdomains:'abc'
   });
   document.getElementById('btnSat').addEventListener('click', ()=>{
     map.removeLayer(streetsLayer); map.addLayer(satLayer);
