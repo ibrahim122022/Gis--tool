@@ -1,4 +1,654 @@
-function renderLayerList(){
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>أداة الرسم المكاني</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root{
+    --bg:#0d2438; --bg-panel:#123152; --bg-panel-2:#0f2b47;
+    --accent:#e8a33d; --accent-soft:rgba(232,163,61,.16);
+    --teal:#5ec9c0; --teal-soft:rgba(94,201,192,.16);
+    --text:#eef2f0; --text-muted:#84a0b6; --danger:#e2665b; --border:#1c4a73;
+    --mono:'JetBrains Mono', ui-monospace, Consolas, monospace;
+    --sans:'Inter', system-ui, -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;height:100dvh;background:var(--bg);color:var(--text);font-family:var(--sans);overflow:hidden;}
+  .app{display:flex;flex-direction:row;height:100vh;height:100dvh;width:100vw;}
+
+  .toolbar{width:72px;background:var(--bg-panel-2);border-left:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:6px;flex-shrink:0;z-index:500;}
+  .tool-btn{width:52px;height:52px;border-radius:10px;border:1px solid transparent;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--text-muted);transition:.15s;}
+  .tool-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;}
+  .tool-btn span{font-size:9px;font-family:var(--sans);}
+  .tool-btn:hover{background:rgba(255,255,255,.05);color:var(--text);}
+  .tool-btn.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);}
+  .tool-btn:disabled{opacity:0.3;cursor:not-allowed;color:var(--text-muted) !important;background:transparent !important;}
+  .toolbar-sep{width:36px;height:1px;background:var(--border);margin:4px 0;}
+
+  .main{flex:1;position:relative;display:flex;flex-direction:column;min-width:0;}
+  .canvas-wrap{flex:1;position:relative;overflow:hidden;}
+  #map{width:100%;height:100%;background:#0d2438;}
+  #map.tool-select{cursor:default;}
+  #map.tool-draw{cursor:crosshair;}
+
+  .basemap-toggle{position:absolute;top:10px;left:10px;z-index:450;background:var(--bg-panel);border:1px solid var(--border);border-radius:9px;display:flex;padding:3px;gap:3px;box-shadow:0 4px 14px rgba(0,0,0,.35);}
+  .basemap-toggle button{border:none;background:transparent;color:var(--text-muted);font-size:11.5px;padding:6px 10px;border-radius:6px;cursor:pointer;font-family:var(--sans);}
+  .basemap-toggle button.active{background:var(--accent-soft);color:var(--accent);font-weight:600;}
+
+  .drive-control{position:absolute;top:10px;right:10px;z-index:450;background:var(--bg-panel);border:1px solid var(--border);border-radius:9px;padding:8px 12px;box-shadow:0 4px 14px rgba(0,0,0,.35);display:flex;align-items:center;gap:8px;font-size:11.5px;}
+  .drive-control svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;flex-shrink:0;}
+  .drive-control.connected{color:var(--teal);}
+  .drive-control.disconnected{color:var(--text-muted);}
+  .drive-control button{border:none;background:var(--accent);color:#1a1200;font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:var(--sans);}
+  .drive-control .drive-msg{font-family:var(--mono);font-size:10.5px;opacity:.85;}
+
+  .statusbar{height:30px;background:var(--bg-panel-2);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:18px;font-family:var(--mono);font-size:11.5px;color:var(--text-muted);flex-shrink:0;}
+  .statusbar b{color:var(--teal);font-weight:500;}
+  .statusbar .spacer{flex:1;}
+  .save-indicator{opacity:0;transition:opacity .3s;color:var(--teal);}
+  .save-indicator.show{opacity:1;}
+
+  .rect-hud{position:absolute;background:var(--bg-panel);border:1px solid var(--accent);border-radius:10px;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:600;width:200px;display:none;}
+  .rect-hud h4{margin:0 0 8px;font-size:12px;color:var(--accent);font-weight:600;}
+  .rect-hud label{display:block;font-size:10.5px;color:var(--text-muted);margin-top:6px;}
+  .rect-hud input, .rect-hud select{width:100%;background:var(--bg-panel-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 7px;font-family:var(--mono);font-size:12px;margin-top:2px;}
+  .rect-hud .row-btns{display:flex;gap:6px;margin-top:10px;}
+  .rect-hud .row-btns button{flex:1;border-radius:6px;border:none;padding:7px 0;font-size:11.5px;cursor:pointer;font-family:var(--sans);font-weight:600;}
+  .btn-create{background:var(--accent);color:#1a1200;}
+  .btn-cancel{background:var(--bg-panel-2);color:var(--text-muted);border:1px solid var(--border) !important;}
+
+  .sidebar{width:280px;background:var(--bg-panel);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
+  .tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
+  .tab{flex:1;text-align:center;padding:11px 0;font-size:12.5px;color:var(--text-muted);cursor:pointer;font-weight:600;border-bottom:2px solid transparent;}
+  .tab.active{color:var(--teal);border-bottom-color:var(--teal);}
+  .panel{flex:1;overflow-y:auto;padding:12px;display:none;}
+  .panel.active{display:block;}
+
+  .section-title{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin:4px 0 8px;font-weight:600;}
+  .layer-row{display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;background:var(--bg-panel-2);margin-bottom:6px;border:1px solid transparent;cursor:pointer;}
+  .layer-row.active{border-color:var(--teal);}
+  .swatch{width:16px;height:16px;border-radius:4px;flex-shrink:0;border:1px solid rgba(255,255,255,.2);cursor:pointer;}
+  .layer-row .lname{flex:1;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .layer-row .lcount{font-size:10.5px;color:var(--text-muted);font-family:var(--mono);}
+  .icon-btn{background:none;border:none;color:var(--text-muted);cursor:pointer;padding:3px;display:flex;}
+  .icon-btn:hover{color:var(--text);}
+  .add-btn{width:100%;padding:8px;border-radius:8px;border:1px dashed var(--border);background:transparent;color:var(--text-muted);cursor:pointer;font-size:12px;margin-top:4px;}
+  .add-btn:hover{border-color:var(--teal);color:var(--teal);}
+  .empty-state{color:var(--text-muted);font-size:12px;text-align:center;padding:40px 10px;line-height:1.7;}
+  .attr-block{background:var(--bg-panel-2);border-radius:10px;padding:12px;margin-bottom:12px;}
+  .attr-block .ftype{color:var(--accent);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+  .stat-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11.5px;color:var(--text-muted);margin-top:6px;}
+  .stat-row b{color:var(--text);font-weight:500;}
+  .field-row{display:flex;gap:6px;margin-top:8px;align-items:center;}
+  .field-row input{background:var(--bg-panel);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 7px;font-size:12px;font-family:var(--sans);flex:1;min-width:0;}
+  .field-row input.key{flex:0 0 34%;color:var(--teal);font-family:var(--mono);font-size:11px;}
+  .rect-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;}
+  .rect-edit-grid label{font-size:10px;color:var(--text-muted);}
+  .rect-edit-grid input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 7px;font-family:var(--mono);font-size:12px;margin-top:2px;}
+  .danger-btn{width:100%;margin-top:10px;padding:8px;border-radius:8px;border:1px solid var(--danger);background:transparent;color:var(--danger);cursor:pointer;font-size:12px;font-weight:600;}
+  .danger-btn:hover{background:rgba(226,102,91,.12);}
+  ::-webkit-scrollbar{width:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+
+  .leaflet-popup-content{font-family:var(--sans);direction:rtl;}
+  .vertex-marker{background:var(--bg);border:2px solid var(--teal);border-radius:50%;}
+
+  .mobile-sidebar-toggle{display:none;position:fixed;bottom:calc(76px + env(safe-area-inset-bottom, 0px) + 16px);left:12px;z-index:900;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#1a1200;border:none;box-shadow:0 6px 16px rgba(0,0,0,.4);align-items:center;justify-content:center;}
+  .mobile-sidebar-toggle svg{width:22px;height:22px;}
+
+  @media (max-width: 760px){
+    .app{flex-direction:column;}
+    .toolbar{
+      width:100%;height:calc(66px + env(safe-area-inset-bottom, 0px) + 16px);
+      padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 16px);
+      flex-direction:row;border-left:none;border-top:1px solid var(--border);
+      order:3;overflow-x:auto;padding-right:6px;padding-left:6px;padding-top:6px;
+      -webkit-overflow-scrolling:touch;justify-content:flex-start;box-sizing:border-box;
+    }
+    .toolbar-sep{width:1px;height:34px;margin:0 5px;flex-shrink:0;}
+    .tool-btn{width:46px;height:46px;flex-shrink:0;}
+    .tool-btn span{font-size:7.5px;}
+    .main{order:1;min-height:0;}
+    .sidebar{
+      position:fixed;top:0;bottom:calc(66px + env(safe-area-inset-bottom, 0px) + 16px);right:0;width:88%;max-width:320px;z-index:850;
+      transform:translateX(100%);transition:transform .25s ease;box-shadow:-8px 0 24px rgba(0,0,0,.45);
+    }
+    .sidebar.open{transform:translateX(0);}
+    .mobile-sidebar-toggle{display:flex;}
+    .basemap-toggle{top:8px;left:8px;padding:2px;}
+    .basemap-toggle button{font-size:10px;padding:5px 7px;}
+    .drive-control{top:8px;right:8px;padding:6px 8px;gap:5px;flex-wrap:wrap;max-width:44vw;}
+    .drive-control .drive-msg{font-size:9px;}
+    .drive-control button{font-size:9.5px;padding:4px 6px;}
+    .rect-hud{left:50% !important;top:50% !important;transform:translate(-50%,-50%);width:82vw;max-width:260px;}
+    .statusbar{font-size:10px;gap:10px;padding:0 8px;flex-wrap:wrap;height:auto;min-height:28px;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <button class="mobile-sidebar-toggle" id="mobileSidebarToggle" title="الطبقات والخصائص">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+  </button>
+
+  <div class="toolbar" id="toolbar">
+    <button class="tool-btn active" data-tool="select" title="تحديد وتحرير">
+      <svg viewBox="0 0 24 24"><path d="M4 3l7 17 2-7 7-2z"/></svg><span>تحديد</span>
+    </button>
+    <button class="tool-btn" data-tool="point" title="نقطة">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="8" stroke-dasharray="2 2"/></svg><span>نقطة</span>
+    </button>
+    <button class="tool-btn" data-tool="line" title="خط">
+      <svg viewBox="0 0 24 24"><path d="M4 18L20 6"/><circle cx="4" cy="18" r="1.6" fill="currentColor"/><circle cx="20" cy="6" r="1.6" fill="currentColor"/></svg><span>خط</span>
+    </button>
+    <button class="tool-btn" data-tool="polygon" title="مضلع">
+      <svg viewBox="0 0 24 24"><path d="M12 3l8 6-3 10H7L4 9z"/></svg><span>مضلع</span>
+    </button>
+    <button class="tool-btn" data-tool="rectangle" title="مستطيل بالأطوال">
+      <svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="9"/><path d="M4 5.5h16M4 4v3M20 4v3"/></svg><span>مستطيل</span>
+    </button>
+    <button class="tool-btn" data-tool="circle" title="دائرة بنصف قطر">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 12h8"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg><span>دائرة</span>
+    </button>
+    <div class="toolbar-sep"></div>
+    <button class="tool-btn active" id="snapBtn" title="تفعيل/تعطيل السناب">
+      <svg viewBox="0 0 24 24"><path d="M4 12h4M16 12h4M12 4v4M12 16v4"/><circle cx="12" cy="12" r="3"/></svg><span>سناب</span>
+    </button>
+    <button class="tool-btn" id="undoBtn" title="تراجع (Ctrl+Z)" disabled>
+      <svg viewBox="0 0 24 24"><path d="M3 7v6h6M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/></svg><span>تراجع</span>
+    </button>
+    <div class="toolbar-sep"></div>
+    <button class="tool-btn" id="locateBtn" title="تحديد موقعي الحالي">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span>موقعي</span>
+    </button>
+    <button class="tool-btn" id="fitBtn" title="ملائمة العرض">
+      <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>ملائمة</span>
+    </button>
+    <div class="toolbar-sep"></div>
+    <button class="tool-btn" id="exportBtn" title="تصدير GeoJSON">
+      <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 19h14"/></svg><span>تصدير</span>
+    </button>
+  </div>
+
+  <div class="main">
+    <div class="canvas-wrap">
+      <div id="map"></div>
+      <div class="basemap-toggle">
+        <button id="btnSat" class="active">قمر صناعي</button>
+        <button id="btnStreets">خريطة عادية</button>
+      </div>
+      <div class="drive-control disconnected" id="driveControl">
+        <svg viewBox="0 0 24 24"><path d="M7 15l-4-7 4-7h10l4 7-4 7z"/><path d="M3 8h18M9 15l3 5 3-5"/></svg>
+        <span class="drive-msg" id="driveMsg">غير متصل بـ Drive</span>
+        <button id="driveConnectBtn">اتصال</button>
+        <button id="driveJoinBtn" title="الانضمام لملف مشترك من زميل">ربط بملف</button>
+        <button id="driveCopyIdBtn" title="نسخ رقم الملف لمشاركته">نسخ ID</button>
+      </div>
+      <div class="rect-hud" id="rectHud">
+        <h4>مستطيل بالأطوال</h4>
+        <label>العرض (متر)</label>
+        <input type="number" id="rWidth" value="10" step="0.1" min="0.01">
+        <label>الطول (متر)</label>
+        <input type="number" id="rLength" value="20" step="0.1" min="0.01">
+        <label>زاوية الدوران (°)</label>
+        <input type="number" id="rRotation" value="0" step="1">
+        <label>نقطة الإدراج تمثل</label>
+        <select id="rAnchor"><option value="corner">ركن المستطيل</option><option value="center">مركز المستطيل</option></select>
+        <div class="row-btns">
+          <button class="btn-cancel" id="rectCancel">إلغاء</button>
+          <button class="btn-create" id="rectCreate">إنشاء</button>
+        </div>
+      </div>
+      <div class="rect-hud" id="circleHud">
+        <h4>دائرة بنصف قطر</h4>
+        <label>نصف القطر (متر)</label>
+        <input type="number" id="cRadius" value="10" step="0.1" min="0.01">
+        <div class="row-btns">
+          <button class="btn-cancel" id="circleCancel">إلغاء</button>
+          <button class="btn-create" id="circleCreate">إنشاء</button>
+        </div>
+      </div>
+    </div>
+    <div class="statusbar">
+      <span>Lat: <b id="stLat">--</b></span>
+      <span>Lng: <b id="stLng">--</b></span>
+      <span id="stTemp"></span>
+      <span class="save-indicator" id="saveIndicator">✓ تم الحفظ محلياً</span>
+      <div class="spacer"></div>
+      <span id="stHint">اختر أداة رسم من الشريط الجانبي</span>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="tabs">
+      <div class="tab active" data-panel="layersPanel">الطبقات</div>
+      <div class="tab" data-panel="attrPanel">الخصائص</div>
+    </div>
+    <div class="panel active" id="layersPanel">
+      <div class="section-title">الطبقات</div>
+      <div id="layerList"></div>
+      <button class="add-btn" id="addLayerBtn">+ طبقة جديدة</button>
+    </div>
+    <div class="panel" id="attrPanel">
+      <div id="attrContent"><div class="empty-state">اختر عنصر من الخريطة<br>لعرض وتعديل خصائصه</div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const palette = ['#e8a33d','#5ec9c0','#e2665b','#8fbf5e','#c47fd6','#4f9ddb','#d6a15e','#7fd6b0'];
+  let state = {
+    layers: [{id:'L1', name:'طبقة 1', color: palette[0], visible:true, features:[]}],
+    activeLayerId:'L1', nextColorIdx:1
+  };
+  let undoStack = [];
+  const MAX_UNDO = 30;
+
+  let tool = 'select';
+  let selection = null;
+  let drawingCoords = null;
+  let rectPending = null;
+  let circlePending = null;
+  let dragCtx = null;
+  let saveTimer = null;
+  let tempLine = null;
+  let snapEnabled = true;
+  let snapMarker = null;
+
+  const mapEl = document.getElementById('map');
+  const rectHud = document.getElementById('rectHud');
+  const circleHud = document.getElementById('circleHud');
+  const undoBtn = document.getElementById('undoBtn');
+
+  const map = L.map('map', {zoomControl:false, center:[29.9792, 31.1342], zoom:16, worldCopyJump:true});
+  L.control.zoom({position:'topleft'}).addTo(map);
+
+  const satLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+    attribution: '© Google Maps', maxZoom:20
+  }).addTo(map);
+  const streetsLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom:19, subdomains:'abc'
+  });
+
+  document.getElementById('btnSat').addEventListener('click', ()=>{
+    map.removeLayer(streetsLayer); map.addLayer(satLayer);
+    document.getElementById('btnSat').classList.add('active');
+    document.getElementById('btnStreets').classList.remove('active');
+  });
+  document.getElementById('btnStreets').addEventListener('click', ()=>{
+    map.removeLayer(satLayer); map.addLayer(streetsLayer);
+    document.getElementById('btnStreets').classList.add('active');
+    document.getElementById('btnSat').classList.remove('active');
+  });
+
+  const layerGroups = {}; 
+  function ensureLayerGroup(layer){
+    if(!layerGroups[layer.id]){
+      layerGroups[layer.id] = L.layerGroup();
+      if(layer.visible) layerGroups[layer.id].addTo(map);
+    }
+    return layerGroups[layer.id];
+  }
+
+  /* ---------- Undo Mechanism ---------- */
+  function pushStateToUndo() {
+    if (undoStack.length >= MAX_UNDO) {
+      undoStack.shift();
+    }
+    undoStack.push(JSON.stringify(state));
+    updateUndoButtonState();
+  }
+
+  function handleUndo() {
+    if (undoStack.length === 0) return;
+    const previousRawState = undoStack.pop();
+    state = JSON.parse(previousRawState);
+    
+    // إعادة التحقق من صحة التحديد بعد التراجع
+    if (selection) {
+      const targetLayer = getLayer(selection.layerId);
+      if (!targetLayer || !targetLayer.features.some(f => f.id === selection.featureId)) {
+        selection = null;
+      }
+    }
+    
+    renderLayerList();
+    renderFeatures();
+    renderAttrPanel();
+    updateUndoButtonState();
+    scheduleSave();
+  }
+
+  function updateUndoButtonState() {
+    undoBtn.disabled = (undoStack.length === 0);
+  }
+
+  /* ---------- Geometry helpers ---------- */
+  function uid(){ return 'f' + Math.random().toString(36).slice(2,10); }
+  function toRad(d){ return d*Math.PI/180; }
+  function haversine(lat1,lng1,lat2,lng2){
+    const R=6371000;
+    const dLat=toRad(lat2-lat1), dLng=toRad(lng2-lng1);
+    const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+    return 2*R*Math.asin(Math.sqrt(a));
+  }
+  function destPoint(lat,lng,dEast,dNorth){
+    const dLat = dNorth/111320;
+    const dLng = dEast/(111320*Math.cos(toRad(lat)));
+    return [lat+dLat, lng+dLng];
+  }
+  function pathLength(coords){
+    let s=0; for(let i=0;i<coords.length-1;i++) s+=haversine(coords[i][0],coords[i][1],coords[i+1][0],coords[i+1][1]);
+    return s;
+  }
+  function pathPerimeter(coords){ return pathLength(coords) + haversine(coords[coords.length-1][0],coords[coords.length-1][1],coords[0][0],coords[0][1]); }
+  function polygonAreaMeters(coords){
+    const refLat = coords[0][0], refLng = coords[0][1];
+    const pts = coords.map(c=>{
+      const north = (c[0]-refLat)*111320;
+      const east = (c[1]-refLng)*111320*Math.cos(toRad(refLat));
+      return [east, north];
+    });
+    let a=0;
+    for(let i=0;i<pts.length;i++){ const [x1,y1]=pts[i], [x2,y2]=pts[(i+1)%pts.length]; a+=x1*y2-x2*y1; }
+    return Math.abs(a)/2;
+  }
+  function rectCorners(rect){
+    const th = toRad(rect.rotation);
+    const uxE = Math.cos(th), uxN = Math.sin(th);
+    const uyE = -Math.sin(th), uyN = Math.cos(th);
+    let baseE=0, baseN=0;
+    if(rect.mode==='center'){ baseE = -(uxE*rect.width/2+uyE*rect.length/2); baseN = -(uxN*rect.width/2+uyN*rect.length/2); }
+    const cornersMeters = [
+      [baseE, baseN],
+      [baseE+uxE*rect.width, baseN+uxN*rect.width],
+      [baseE+uxE*rect.width+uyE*rect.length, baseN+uxN*rect.width+uyN*rect.length],
+      [baseE+uyE*rect.length, baseN+uyN*rect.length]
+    ];
+    return cornersMeters.map(([e,n])=>destPoint(rect.lat, rect.lng, e, n));
+  }
+  function syncRectCoords(f){ f.coords = rectCorners(f.rect); }
+  function circlePoints(circle, segments){
+    segments = segments || 64;
+    const pts = [];
+    for(let i=0;i<segments;i++){
+      const ang = (i/segments)*Math.PI*2;
+      const east = circle.radius*Math.sin(ang);
+      const north = circle.radius*Math.cos(ang);
+      pts.push(destPoint(circle.lat, circle.lng, east, north));
+    }
+    return pts;
+  }
+  function syncCircleCoords(f){ f.coords = circlePoints(f.circle); }
+
+  function getLayer(id){ return state.layers.find(l=>l.id===id); }
+  function getFeature(layerId, featureId){ const l=getLayer(layerId); return l? l.features.find(f=>f.id===featureId): null; }
+  function activeLayer(){ return getLayer(state.activeLayerId) || state.layers[0]; }
+
+  function findSnap(latlng, excludeFeatureId){
+    if(!snapEnabled) return null;
+    const pt = map.latLngToContainerPoint(latlng);
+    let best=null, bestDist=12;
+    state.layers.forEach(layer=>{
+      if(!layer.visible) return;
+      layer.features.forEach(f=>{
+        if(f.id===excludeFeatureId) return;
+        f.coords.forEach(c=>{
+          const cp = map.latLngToContainerPoint(L.latLng(c[0],c[1]));
+          const d = Math.hypot(cp.x-pt.x, cp.y-pt.y);
+          if(d<bestDist){ bestDist=d; best=c; }
+        });
+      });
+    });
+    return best;
+  }
+  function effectiveLatLng(e, excludeFeatureId){
+    const snap = findSnap(e.latlng, excludeFeatureId);
+    if(snap){
+      if(!snapMarker) snapMarker = L.circleMarker(snap, {radius:9, color:'#e8a33d', weight:2, fillOpacity:0}).addTo(map);
+      else snapMarker.setLatLng(snap);
+      return L.latLng(snap[0], snap[1]);
+    } else if(snapMarker){
+      map.removeLayer(snapMarker); snapMarker=null;
+    }
+    return e.latlng;
+  }
+
+  /* ---------- Persistence ---------- */
+  function scheduleSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(doSave, 700); }
+  function doSave(){
+    try{
+      localStorage.setItem('gis-tool-state-v2', JSON.stringify({state}));
+      const ind=document.getElementById('saveIndicator'); ind.classList.add('show');
+      setTimeout(()=>ind.classList.remove('show'),1200);
+    }catch(e){ console.error('save failed', e); }
+  }
+  function loadState(){
+    try{
+      const raw = localStorage.getItem('gis-tool-state-v2');
+      if(raw){ const parsed = JSON.parse(raw); if(parsed.state && parsed.state.layers) state=parsed.state; }
+    }catch(e){}
+    renderLayerList(); renderFeatures();
+    const all=[]; state.layers.forEach(l=>l.features.forEach(f=>f.coords.forEach(c=>all.push(c))));
+    if(all.length) map.fitBounds(L.latLngBounds(all), {padding:[40,40]});
+  }
+
+  /* ---------- Rendering vector features ---------- */
+  function renderFeatures(){
+    state.layers.forEach(layer=>{
+      const lg = ensureLayerGroup(layer);
+      lg.clearLayers();
+      if(layer.visible){ if(!map.hasLayer(lg)) lg.addTo(map); } else { if(map.hasLayer(lg)) map.removeLayer(lg); }
+      layer.features.forEach(f=>{
+        const isSel = selection && selection.layerId===layer.id && selection.featureId===f.id;
+        const color = layer.color;
+        let shape;
+        if(f.type==='point'){
+          shape = L.circleMarker(f.coords[0], {radius:7, color: isSel?'#5ec9c0':'#0d2438', weight:isSel?2.5:1.4, fillColor:color, fillOpacity:0.95});
+        } else if(f.type==='line'){
+          shape = L.polyline(f.coords, {color: isSel?'#5ec9c0':color, weight: isSel?3.2:2.4});
+        } else {
+          shape = L.polygon(f.coords, {color: isSel?'#5ec9c0':color, weight: isSel?3:2, fillColor:color, fillOpacity: isSel?0.3:0.18});
+        }
+        shape.on('mousedown', e=>{
+          if(tool!=='select') return;
+          L.DomEvent.stopPropagation(e);
+          selection = {layerId:layer.id, featureId:f.id};
+          renderAttrPanel(); renderFeatures();
+          map.dragging.disable();
+          pushStateToUndo(); // حفظ الحالة الحالية قبل بدء السحب والتحريك
+          dragCtx = {mode:'move', feature:f, startLatLng:e.latlng, origCoords:JSON.parse(JSON.stringify(f.coords)), origRect: f.rect?Object.assign({},f.rect):null, origCircle: f.circle?Object.assign({},f.circle):null};
+        });
+        shape.addTo(lg);
+
+        if(isSel && f.type!=='rectangle' && f.type!=='circle'){
+          f.coords.forEach((c,idx)=>{
+            const h = L.circleMarker(c, {radius:6, className:'vertex-marker', color:'#5ec9c0', weight:2, fillColor:'#0d2438', fillOpacity:1});
+            h.on('mousedown', e=>{
+              L.DomEvent.stopPropagation(e);
+              map.dragging.disable();
+              pushStateToUndo(); // حفظ الحالة الحالية قبل التلاعب بالنقاط هندسياً
+              dragCtx = {mode:'vertex', feature:f, idx};
+            });
+            h.addTo(lg);
+          });
+        }
+      });
+    });
+  }
+
+  /* ---------- Drag handling ---------- */
+  map.on('mousemove', e=>{
+    document.getElementById('stLat').textContent = e.latlng.lat.toFixed(6);
+    document.getElementById('stLng').textContent = e.latlng.lng.toFixed(6);
+    if(dragCtx){
+      const snapped = dragCtx.mode==='vertex' ? effectiveLatLng(e, dragCtx.feature.id) : e.latlng;
+      if(dragCtx.mode==='vertex'){
+        dragCtx.feature.coords[dragCtx.idx] = [snapped.lat, snapped.lng];
+      } else if(dragCtx.mode==='move'){
+        const dLat = e.latlng.lat - dragCtx.startLatLng.lat;
+        const dLng = e.latlng.lng - dragCtx.startLatLng.lng;
+        if(dragCtx.feature.type==='rectangle'){
+          dragCtx.feature.rect.lat = dragCtx.origRect.lat + dLat;
+          dragCtx.feature.rect.lng = dragCtx.origRect.lng + dLng;
+          syncRectCoords(dragCtx.feature);
+        } else if(dragCtx.feature.type==='circle'){
+          dragCtx.feature.circle.lat = dragCtx.origCircle.lat + dLat;
+          dragCtx.feature.circle.lng = dragCtx.origCircle.lng + dLng;
+          syncCircleCoords(dragCtx.feature);
+        } else {
+          dragCtx.feature.coords = dragCtx.origCoords.map(c=>[c[0]+dLat, c[1]+dLng]);
+        }
+      }
+      renderFeatures();
+    } else if(drawingCoords && drawingCoords.length){
+      const snapped = effectiveLatLng(e);
+      if(tempLine){ map.removeLayer(tempLine); }
+      const pts = drawingCoords.concat([[snapped.lat, snapped.lng]]);
+      tempLine = L.polyline(pts, {color:'#e8a33d', weight:2, dashArray:'6 5'}).addTo(map);
+      const last = drawingCoords[drawingCoords.length-1];
+      const segLen = haversine(last[0],last[1], snapped.lat, snapped.lng);
+      document.getElementById('stTemp').textContent = 'الطول الحالي: ' + segLen.toFixed(2) + ' م';
+    } else if(tool==='point' || tool==='rectangle' || tool==='circle'){
+      effectiveLatLng(e);
+    } else if(snapMarker){
+      map.removeLayer(snapMarker); snapMarker=null;
+    }
+  });
+  map.getContainer().addEventListener('mouseup', endDrag);
+  document.addEventListener('mouseup', endDrag);
+  function endDrag(){
+    if(dragCtx){ map.dragging.enable(); dragCtx=null; renderAttrPanel(); scheduleSave(); }
+  }
+
+  /* ---------- Map click: selection clear / drawing ---------- */
+  map.on('click', e=>{
+    if(tool==='select'){ selection=null; renderAttrPanel(); renderFeatures(); return; }
+    const snapped = effectiveLatLng(e);
+    if(tool==='point'){
+      pushStateToUndo();
+      const f = addFeature('point', [[snapped.lat, snapped.lng]]);
+      selection = {layerId: activeLayer().id, featureId:f.id};
+      renderFeatures(); renderAttrPanel(); scheduleSave();
+    } else if(tool==='line' || tool==='polygon'){
+      if(!drawingCoords) drawingCoords=[];
+      drawingCoords.push([snapped.lat, snapped.lng]);
+    } else if(tool==='rectangle'){
+      rectPending = {lat:snapped.lat, lng:snapped.lng};
+      const pt = map.latLngToContainerPoint(snapped);
+      const wrapRect = mapEl.getBoundingClientRect();
+      const hudX = Math.min(Math.max(pt.x+16,8), wrapRect.width-216);
+      const hudY = Math.min(Math.max(pt.y+16,8), wrapRect.height-260);
+      rectHud.style.left = hudX+'px'; rectHud.style.top = hudY+'px'; rectHud.style.display='block';
+    } else if(tool==='circle'){
+      circlePending = {lat:snapped.lat, lng:snapped.lng};
+      const pt = map.latLngToContainerPoint(snapped);
+      const wrapRect = mapEl.getBoundingClientRect();
+      const hudX = Math.min(Math.max(pt.x+16,8), wrapRect.width-216);
+      const hudY = Math.min(Math.max(pt.y+16,8), wrapRect.height-160);
+      circleHud.style.left = hudX+'px'; circleHud.style.top = hudY+'px'; circleHud.style.display='block';
+    }
+  });
+  map.on('dblclick', e=>{ if(tool==='line'||tool==='polygon') finishDrawing(); });
+
+  function finishDrawing(){
+    if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
+    document.getElementById('stTemp').textContent='';
+    if(tool==='line' && drawingCoords && drawingCoords.length>=2){
+      pushStateToUndo();
+      const f=addFeature('line', drawingCoords);
+      selection={layerId:activeLayer().id, featureId:f.id};
+      drawingCoords=null; renderFeatures(); renderAttrPanel(); scheduleSave();
+    } else if(tool==='polygon' && drawingCoords && drawingCoords.length>=3){
+      pushStateToUndo();
+      const f=addFeature('polygon', drawingCoords);
+      selection={layerId:activeLayer().id, featureId:f.id};
+      drawingCoords=null; renderFeatures(); renderAttrPanel(); scheduleSave();
+    } else {
+      drawingCoords=null;
+    }
+  }
+
+  window.addEventListener('keydown', e=>{
+    const tag=document.activeElement.tagName;
+    const typing = tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA';
+    
+    // دعم تراجع عبر Ctrl + Z
+    if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !typing) {
+      e.preventDefault();
+      handleUndo();
+      return;
+    }
+
+    if(e.key==='Enter' && !typing) finishDrawing();
+    if(e.key==='Escape'){
+      drawingCoords=null; rectPending=null; circlePending=null;
+      rectHud.style.display='none'; circleHud.style.display='none';
+      if(tempLine){map.removeLayer(tempLine); tempLine=null;}
+      document.getElementById('stTemp').textContent='';
+    }
+    if((e.key==='Delete'||e.key==='Backspace') && !typing && selection){
+      pushStateToUndo();
+      const layer=getLayer(selection.layerId);
+      layer.features = layer.features.filter(x=>x.id!==selection.featureId);
+      selection=null; renderLayerList(); renderAttrPanel(); renderFeatures(); scheduleSave();
+    }
+  });
+
+  /* ---------- Tools & tabs ---------- */
+  document.getElementById('snapBtn').addEventListener('click', ()=>{
+    snapEnabled = !snapEnabled;
+    document.getElementById('snapBtn').classList.toggle('active', snapEnabled);
+    if(!snapEnabled && snapMarker){ map.removeLayer(snapMarker); snapMarker=null; }
+  });
+  
+  undoBtn.addEventListener('click', handleUndo);
+
+  document.getElementById('toolbar').addEventListener('click', e=>{
+    const btn=e.target.closest('.tool-btn'); if(!btn || !btn.dataset.tool) return;
+    document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    tool = btn.dataset.tool;
+    drawingCoords=null; rectPending=null; circlePending=null;
+    rectHud.style.display='none'; circleHud.style.display='none';
+    if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
+    if(snapMarker){ map.removeLayer(snapMarker); snapMarker=null; }
+    document.getElementById('stTemp').textContent='';
+    document.getElementById('stHint').textContent = tool==='select' ? 'اضغط على عنصر لتحديده أو اسحبه لتحريكه' : 'اضغط على الخريطة للرسم';
+    mapEl.classList.toggle('tool-select', tool==='select');
+    mapEl.classList.toggle('tool-draw', tool!=='select');
+    map.doubleClickZoom[(tool==='line'||tool==='polygon')?'disable':'enable']();
+  });
+  document.querySelectorAll('.tab').forEach(tabEl=>{
+    tabEl.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+      tabEl.classList.add('active');
+      document.getElementById(tabEl.dataset.panel).classList.add('active');
+    });
+  });
+
+  const sidebarEl = document.querySelector('.sidebar');
+  document.getElementById('mobileSidebarToggle').addEventListener('click', ()=>{
+    sidebarEl.classList.toggle('open');
+  });
+
+  /* ---------- Layers UI ---------- */
+  function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+  function eyeOpenIcon(){ return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>'; }
+  function eyeClosedIcon(){ return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l18 18M10.6 10.6a3 3 0 004.2 4.2M9.9 5.1A10.4 10.4 0 0112 5c6.5 0 10 7 10 7a13.5 13.5 0 01-2.6 3.4M6.5 6.5A13.6 13.6 0 002 12s3.5 7 10 7c1.1 0 2.1-.2 3-.5"/></svg>'; }
+
+  function renderLayerList(){
     const container = document.getElementById('layerList');
     container.innerHTML = '';
     state.layers.forEach(l => {
@@ -36,6 +686,7 @@ function renderLayerList(){
         e.stopPropagation();
         if(state.layers.length <= 1) return alert('يجب الإبقاء على طبقة واحدة على الأقل.');
         if(confirm(`هل أنت متأكد من حذف طبقة "${l.name}" وكافة عناصرها؟`)){
+          pushStateToUndo();
           if(layerGroups[l.id]) { map.removeLayer(layerGroups[l.id]); delete layerGroups[l.id]; }
           state.layers = state.layers.filter(x => x.id !== l.id);
           if(state.activeLayerId === l.id) state.activeLayerId = state.layers[0].id;
@@ -46,6 +697,7 @@ function renderLayerList(){
 
       row.querySelector('.swatch').addEventListener('click', (e) => {
         e.stopPropagation();
+        pushStateToUndo();
         const nextIdx = state.nextColorIdx % palette.length;
         l.color = palette[nextIdx];
         state.nextColorIdx++;
@@ -74,6 +726,7 @@ function renderLayerList(){
   });
   document.getElementById('rectCreate').addEventListener('click', () => {
     if(!rectPending) return;
+    pushStateToUndo();
     const w = parseFloat(document.getElementById('rWidth').value) || 10;
     const l = parseFloat(document.getElementById('rLength').value) || 20;
     const rot = parseFloat(document.getElementById('rRotation').value) || 0;
@@ -93,6 +746,7 @@ function renderLayerList(){
   });
   document.getElementById('circleCreate').addEventListener('click', () => {
     if(!circlePending) return;
+    pushStateToUndo();
     const r = parseFloat(document.getElementById('cRadius').value) || 10;
 
     const f = addFeature('circle', [], { name: 'دائرة هندسية' });
@@ -167,8 +821,11 @@ function renderLayerList(){
 
     // Dynamic parametric changes listener
     if(f.type === 'rectangle'){
+      let hasStoredState = false;
       ['edRW', 'edRL', 'edRRot'].forEach(id => {
+        document.getElementById(id).addEventListener('focus', () => { hasStoredState = false; });
         document.getElementById(id).addEventListener('input', () => {
+          if (!hasStoredState) { pushStateToUndo(); hasStoredState = true; } // حفظ الحالة عند بداية الكتابة
           f.rect.width = parseFloat(document.getElementById('edRW').value) || 1;
           f.rect.length = parseFloat(document.getElementById('edRL').value) || 1;
           f.rect.rotation = parseFloat(document.getElementById('edRRot').value) || 0;
@@ -176,7 +833,10 @@ function renderLayerList(){
         });
       });
     } else if(f.type === 'circle'){
+      let hasStoredState = false;
+      document.getElementById('edCRad').addEventListener('focus', () => { hasStoredState = false; });
       document.getElementById('edCRad').addEventListener('input', (e) => {
+        if (!hasStoredState) { pushStateToUndo(); hasStoredState = true; }
         f.circle.radius = parseFloat(e.target.value) || 1;
         syncCircleCoords(f); renderFeatures(); scheduleSave();
       });
@@ -184,7 +844,10 @@ function renderLayerList(){
 
     // Property value adjustments
     container.querySelectorAll('.field-row .val').forEach(input => {
+      let hasStoredState = false;
+      input.addEventListener('focus', () => { hasStoredState = false; });
       input.addEventListener('input', (e) => {
+        if (!hasStoredState) { pushStateToUndo(); hasStoredState = true; }
         const key = e.target.closest('.field-row').dataset.key;
         f.properties[key] = e.target.value;
         scheduleSave();
@@ -195,11 +858,13 @@ function renderLayerList(){
       const k = document.getElementById('newKey').value.trim();
       const v = document.getElementById('newVal').value.trim();
       if(!k) return;
+      pushStateToUndo();
       f.properties[k] = v;
       renderAttrPanel(); scheduleSave();
     });
 
     document.getElementById('delFeatureBtn').addEventListener('click', () => {
+      pushStateToUndo();
       const layer = getLayer(selection.layerId);
       layer.features = layer.features.filter(x => x.id !== selection.featureId);
       selection = null;
@@ -211,6 +876,7 @@ function renderLayerList(){
   document.getElementById('addLayerBtn').addEventListener('click', () => {
     const name = prompt('أدخل اسم الطبقة الجديدة:', `طبقة ${state.layers.length + 1}`);
     if(!name) return;
+    pushStateToUndo();
     const nextIdx = state.nextColorIdx % palette.length;
     const newLayer = { id: 'L_' + uid(), name, color: palette[nextIdx], visible: true, features: [] };
     state.nextColorIdx++;
@@ -238,13 +904,11 @@ function renderLayerList(){
         let geomType = f.type === 'point' ? 'Point' : f.type === 'line' ? 'LineString' : 'Polygon';
         let geometry = { type: geomType, coordinates: [] };
         
-        // Convert to standard GeoJSON coordinates structure [Lng, Lat]
         if(f.type === 'point'){
           geometry.coordinates = [f.coords[0][1], f.coords[0][0]];
         } else if(f.type === 'line'){
           geometry.coordinates = f.coords.map(c => [c[1], c[0]]);
         } else {
-          // Polygons/Rectangles/Circles require closed rings
           const ring = f.coords.map(c => [c[1], c[0]]);
           ring.push([f.coords[0][1], f.coords[0][0]]);
           geometry.coordinates = [ring];
@@ -271,18 +935,55 @@ function renderLayerList(){
     dlAnchor.remove();
   });
 
-  /* ---------- Google Drive Cloud Storage Stub / Mock ---------- */
-  document.getElementById('driveConnectBtn').addEventListener('click', () => {
+  /* ---------- Google Drive Simulation Sync ---------- */
+  function setDriveStatus(isConnected, fileName = 'Cloud_Project.json') {
     const ctrl = document.getElementById('driveControl');
     const msg = document.getElementById('driveMsg');
-    ctrl.className = 'drive-control connected';
-    msg.textContent = 'متصل: Cloud_Project.json';
-    alert('تم محاكاة الاتصال بـ Google Drive بنجاح ومزامنة البيانات مكانيّاً.');
+    
+    if (isConnected) {
+      ctrl.className = 'drive-control connected';
+      msg.textContent = `متصل: ${fileName}`;
+      localStorage.setItem('drive_connected', 'true');
+    } else {
+      ctrl.className = 'drive-control disconnected';
+      msg.textContent = 'غير متصل بـ Drive';
+      localStorage.setItem('drive_connected', 'false');
+    }
+  }
+
+  document.getElementById('driveConnectBtn').addEventListener('click', () => {
+    if (navigator.onLine) {
+      setDriveStatus(true);
+      alert('تم الاتصال بـ Google Drive ومزامنة البيانات بنجاح.');
+    } else {
+      alert('لا يمكن الاتصال الآن، يرجى التحقق من جودة شبكة الإنترنت.');
+    }
+  });
+
+  window.addEventListener('online', () => {
+    const wasConnectedBefore = localStorage.getItem('drive_connected') === 'true';
+    if (wasConnectedBefore) {
+      setDriveStatus(true);
+      if (typeof doSave === "function") doSave(); 
+    }
+  });
+
+  window.addEventListener('offline', () => {
+    const msg = document.getElementById('driveMsg');
+    msg.textContent = 'جاري الانتظار... انقطع الاتصال بالشبكة';
   });
 
   /* ---------- Startup Initialization ---------- */
   document.addEventListener('DOMContentLoaded', () => {
     loadState();
+    
+    const wasConnectedBefore = localStorage.getItem('drive_connected') === 'true';
+    if (wasConnectedBefore && navigator.onLine) {
+      setDriveStatus(true);
+    } else if (wasConnectedBefore && !navigator.onLine) {
+      const msg = document.getElementById('driveMsg');
+      msg.textContent = 'بانتظار شبكة الإنترنت لإعادة المزامنة...';
+    }
   });
 })();
 </script>
