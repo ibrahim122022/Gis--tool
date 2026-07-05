@@ -182,7 +182,7 @@
       <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>ملائمة</span>
     </button>
     <div class="toolbar-sep"></div>
-    <button class="tool-btn" id="exportBtn" title="تصدر GeoJSON">
+    <button class="tool-btn" id="exportBtn" title="تصدير GeoJSON">
       <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 19h14"/></svg><span>تصدير</span>
     </button>
   </div>
@@ -436,28 +436,6 @@
     if(all.length) map.fitBounds(L.latLngBounds(all), {padding:[40,40]});
   }
 
-  /* دالة مساعدة للحصول على موقع اللمس بشكل صحيح على الموبايل */
-  function getEventLatLng(e) {
-    if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches.length) {
-      const touch = e.originalEvent.touches[0];
-      const point = map.mouseEventToContainerPoint({ clientX: touch.clientX, clientY: touch.clientY });
-      return map.containerPointToLatLng(point);
-    }
-    return e.latlng;
-  }
-
-  /* دالة لبدء عملية السحب والتحكم - تدعم اللمس والماوس */
-  function setupDragHandlers(marker, setupCtxFn) {
-    const startHandler = (e) => {
-      L.DomEvent.stopPropagation(e);
-      map.dragging.disable(); // تعطيل حركة الخريطة فوراً
-      const startLngLat = getEventLatLng(e);
-      dragCtx = setupCtxFn(startLngLat, e);
-    };
-    marker.on('mousedown', startHandler);
-    marker.on('touchstart', startHandler);
-  }
-
   /* ---------- Rendering vector features ---------- */
   function renderFeatures(){
     state.layers.forEach(layer=>{
@@ -476,55 +454,59 @@
           shape = L.polygon(f.coords, {color: isSel?'#5ec9c0':color, weight: isSel?3:2, fillColor:color, fillOpacity: isSel?0.3:0.18});
         }
         
-        const shapeStartDrag = (e) => {
+        shape.on('mousedown', e=>{
           if(tool!=='select') return;
           L.DomEvent.stopPropagation(e);
           selection = {layerId:layer.id, featureId:f.id};
           renderAttrPanel(); renderFeatures();
           map.dragging.disable();
-          const startLngLat = getEventLatLng(e);
           dragCtx = {
-            mode:'move', feature:f, startLatLng:startLngLat, 
+            mode:'move', feature:f, startLatLng:e.latlng, 
             origCoords:JSON.parse(JSON.stringify(f.coords)), 
             origRect: f.rect?Object.assign({},f.rect):null, 
             origCircle: f.circle?Object.assign({},f.circle):null
           };
-        };
-        shape.on('mousedown', shapeStartDrag);
-        shape.on('touchstart', shapeStartDrag);
+        });
         shape.addTo(lg);
 
-        // مقبض الدوران والتكبير للمستطيل
+        // إذا كان المضلع المحدد مستطيلاً بالأطوال، أظهر مقابض التدوير والتكبير
         if(isSel && f.type==='rectangle') {
-          const corners = f.coords;
+          const corners = f.coords; // 4 أركان
+          // حساب المركز التقريبي للمستطيل لوضع مقبض الدوران بالأعلى
           const centerLat = (corners[0][0] + corners[2][0]) / 2;
           const centerLng = (corners[0][1] + corners[2][1]) / 2;
           
+          // مقبض الدوران (وضعه أعلى الضلع الأول بمسافة بسيطة)
           const th = toRad(f.rect.rotation);
           const uxN = Math.sin(th), uxE = Math.cos(th);
-          const rotatePt = destPoint(centerLat, centerLng, uxE * 0, uxN * 0 + (f.rect.length / 2) + 5);
+          const rotatePt = destPoint(centerLat, centerLng, uxE * (f.rect.width * 0.0), uxN * (f.rect.width * 0.0) + (f.rect.length / 2) + 6);
           
-          // مقبض الدوران
-          const rotMarker = L.circleMarker(rotatePt, {radius:9, className:'rect-rotate-marker', color:'#0d2438', weight:1.5, fillColor:'#e8a33d', fillOpacity:1});
-          setupDragHandlers(rotMarker, (startLngLat) => {
-            return { mode:'rect-rotate', feature:f, center:[centerLat, centerLng], origRotation: f.rect.rotation, startAngle: Math.atan2(startLngLat.lat - centerLat, startLngLat.lng - centerLng) };
+          const rotMarker = L.circleMarker(rotatePt, {radius:7, className:'rect-rotate-marker', color:'#0d2438', weight:1.5, fillColor:'#e8a33d', fillOpacity:1});
+          rotMarker.on('mousedown', e => {
+            L.DomEvent.stopPropagation(e);
+            map.dragging.disable();
+            dragCtx = { mode:'rect-rotate', feature:f, center:[centerLat, centerLng], origRotation: f.rect.rotation, startAngle: Math.atan2(e.latlng.lat - centerLat, e.latlng.lng - centerLng) };
           });
           rotMarker.addTo(lg);
 
-          // مقبض التكبير
-          const scaleMarker = L.circleMarker(corners[2], {radius:9, className:'rect-scale-marker', color:'#0d2438', weight:1.5, fillColor:'#5ec9c0', fillOpacity:1});
-          setupDragHandlers(scaleMarker, (startLngLat) => {
-            return { mode:'rect-scale', feature:f, anchor: corners[0], origWidth: f.rect.width, origLength: f.rect.length, startLatLng: startLngLat };
+          // مقبض التكبير (وضعه عند الركن الثالث للمستطيل)
+          const scaleMarker = L.circleMarker(corners[2], {radius:7, className:'rect-scale-marker', color:'#0d2438', weight:1.5, fillColor:'#5ec9c0', fillOpacity:1});
+          scaleMarker.on('mousedown', e => {
+            L.DomEvent.stopPropagation(e);
+            map.dragging.disable();
+            dragCtx = { mode:'rect-scale', feature:f, anchor: corners[0], origWidth: f.rect.width, origLength: f.rect.length, startLatLng: e.latlng };
           });
           scaleMarker.addTo(lg);
         }
 
-        // العقد العادية للمضلعات والخطوط الحرة
+        // العقد العادية للعناصر الأخرى غير المستطيل والدائرة
         if(isSel && f.type!=='rectangle' && f.type!=='circle'){
           f.coords.forEach((c,idx)=>{
-            const h = L.circleMarker(c, {radius:8, className:'vertex-marker', color:'#5ec9c0', weight:2, fillColor:'#0d2438', fillOpacity:1});
-            setupDragHandlers(h, () => {
-              return {mode:'vertex', feature:f, idx};
+            const h = L.circleMarker(c, {radius:6, className:'vertex-marker', color:'#5ec9c0', weight:2, fillColor:'#0d2438', fillOpacity:1});
+            h.on('mousedown', e=>{
+              L.DomEvent.stopPropagation(e);
+              map.dragging.disable();
+              dragCtx = {mode:'vertex', feature:f, idx};
             });
             h.addTo(lg);
           });
@@ -533,61 +515,51 @@
     });
   }
 
-  /* ---------- Drag handling (Mouse & Touch Move) ---------- */
-  function handleMove(latlng, originalEvent) {
-    if(!dragCtx) return;
-    
-    let currentLatLng = latlng;
-    if(originalEvent && originalEvent.touches && originalEvent.touches.length) {
-      const touch = originalEvent.touches[0];
-      const point = map.mouseEventToContainerPoint({ clientX: touch.clientX, clientY: touch.clientY });
-      currentLatLng = map.containerPointToLatLng(point);
-    }
-
-    const snapped = dragCtx.mode==='vertex' ? effectiveLatLng({latlng: currentLatLng}, dragCtx.feature.id) : currentLatLng;
-    
-    if(dragCtx.mode==='vertex'){
-      dragCtx.feature.coords[dragCtx.idx] = [snapped.lat, snapped.lng];
-    } 
-    else if(dragCtx.mode==='rect-rotate'){
-      const currentAngle = Math.atan2(currentLatLng.lat - dragCtx.center[0], currentLatLng.lng - dragCtx.center[1]);
-      const angleDiff = toDeg(currentAngle - dragCtx.startAngle);
-      dragCtx.feature.rect.rotation = Math.round((dragCtx.origRotation - angleDiff) % 360);
-      syncRectCoords(dragCtx.feature);
-    }
-    else if(dragCtx.mode==='rect-scale'){
-      const currentDistToAnchor = haversine(dragCtx.anchor[0], dragCtx.anchor[1], currentLatLng.lat, currentLatLng.lng);
-      const startDistToAnchor = haversine(dragCtx.anchor[0], dragCtx.anchor[1], dragCtx.startLatLng.lat, dragCtx.startLatLng.lng);
-      const ratio = startDistToAnchor > 0 ? (currentDistToAnchor / startDistToAnchor) : 1;
-      
-      dragCtx.feature.rect.width = Math.max(0.5, parseFloat((dragCtx.origWidth * ratio).toFixed(1)));
-      dragCtx.feature.rect.length = Math.max(0.5, parseFloat((dragCtx.origLength * ratio).toFixed(1)));
-      syncRectCoords(dragCtx.feature);
-    }
-    else if(dragCtx.mode==='move'){
-      const dLat = currentLatLng.lat - dragCtx.startLatLng.lat;
-      const dLng = currentLatLng.lng - dragCtx.startLatLng.lng;
-      if(dragCtx.feature.type==='rectangle'){
-        dragCtx.feature.rect.lat = dragCtx.origRect.lat + dLat;
-        dragCtx.feature.rect.lng = dragCtx.origRect.lng + dLng;
-        syncRectCoords(dragCtx.feature);
-      } else if(dragCtx.feature.type==='circle'){
-        dragCtx.feature.circle.lat = dragCtx.origCircle.lat + dLat;
-        dragCtx.feature.circle.lng = dragCtx.origCircle.lng + dLng;
-        syncCircleCoords(dragCtx.feature);
-      } else {
-        dragCtx.feature.coords = dragCtx.origCoords.map(c=>[c[0]+dLat, c[1]+dLng]);
-      }
-    }
-    renderFeatures();
-  }
-
-  map.on('mousemove', e => {
+  /* ---------- Drag handling ---------- */
+  map.on('mousemove', e=>{
     document.getElementById('stLat').textContent = e.latlng.lat.toFixed(6);
     document.getElementById('stLng').textContent = e.latlng.lng.toFixed(6);
     
-    if(dragCtx) {
-      handleMove(e.latlng, e.originalEvent);
+    if(dragCtx){
+      const snapped = dragCtx.mode==='vertex' ? effectiveLatLng(e, dragCtx.feature.id) : e.latlng;
+      
+      if(dragCtx.mode==='vertex'){
+        dragCtx.feature.coords[dragCtx.idx] = [snapped.lat, snapped.lng];
+      } 
+      else if(dragCtx.mode==='rect-rotate'){
+        const currentAngle = Math.atan2(e.latlng.lat - dragCtx.center[0], e.latlng.lng - dragCtx.center[1]);
+        const angleDiff = toDeg(currentAngle - dragCtx.startAngle);
+        dragCtx.feature.rect.rotation = Math.round((dragCtx.origRotation - angleDiff) % 360);
+        syncRectCoords(dragCtx.feature);
+      }
+      else if(dragCtx.mode==='rect-scale'){
+        // حساب المسافة الأفقية والرأسية لحركة الماوس بالمتر مقارنة بنقطة البداية
+        const dist = haversine(dragCtx.startLatLng.lat, dragCtx.startLatLng.lng, e.latlng.lat, e.latlng.lng);
+        // تكبير/تصغير مبسط بناءً على مسافة السحب الإجمالية
+        const currentDistToAnchor = haversine(dragCtx.anchor[0], dragCtx.anchor[1], e.latlng.lat, e.latlng.lng);
+        const startDistToAnchor = haversine(dragCtx.anchor[0], dragCtx.anchor[1], dragCtx.startLatLng.lat, dragCtx.startLatLng.lng);
+        const ratio = startDistToAnchor > 0 ? (currentDistToAnchor / startDistToAnchor) : 1;
+        
+        dragCtx.feature.rect.width = Math.max(0.5, parseFloat((dragCtx.origWidth * ratio).toFixed(1)));
+        dragCtx.feature.rect.length = Math.max(0.5, parseFloat((dragCtx.origLength * ratio).toFixed(1)));
+        syncRectCoords(dragCtx.feature);
+      }
+      else if(dragCtx.mode==='move'){
+        const dLat = e.latlng.lat - dragCtx.startLatLng.lat;
+        const dLng = e.latlng.lng - dragCtx.startLatLng.lng;
+        if(dragCtx.feature.type==='rectangle'){
+          dragCtx.feature.rect.lat = dragCtx.origRect.lat + dLat;
+          dragCtx.feature.rect.lng = dragCtx.origRect.lng + dLng;
+          syncRectCoords(dragCtx.feature);
+        } else if(dragCtx.feature.type==='circle'){
+          dragCtx.feature.circle.lat = dragCtx.origCircle.lat + dLat;
+          dragCtx.feature.circle.lng = dragCtx.origCircle.lng + dLng;
+          syncCircleCoords(dragCtx.feature);
+        } else {
+          dragCtx.feature.coords = dragCtx.origCoords.map(c=>[c[0]+dLat, c[1]+dLng]);
+        }
+      }
+      renderFeatures();
     } 
     else if(drawingCoords && drawingCoords.length){
       const snapped = effectiveLatLng(e);
@@ -597,25 +569,20 @@
       const last = drawingCoords[drawingCoords.length-1];
       const segLen = haversine(last[0],last[1], snapped.lat, snapped.lng);
       document.getElementById('stTemp').textContent = 'الطول الحالي: ' + segLen.toFixed(2) + ' م';
+    } 
+    else if(tool==='point' || tool==='rectangle' || tool==='circle'){
+      effectiveLatLng(e);
+    } 
+    else if(snapMarker){
+      map.removeLayer(snapMarker); snapMarker=null;
     }
   });
 
-  // إضافة الدعم لحدث تحرك اللمس على الخريطة
-  map.on('touchmove', e => {
-    if(dragCtx) {
-      L.DomEvent.preventDefault(e.originalEvent); // منع الخريطة من التحرك بالخلفية
-      handleMove(e.latlng, e.originalEvent);
-    }
-  });
-
-  // إنهاء السحب عند رفع الإصبع أو الماوس
-  const endDrag = () => {
-    if(dragCtx){ map.dragging.enable(); dragCtx=null; renderAttrPanel(); scheduleSave(); }
-  };
   map.getContainer().addEventListener('mouseup', endDrag);
-  map.getContainer().addEventListener('touchend', endDrag);
   document.addEventListener('mouseup', endDrag);
-  document.addEventListener('touchend', endDrag);
+  function endDrag(){
+    if(dragCtx){ map.dragging.enable(); dragCtx=null; renderAttrPanel(); scheduleSave(); }
+  }
 
   /* ---------- Map click: selection clear / drawing ---------- */
   map.on('click', e=>{
@@ -631,6 +598,7 @@
     else if(tool==='line' || tool==='polygon'){
       if(!drawingCoords) {
         drawingCoords=[];
+        // إظهار زر الإنهاء عند بدء الرسم في الموبايل
         if(window.innerWidth <= 760) mobileFinishBtn.style.display = 'flex';
       }
       drawingCoords.push([snapped.lat, snapped.lng]);
@@ -657,6 +625,7 @@
     if(tool==='line'||tool==='polygon') finishDrawing();
   });
 
+  // حدث ضغط زر إنهاء الرسم العائم للموبايل
   mobileFinishBtn.addEventListener('click', (e)=>{
     L.DomEvent.stopPropagation(e);
     finishDrawing();
@@ -665,7 +634,7 @@
   function finishDrawing(){
     if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
     document.getElementById('stTemp').textContent='';
-    mobileFinishBtn.style.display = 'none';
+    mobileFinishBtn.style.display = 'none'; // إخفاء الزر
 
     if(tool==='line' && drawingCoords && drawingCoords.length>=2){
       const f=addFeature('line', drawingCoords); selection={layerId:activeLayer().id, featureId:f.id};
@@ -859,6 +828,7 @@
 
     container.innerHTML = html;
 
+    // أحداث حقول المستطيل بالأطوال
     if(f.type==='rectangle'){
       ['edW','edL','edR'].forEach(id=>{
         document.getElementById(id).addEventListener('input', ()=>{
@@ -876,6 +846,7 @@
       });
     }
 
+    // أحداث الحقول الوصفية
     container.querySelectorAll('.field-row input.val').forEach(inp=>{
       inp.addEventListener('input', e=>{ f.attrs[e.target.dataset.key] = e.target.value; scheduleSave(); });
     });
@@ -976,6 +947,7 @@
   document.getElementById('driveJoinBtn').addEventListener('click', ()=>{ let id = prompt('أدخل رقم الملف المشترك (File ID):'); if(id) alert('جارٍ جلب البيانات المشتركة...'); });
   document.getElementById('driveCopyIdBtn').addEventListener('click', ()=>alert('لا يوجد ملف نشط حالياً لمشاركته.'));
 
+  // تهيئة التطبيق
   loadState();
 })();
 </script>
