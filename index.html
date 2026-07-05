@@ -11,7 +11,8 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root{
-    --bg:#0d2438; --bg-panel:#123152; --bg-panel-2:#0f2b47;
+    --bg:#0d2438;
+    --bg-panel:#123152; --bg-panel-2:#0f2b47;
     --accent:#e8a33d; --accent-soft:rgba(232,163,61,.16);
     --teal:#5ec9c0; --teal-soft:rgba(94,201,192,.16);
     --text:#eef2f0; --text-muted:#84a0b6; --danger:#e2665b; --border:#1c4a73;
@@ -28,7 +29,6 @@
   .tool-btn span{font-size:9px;font-family:var(--sans);}
   .tool-btn:hover{background:rgba(255,255,255,.05);color:var(--text);}
   .tool-btn.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);}
-  .tool-btn:disabled{opacity:0.3;cursor:not-allowed;color:var(--text-muted) !important;background:transparent !important;}
   .toolbar-sep{width:36px;height:1px;background:var(--border);margin:4px 0;}
 
   .main{flex:1;position:relative;display:flex;flex-direction:column;min-width:0;}
@@ -87,10 +87,11 @@
   .stat-row b{color:var(--text);font-weight:500;}
   .field-row{display:flex;gap:6px;margin-top:8px;align-items:center;}
   .field-row input{background:var(--bg-panel);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 7px;font-size:12px;font-family:var(--sans);flex:1;min-width:0;}
+  
   .field-row input.key{flex:0 0 34%;color:var(--teal);font-family:var(--mono);font-size:11px;}
   .rect-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;}
   .rect-edit-grid label{font-size:10px;color:var(--text-muted);}
-  .rect-edit-grid input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 7px;font-family:var(--mono);font-size:12px;margin-top:2px;}
+  .rect-edit-grid input{width:100%;background:var(--bg-panel);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 7px;font-family:var(--mono);font-size:12px;margin-top:2px;}
   .danger-btn{width:100%;margin-top:10px;padding:8px;border-radius:8px;border:1px solid var(--danger);background:transparent;color:var(--danger);cursor:pointer;font-size:12px;font-weight:600;}
   .danger-btn:hover{background:rgba(226,102,91,.12);}
   ::-webkit-scrollbar{width:8px;}
@@ -98,9 +99,21 @@
 
   .leaflet-popup-content{font-family:var(--sans);direction:rtl;}
   .vertex-marker{background:var(--bg);border:2px solid var(--teal);border-radius:50%;}
+  
+  /* مقبض الدوران والتكبير الخاص بالمستطيل */
+  .rect-rotate-marker{background:#e8a33d;border:2px solid #0d2438;border-radius:50%;cursor:alias;}
+  .rect-scale-marker{background:#5ec9c0;border:2px solid #0d2438;border-radius:50%;cursor:se-resize;}
 
   .mobile-sidebar-toggle{display:none;position:fixed;bottom:calc(76px + env(safe-area-inset-bottom, 0px) + 16px);left:12px;z-index:900;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#1a1200;border:none;box-shadow:0 6px 16px rgba(0,0,0,.4);align-items:center;justify-content:center;}
   .mobile-sidebar-toggle svg{width:22px;height:22px;}
+
+  /* زر إنهاء الرسم العائم للموبايل */
+  .mobile-finish-btn {
+    display: none; position: absolute; bottom: 20px; right: 20px; z-index: 999;
+    background: var(--teal); color: #0d2438; border: none; border-radius: 30px;
+    padding: 12px 20px; font-weight: bold; font-size: 13px; font-family: var(--sans);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4); cursor: pointer; align-items: center; gap: 6px;
+  }
 
   @media (max-width: 760px){
     .app{flex-direction:column;}
@@ -161,9 +174,6 @@
     <button class="tool-btn active" id="snapBtn" title="تفعيل/تعطيل السناب">
       <svg viewBox="0 0 24 24"><path d="M4 12h4M16 12h4M12 4v4M12 16v4"/><circle cx="12" cy="12" r="3"/></svg><span>سناب</span>
     </button>
-    <button class="tool-btn" id="undoBtn" title="تراجع (Ctrl+Z)" disabled>
-      <svg viewBox="0 0 24 24"><path d="M3 7v6h6M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/></svg><span>تراجع</span>
-    </button>
     <div class="toolbar-sep"></div>
     <button class="tool-btn" id="locateBtn" title="تحديد موقعي الحالي">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span>موقعي</span>
@@ -180,6 +190,12 @@
   <div class="main">
     <div class="canvas-wrap">
       <div id="map"></div>
+      
+      <button class="mobile-finish-btn" id="mobileFinishBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align: middle;"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        إنهـاء الرسم
+      </button>
+
       <div class="basemap-toggle">
         <button id="btnSat" class="active">قمر صناعي</button>
         <button id="btnStreets">خريطة عادية</button>
@@ -251,9 +267,6 @@
     layers: [{id:'L1', name:'طبقة 1', color: palette[0], visible:true, features:[]}],
     activeLayerId:'L1', nextColorIdx:1
   };
-  let undoStack = [];
-  const MAX_UNDO = 30;
-
   let tool = 'select';
   let selection = null;
   let drawingCoords = null;
@@ -268,17 +281,18 @@
   const mapEl = document.getElementById('map');
   const rectHud = document.getElementById('rectHud');
   const circleHud = document.getElementById('circleHud');
-  const undoBtn = document.getElementById('undoBtn');
+  const mobileFinishBtn = document.getElementById('mobileFinishBtn');
 
   const map = L.map('map', {zoomControl:false, center:[29.9792, 31.1342], zoom:16, worldCopyJump:true});
   L.control.zoom({position:'topleft'}).addTo(map);
 
   const satLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-    attribution: '© Google Maps', maxZoom:20
-  }).addTo(map);
-  const streetsLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors', maxZoom:19, subdomains:'abc'
+    attribution: '© Google Maps', maxZoom: 20
   });
+  const streetsLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom:22, subdomains:'abc'
+  });
+  satLayer.addTo(map);
 
   document.getElementById('btnSat').addEventListener('click', ()=>{
     map.removeLayer(streetsLayer); map.addLayer(satLayer);
@@ -300,58 +314,30 @@
     return layerGroups[layer.id];
   }
 
-  /* ---------- Undo Mechanism ---------- */
-  function pushStateToUndo() {
-    if (undoStack.length >= MAX_UNDO) {
-      undoStack.shift();
-    }
-    undoStack.push(JSON.stringify(state));
-    updateUndoButtonState();
-  }
-
-  function handleUndo() {
-    if (undoStack.length === 0) return;
-    const previousRawState = undoStack.pop();
-    state = JSON.parse(previousRawState);
-    
-    // إعادة التحقق من صحة التحديد بعد التراجع
-    if (selection) {
-      const targetLayer = getLayer(selection.layerId);
-      if (!targetLayer || !targetLayer.features.some(f => f.id === selection.featureId)) {
-        selection = null;
-      }
-    }
-    
-    renderLayerList();
-    renderFeatures();
-    renderAttrPanel();
-    updateUndoButtonState();
-    scheduleSave();
-  }
-
-  function updateUndoButtonState() {
-    undoBtn.disabled = (undoStack.length === 0);
-  }
-
   /* ---------- Geometry helpers ---------- */
   function uid(){ return 'f' + Math.random().toString(36).slice(2,10); }
   function toRad(d){ return d*Math.PI/180; }
+  function toDeg(r){ return r*180/Math.PI; }
+  
   function haversine(lat1,lng1,lat2,lng2){
     const R=6371000;
     const dLat=toRad(lat2-lat1), dLng=toRad(lng2-lng1);
     const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
     return 2*R*Math.asin(Math.sqrt(a));
   }
+  
   function destPoint(lat,lng,dEast,dNorth){
     const dLat = dNorth/111320;
     const dLng = dEast/(111320*Math.cos(toRad(lat)));
     return [lat+dLat, lng+dLng];
   }
+  
   function pathLength(coords){
     let s=0; for(let i=0;i<coords.length-1;i++) s+=haversine(coords[i][0],coords[i][1],coords[i+1][0],coords[i+1][1]);
     return s;
   }
   function pathPerimeter(coords){ return pathLength(coords) + haversine(coords[coords.length-1][0],coords[coords.length-1][1],coords[0][0],coords[0][1]); }
+  
   function polygonAreaMeters(coords){
     const refLat = coords[0][0], refLng = coords[0][1];
     const pts = coords.map(c=>{
@@ -363,12 +349,16 @@
     for(let i=0;i<pts.length;i++){ const [x1,y1]=pts[i], [x2,y2]=pts[(i+1)%pts.length]; a+=x1*y2-x2*y1; }
     return Math.abs(a)/2;
   }
+  
   function rectCorners(rect){
     const th = toRad(rect.rotation);
     const uxE = Math.cos(th), uxN = Math.sin(th);
     const uyE = -Math.sin(th), uyN = Math.cos(th);
     let baseE=0, baseN=0;
-    if(rect.mode==='center'){ baseE = -(uxE*rect.width/2+uyE*rect.length/2); baseN = -(uxN*rect.width/2+uyN*rect.length/2); }
+    if(rect.mode==='center'){ 
+      baseE = -(uxE*rect.width/2+uyE*rect.length/2); 
+      baseN = -(uxN*rect.width/2+uyN*rect.length/2);
+    }
     const cornersMeters = [
       [baseE, baseN],
       [baseE+uxE*rect.width, baseN+uxN*rect.width],
@@ -377,7 +367,9 @@
     ];
     return cornersMeters.map(([e,n])=>destPoint(rect.lat, rect.lng, e, n));
   }
+  
   function syncRectCoords(f){ f.coords = rectCorners(f.rect); }
+  
   function circlePoints(circle, segments){
     segments = segments || 64;
     const pts = [];
@@ -412,6 +404,7 @@
     });
     return best;
   }
+  
   function effectiveLatLng(e, excludeFeatureId){
     const snap = findSnap(e.latlng, excludeFeatureId);
     if(snap){
@@ -460,24 +453,59 @@
         } else {
           shape = L.polygon(f.coords, {color: isSel?'#5ec9c0':color, weight: isSel?3:2, fillColor:color, fillOpacity: isSel?0.3:0.18});
         }
+        
         shape.on('mousedown', e=>{
           if(tool!=='select') return;
           L.DomEvent.stopPropagation(e);
           selection = {layerId:layer.id, featureId:f.id};
           renderAttrPanel(); renderFeatures();
           map.dragging.disable();
-          pushStateToUndo(); // حفظ الحالة الحالية قبل بدء السحب والتحريك
-          dragCtx = {mode:'move', feature:f, startLatLng:e.latlng, origCoords:JSON.parse(JSON.stringify(f.coords)), origRect: f.rect?Object.assign({},f.rect):null, origCircle: f.circle?Object.assign({},f.circle):null};
+          dragCtx = {
+            mode:'move', feature:f, startLatLng:e.latlng, 
+            origCoords:JSON.parse(JSON.stringify(f.coords)), 
+            origRect: f.rect?Object.assign({},f.rect):null, 
+            origCircle: f.circle?Object.assign({},f.circle):null
+          };
         });
         shape.addTo(lg);
 
+        // إذا كان المضلع المحدد مستطيلاً بالأطوال، أظهر مقابض التدوير والتكبير
+        if(isSel && f.type==='rectangle') {
+          const corners = f.coords; // 4 أركان
+          // حساب المركز التقريبي للمستطيل لوضع مقبض الدوران بالأعلى
+          const centerLat = (corners[0][0] + corners[2][0]) / 2;
+          const centerLng = (corners[0][1] + corners[2][1]) / 2;
+          
+          // مقبض الدوران (وضعه أعلى الضلع الأول بمسافة بسيطة)
+          const th = toRad(f.rect.rotation);
+          const uxN = Math.sin(th), uxE = Math.cos(th);
+          const rotatePt = destPoint(centerLat, centerLng, uxE * (f.rect.width * 0.0), uxN * (f.rect.width * 0.0) + (f.rect.length / 2) + 6);
+          
+          const rotMarker = L.circleMarker(rotatePt, {radius:7, className:'rect-rotate-marker', color:'#0d2438', weight:1.5, fillColor:'#e8a33d', fillOpacity:1});
+          rotMarker.on('mousedown', e => {
+            L.DomEvent.stopPropagation(e);
+            map.dragging.disable();
+            dragCtx = { mode:'rect-rotate', feature:f, center:[centerLat, centerLng], origRotation: f.rect.rotation, startAngle: Math.atan2(e.latlng.lat - centerLat, e.latlng.lng - centerLng) };
+          });
+          rotMarker.addTo(lg);
+
+          // مقبض التكبير (وضعه عند الركن الثالث للمستطيل)
+          const scaleMarker = L.circleMarker(corners[2], {radius:7, className:'rect-scale-marker', color:'#0d2438', weight:1.5, fillColor:'#5ec9c0', fillOpacity:1});
+          scaleMarker.on('mousedown', e => {
+            L.DomEvent.stopPropagation(e);
+            map.dragging.disable();
+            dragCtx = { mode:'rect-scale', feature:f, anchor: corners[0], origWidth: f.rect.width, origLength: f.rect.length, startLatLng: e.latlng };
+          });
+          scaleMarker.addTo(lg);
+        }
+
+        // العقد العادية للعناصر الأخرى غير المستطيل والدائرة
         if(isSel && f.type!=='rectangle' && f.type!=='circle'){
           f.coords.forEach((c,idx)=>{
             const h = L.circleMarker(c, {radius:6, className:'vertex-marker', color:'#5ec9c0', weight:2, fillColor:'#0d2438', fillOpacity:1});
             h.on('mousedown', e=>{
               L.DomEvent.stopPropagation(e);
               map.dragging.disable();
-              pushStateToUndo(); // حفظ الحالة الحالية قبل التلاعب بالنقاط هندسياً
               dragCtx = {mode:'vertex', feature:f, idx};
             });
             h.addTo(lg);
@@ -491,11 +519,32 @@
   map.on('mousemove', e=>{
     document.getElementById('stLat').textContent = e.latlng.lat.toFixed(6);
     document.getElementById('stLng').textContent = e.latlng.lng.toFixed(6);
+    
     if(dragCtx){
       const snapped = dragCtx.mode==='vertex' ? effectiveLatLng(e, dragCtx.feature.id) : e.latlng;
+      
       if(dragCtx.mode==='vertex'){
         dragCtx.feature.coords[dragCtx.idx] = [snapped.lat, snapped.lng];
-      } else if(dragCtx.mode==='move'){
+      } 
+      else if(dragCtx.mode==='rect-rotate'){
+        const currentAngle = Math.atan2(e.latlng.lat - dragCtx.center[0], e.latlng.lng - dragCtx.center[1]);
+        const angleDiff = toDeg(currentAngle - dragCtx.startAngle);
+        dragCtx.feature.rect.rotation = Math.round((dragCtx.origRotation - angleDiff) % 360);
+        syncRectCoords(dragCtx.feature);
+      }
+      else if(dragCtx.mode==='rect-scale'){
+        // حساب المسافة الأفقية والرأسية لحركة الماوس بالمتر مقارنة بنقطة البداية
+        const dist = haversine(dragCtx.startLatLng.lat, dragCtx.startLatLng.lng, e.latlng.lat, e.latlng.lng);
+        // تكبير/تصغير مبسط بناءً على مسافة السحب الإجمالية
+        const currentDistToAnchor = haversine(dragCtx.anchor[0], dragCtx.anchor[1], e.latlng.lat, e.latlng.lng);
+        const startDistToAnchor = haversine(dragCtx.anchor[0], dragCtx.anchor[1], dragCtx.startLatLng.lat, dragCtx.startLatLng.lng);
+        const ratio = startDistToAnchor > 0 ? (currentDistToAnchor / startDistToAnchor) : 1;
+        
+        dragCtx.feature.rect.width = Math.max(0.5, parseFloat((dragCtx.origWidth * ratio).toFixed(1)));
+        dragCtx.feature.rect.length = Math.max(0.5, parseFloat((dragCtx.origLength * ratio).toFixed(1)));
+        syncRectCoords(dragCtx.feature);
+      }
+      else if(dragCtx.mode==='move'){
         const dLat = e.latlng.lat - dragCtx.startLatLng.lat;
         const dLng = e.latlng.lng - dragCtx.startLatLng.lng;
         if(dragCtx.feature.type==='rectangle'){
@@ -511,7 +560,8 @@
         }
       }
       renderFeatures();
-    } else if(drawingCoords && drawingCoords.length){
+    } 
+    else if(drawingCoords && drawingCoords.length){
       const snapped = effectiveLatLng(e);
       if(tempLine){ map.removeLayer(tempLine); }
       const pts = drawingCoords.concat([[snapped.lat, snapped.lng]]);
@@ -519,12 +569,15 @@
       const last = drawingCoords[drawingCoords.length-1];
       const segLen = haversine(last[0],last[1], snapped.lat, snapped.lng);
       document.getElementById('stTemp').textContent = 'الطول الحالي: ' + segLen.toFixed(2) + ' م';
-    } else if(tool==='point' || tool==='rectangle' || tool==='circle'){
+    } 
+    else if(tool==='point' || tool==='rectangle' || tool==='circle'){
       effectiveLatLng(e);
-    } else if(snapMarker){
+    } 
+    else if(snapMarker){
       map.removeLayer(snapMarker); snapMarker=null;
     }
   });
+
   map.getContainer().addEventListener('mouseup', endDrag);
   document.addEventListener('mouseup', endDrag);
   function endDrag(){
@@ -533,24 +586,32 @@
 
   /* ---------- Map click: selection clear / drawing ---------- */
   map.on('click', e=>{
-    if(tool==='select'){ selection=null; renderAttrPanel(); renderFeatures(); return; }
+    if(tool==='select'){
+      selection=null; renderAttrPanel(); renderFeatures(); return;
+    }
     const snapped = effectiveLatLng(e);
     if(tool==='point'){
-      pushStateToUndo();
       const f = addFeature('point', [[snapped.lat, snapped.lng]]);
       selection = {layerId: activeLayer().id, featureId:f.id};
       renderFeatures(); renderAttrPanel(); scheduleSave();
-    } else if(tool==='line' || tool==='polygon'){
-      if(!drawingCoords) drawingCoords=[];
+    } 
+    else if(tool==='line' || tool==='polygon'){
+      if(!drawingCoords) {
+        drawingCoords=[];
+        // إظهار زر الإنهاء عند بدء الرسم في الموبايل
+        if(window.innerWidth <= 760) mobileFinishBtn.style.display = 'flex';
+      }
       drawingCoords.push([snapped.lat, snapped.lng]);
-    } else if(tool==='rectangle'){
+    } 
+    else if(tool==='rectangle'){
       rectPending = {lat:snapped.lat, lng:snapped.lng};
       const pt = map.latLngToContainerPoint(snapped);
       const wrapRect = mapEl.getBoundingClientRect();
       const hudX = Math.min(Math.max(pt.x+16,8), wrapRect.width-216);
       const hudY = Math.min(Math.max(pt.y+16,8), wrapRect.height-260);
       rectHud.style.left = hudX+'px'; rectHud.style.top = hudY+'px'; rectHud.style.display='block';
-    } else if(tool==='circle'){
+    } 
+    else if(tool==='circle'){
       circlePending = {lat:snapped.lat, lng:snapped.lng};
       const pt = map.latLngToContainerPoint(snapped);
       const wrapRect = mapEl.getBoundingClientRect();
@@ -559,46 +620,45 @@
       circleHud.style.left = hudX+'px'; circleHud.style.top = hudY+'px'; circleHud.style.display='block';
     }
   });
-  map.on('dblclick', e=>{ if(tool==='line'||tool==='polygon') finishDrawing(); });
+
+  map.on('dblclick', e=>{
+    if(tool==='line'||tool==='polygon') finishDrawing();
+  });
+
+  // حدث ضغط زر إنهاء الرسم العائم للموبايل
+  mobileFinishBtn.addEventListener('click', (e)=>{
+    L.DomEvent.stopPropagation(e);
+    finishDrawing();
+  });
 
   function finishDrawing(){
     if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
     document.getElementById('stTemp').textContent='';
+    mobileFinishBtn.style.display = 'none'; // إخفاء الزر
+
     if(tool==='line' && drawingCoords && drawingCoords.length>=2){
-      pushStateToUndo();
-      const f=addFeature('line', drawingCoords);
-      selection={layerId:activeLayer().id, featureId:f.id};
+      const f=addFeature('line', drawingCoords); selection={layerId:activeLayer().id, featureId:f.id};
       drawingCoords=null; renderFeatures(); renderAttrPanel(); scheduleSave();
-    } else if(tool==='polygon' && drawingCoords && drawingCoords.length>=3){
-      pushStateToUndo();
-      const f=addFeature('polygon', drawingCoords);
-      selection={layerId:activeLayer().id, featureId:f.id};
+    } 
+    else if(tool==='polygon' && drawingCoords && drawingCoords.length>=3){
+      const f=addFeature('polygon', drawingCoords); selection={layerId:activeLayer().id, featureId:f.id};
       drawingCoords=null; renderFeatures(); renderAttrPanel(); scheduleSave();
-    } else {
-      drawingCoords=null;
-    }
+    } 
+    else { drawingCoords=null; }
   }
 
   window.addEventListener('keydown', e=>{
     const tag=document.activeElement.tagName;
     const typing = tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA';
-    
-    // دعم تراجع عبر Ctrl + Z
-    if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !typing) {
-      e.preventDefault();
-      handleUndo();
-      return;
-    }
-
     if(e.key==='Enter' && !typing) finishDrawing();
     if(e.key==='Escape'){
       drawingCoords=null; rectPending=null; circlePending=null;
       rectHud.style.display='none'; circleHud.style.display='none';
+      mobileFinishBtn.style.display = 'none';
       if(tempLine){map.removeLayer(tempLine); tempLine=null;}
       document.getElementById('stTemp').textContent='';
     }
     if((e.key==='Delete'||e.key==='Backspace') && !typing && selection){
-      pushStateToUndo();
       const layer=getLayer(selection.layerId);
       layer.features = layer.features.filter(x=>x.id!==selection.featureId);
       selection=null; renderLayerList(); renderAttrPanel(); renderFeatures(); scheduleSave();
@@ -611,16 +671,16 @@
     document.getElementById('snapBtn').classList.toggle('active', snapEnabled);
     if(!snapEnabled && snapMarker){ map.removeLayer(snapMarker); snapMarker=null; }
   });
-  
-  undoBtn.addEventListener('click', handleUndo);
 
   document.getElementById('toolbar').addEventListener('click', e=>{
-    const btn=e.target.closest('.tool-btn'); if(!btn || !btn.dataset.tool) return;
+    const btn=e.target.closest('.tool-btn');
+    if(!btn || !btn.dataset.tool) return;
     document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     tool = btn.dataset.tool;
     drawingCoords=null; rectPending=null; circlePending=null;
     rectHud.style.display='none'; circleHud.style.display='none';
+    mobileFinishBtn.style.display = 'none';
     if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
     if(snapMarker){ map.removeLayer(snapMarker); snapMarker=null; }
     document.getElementById('stTemp').textContent='';
@@ -629,6 +689,7 @@
     mapEl.classList.toggle('tool-draw', tool!=='select');
     map.doubleClickZoom[(tool==='line'||tool==='polygon')?'disable':'enable']();
   });
+
   document.querySelectorAll('.tab').forEach(tabEl=>{
     tabEl.addEventListener('click', ()=>{
       document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -637,7 +698,7 @@
       document.getElementById(tabEl.dataset.panel).classList.add('active');
     });
   });
-
+  
   const sidebarEl = document.querySelector('.sidebar');
   document.getElementById('mobileSidebarToggle').addEventListener('click', ()=>{
     sidebarEl.classList.toggle('open');
@@ -646,345 +707,248 @@
   /* ---------- Layers UI ---------- */
   function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
   function eyeOpenIcon(){ return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>'; }
-  function eyeClosedIcon(){ return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l18 18M10.6 10.6a3 3 0 004.2 4.2M9.9 5.1A10.4 10.4 0 0112 5c6.5 0 10 7 10 7a13.5 13.5 0 01-2.6 3.4M6.5 6.5A13.6 13.6 0 002 12s3.5 7 10 7c1.1 0 2.1-.2 3-.5"/></svg>'; }
+  function eyeClosedIcon(){ return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'; }
+  function trashIcon(){ return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'; }
 
   function renderLayerList(){
     const container = document.getElementById('layerList');
     container.innerHTML = '';
-    state.layers.forEach(l => {
-      const activeClass = l.id === state.activeLayerId ? 'active' : '';
-      const eye = l.visible ? eyeOpenIcon() : eyeClosedIcon();
-      
+    state.layers.forEach(layer=>{
       const row = document.createElement('div');
-      row.className = `layer-row ${activeClass}`;
-      row.innerHTML = `
-        <div class="swatch" style="background:${l.color}" title="تغيير اللون"></div>
-        <div class="lname">${escapeHtml(l.name)}</div>
-        <div class="lcount">${l.features.length}</div>
-        <button class="icon-btn toggle-vis" title="إخفاء/إظهار">${eye}</button>
-        <button class="icon-btn delete-layer" title="حذف الطبقة">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-        </button>
-      `;
-
-      row.addEventListener('click', (e) => {
-        if(e.target.closest('.toggle-vis') || e.target.closest('.delete-layer') || e.target.closest('.swatch')) return;
-        state.activeLayerId = l.id;
-        renderLayerList();
-        renderFeatures();
-      });
-
-      row.querySelector('.toggle-vis').addEventListener('click', (e) => {
-        e.stopPropagation();
-        l.visible = !l.visible;
-        renderLayerList();
-        renderFeatures();
-        scheduleSave();
-      });
-
-      row.querySelector('.delete-layer').addEventListener('click', (e) => {
-        e.stopPropagation();
-        if(state.layers.length <= 1) return alert('يجب الإبقاء على طبقة واحدة على الأقل.');
-        if(confirm(`هل أنت متأكد من حذف طبقة "${l.name}" وكافة عناصرها؟`)){
-          pushStateToUndo();
-          if(layerGroups[l.id]) { map.removeLayer(layerGroups[l.id]); delete layerGroups[l.id]; }
-          state.layers = state.layers.filter(x => x.id !== l.id);
-          if(state.activeLayerId === l.id) state.activeLayerId = state.layers[0].id;
-          if(selection && selection.layerId === l.id) selection = null;
-          renderLayerList(); renderAttrPanel(); renderFeatures(); scheduleSave();
-        }
-      });
-
-      row.querySelector('.swatch').addEventListener('click', (e) => {
-        e.stopPropagation();
-        pushStateToUndo();
-        const nextIdx = state.nextColorIdx % palette.length;
-        l.color = palette[nextIdx];
-        state.nextColorIdx++;
+      row.className = `layer-row ${layer.id===state.activeLayerId?'active':''}`;
+      row.addEventListener('click', ()=>{ state.activeLayerId=layer.id; renderLayerList(); });
+      
+      const swatch = document.createElement('div');
+      swatch.className = 'swatch'; swatch.style.background = layer.color;
+      swatch.addEventListener('click', e=>{
+        L.DomEvent.stopPropagation(e);
+        const idx = palette.indexOf(layer.color);
+        layer.color = palette[(idx+1)%palette.length];
         renderLayerList(); renderFeatures(); scheduleSave();
       });
 
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'lname'; nameSpan.textContent = layer.name;
+      
+      const countSpan = document.createElement('span');
+      countSpan.className = 'lcount'; countSpan.textContent = `(${layer.features.length})`;
+
+      const visBtn = document.createElement('button');
+      visBtn.className = 'icon-btn'; visBtn.innerHTML = layer.visible ? eyeOpenIcon() : eyeClosedIcon();
+      visBtn.addEventListener('click', e=>{
+        L.DomEvent.stopPropagation(e);
+        layer.visible = !layer.visible;
+        renderLayerList(); renderFeatures(); scheduleSave();
+      });
+
+      row.appendChild(swatch); row.appendChild(nameSpan); row.appendChild(countSpan); row.appendChild(visBtn);
+      if(state.layers.length > 1){
+        const delBtn = document.createElement('button');
+        delBtn.className = 'icon-btn'; delBtn.innerHTML = trashIcon();
+        delBtn.addEventListener('click', e=>{
+          L.DomEvent.stopPropagation(e);
+          if(confirm(`هل تريد حذف الطبقة "${layer.name}" بجميع عناصرها؟`)){
+            if(layerGroups[layer.id]) { map.removeLayer(layerGroups[layer.id]); delete layerGroups[layer.id]; }
+            state.layers = state.layers.filter(l=>l.id!==layer.id);
+            if(state.activeLayerId===layer.id) state.activeLayerId = state.layers[0].id;
+            if(selection && selection.layerId===layer.id) selection=null;
+            renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
+          }
+        });
+        row.appendChild(delBtn);
+      }
       container.appendChild(row);
     });
   }
 
-  function addFeature(type, coords, props){
-    const f = {
-      id: uid(),
-      type: type,
-      coords: coords,
-      properties: props || { name: 'عنصر جديد_' + uid().slice(2,6) }
-    };
-    activeLayer().features.push(f);
-    renderLayerList();
-    return f;
-  }
-
-  /* ---------- HUD Operations for Precise Geometry ---------- */
-  document.getElementById('rectCancel').addEventListener('click', () => {
-    rectPending = null; rectHud.style.display = 'none';
-  });
-  document.getElementById('rectCreate').addEventListener('click', () => {
-    if(!rectPending) return;
-    pushStateToUndo();
-    const w = parseFloat(document.getElementById('rWidth').value) || 10;
-    const l = parseFloat(document.getElementById('rLength').value) || 20;
-    const rot = parseFloat(document.getElementById('rRotation').value) || 0;
-    const anchor = document.getElementById('rAnchor').value;
-
-    const f = addFeature('rectangle', [], { name: 'مستطيل هندسي' });
-    f.rect = { lat: rectPending.lat, lng: rectPending.lng, width: w, length: l, rotation: rot, mode: anchor };
-    syncRectCoords(f);
-
-    rectPending = null; rectHud.style.display = 'none';
-    selection = { layerId: activeLayer().id, featureId: f.id };
-    renderFeatures(); renderAttrPanel(); scheduleSave();
+  document.getElementById('addLayerBtn').addEventListener('click', ()=>{
+    const name = prompt('أدخل اسم الطبقة الجديدة:', `طبقة ${state.layers.length+1}`);
+    if(!name) return;
+    const id = 'L' + uid();
+    const color = palette[state.nextColorIdx++ % palette.length];
+    state.layers.push({id, name, color, visible:true, features:[]});
+    state.activeLayerId = id;
+    renderLayerList(); renderFeatures(); scheduleSave();
   });
 
-  document.getElementById('circleCancel').addEventListener('click', () => {
-    circlePending = null; circleHud.style.display = 'none';
-  });
-  document.getElementById('circleCreate').addEventListener('click', () => {
-    if(!circlePending) return;
-    pushStateToUndo();
-    const r = parseFloat(document.getElementById('cRadius').value) || 10;
-
-    const f = addFeature('circle', [], { name: 'دائرة هندسية' });
-    f.circle = { lat: circlePending.lat, lng: circlePending.lng, radius: r };
-    syncCircleCoords(f);
-
-    circlePending = null; circleHud.style.display = 'none';
-    selection = { layerId: activeLayer().id, featureId: f.id };
-    renderFeatures(); renderAttrPanel(); scheduleSave();
-  });
-
-  /* ---------- Attributes Panel Renderer ---------- */
+  /* ---------- Attributes UI & Editing ---------- */
   function renderAttrPanel(){
     const container = document.getElementById('attrContent');
     if(!selection){
-      container.innerHTML = '<div class="empty-state">اختر عنصر من الخريطة<br>لعرض وتعديل خصائصه</div>';
-      return;
+      container.innerHTML = '<div class="empty-state">اختر عنصر من الخريطة<br>لعرض وتعديل خصائصه</div>'; return;
     }
     const f = getFeature(selection.layerId, selection.featureId);
-    if(!f){ selection = null; renderAttrPanel(); return; }
-
-    let infoHtml = '';
-    if(f.type === 'point'){
-      infoHtml = `<div class="stat-row">الإحداثيات: <b>${f.coords[0][0].toFixed(5)}, ${f.coords[0][1].toFixed(5)}</b></div>`;
-    } else if(f.type === 'line'){
-      infoHtml = `<div class="stat-row">إجمالي الطول: <b>${pathLength(f.coords).toFixed(2)} م</b></div>`;
-    } else if(f.type === 'polygon'){
-      infoHtml = `
-        <div class="stat-row">المساحة: <b>${polygonAreaMeters(f.coords).toFixed(2)} م²</b></div>
-        <div class="stat-row">المحيط: <b>${pathPerimeter(f.coords).toFixed(2)} م</b></div>
-      `;
-    } else if(f.type === 'rectangle'){
-      infoHtml = `
-        <div class="stat-row">المساحة المحسوبة: <b>${(f.rect.width * f.rect.length).toFixed(2)} م²</b></div>
-        <div class="rect-edit-grid">
-          <div><label>العرض (متر)</label><input type="number" id="edRW" value="${f.rect.width}" step="0.1"></div>
-          <div><label>الطول (متر)</label><input type="number" id="edRL" value="${f.rect.length}" step="0.1"></div>
-          <div style="grid-column: span 2"><label>الدوران (°)</label><input type="number" id="edRRot" value="${f.rect.rotation}" step="1"></div>
-        </div>
-      `;
-    } else if(f.type === 'circle'){
-      infoHtml = `
-        <div class="stat-row">المساحة: <b>${(Math.PI * (f.circle.radius ** 2)).toFixed(2)} م²</b></div>
-        <div style="margin-top:8px;"><label>نصف القطر (متر)</label><input type="number" id="edCRad" value="${f.circle.radius}" step="0.1"></div>
-      `;
+    if(!f){ selection=null; container.innerHTML = '<div class="empty-state">العنصر لم يعد موجوداً</div>'; return; }
+    
+    let html = `<div class="attr-block">`;
+    if(f.type==='rectangle') {
+      html += `<div class="ftype">مستطيل بالأطوال</div>`;
+      html += `<div class="stat-row">المحيط: <b>${pathPerimeter(f.coords).toFixed(1)} م</b></div>`;
+      html += `<div class="stat-row">المساحة: <b>${polygonAreaMeters(f.coords).toFixed(1)} م²</b></div>`;
+      html += `<div class="rect-edit-grid">
+        <div><label>العرض (م)</label><input type="number" id="edW" value="${f.rect.width}" step="0.1"></div>
+        <div><label>الطول (م)</label><input type="number" id="edL" value="${f.rect.length}" step="0.1"></div>
+        <div style="grid-column: span 2"><label>الدوران (°)</label><input type="number" id="edR" value="${f.rect.rotation}"></div>
+      </div>`;
+    } 
+    else if(f.type==='circle') {
+      html += `<div class="ftype">دائرة بنصف قطر</div>`;
+      html += `<div class="stat-row">نصف القطر: <b>${f.circle.radius} م</b></div>`;
+      html += `<div class="stat-row">المحيط: <b> ${(2*Math.PI*f.circle.radius).toFixed(1)} م</b></div>`;
+      html += `<div class="stat-row">المساحة: <b> ${(Math.PI*(f.circle.radius**2)).toFixed(1)} م²</b></div>`;
+      html += `<div class="field-row"><label style="font-size:11px;">نصف القطر (م)</label><input type="number" id="edRad" value="${f.circle.radius}" step="0.1"></div>`;
+    } 
+    else if(f.type==='point') {
+      html += `<div class="ftype">نقطة</div>`;
+      html += `<div class="stat-row">Lat: <b>${f.coords[0][0].toFixed(6)}</b></div>`;
+      html += `<div class="stat-row">Lng: <b>${f.coords[0][1].toFixed(6)}</b></div>`;
+    } 
+    else if(f.type==='line') {
+      html += `<div class="ftype">خط</div>`;
+      html += `<div class="stat-row">الطول الإجمالي: <b>${pathLength(f.coords).toFixed(1)} م</b></div>`;
+      html += `<div class="stat-row">النقاط: <b>${f.coords.length}</b></div>`;
+    } 
+    else {
+      html += `<div class="ftype">مضلع حر</div>`;
+      html += `<div class="stat-row">المحيط: <b>${pathPerimeter(f.coords).toFixed(1)} م</b></div>`;
+      html += `<div class="stat-row">المساحة: <b>${polygonAreaMeters(f.coords).toFixed(1)} م²</b></div>`;
     }
+    html += `</div>`;
 
-    let propsFields = '';
-    Object.keys(f.properties).forEach(k => {
-      propsFields += `
-        <div class="field-row" data-key="${escapeHtml(k)}">
-          <input type="text" class="key" value="${escapeHtml(k)}" disabled>
-          <input type="text" class="val" value="${escapeHtml(f.properties[k])}">
-        </div>
-      `;
+    html += `<div class="section-title" style="margin-top:12px;">الحقول الوصفية</div>`;
+    Object.keys(f.attrs).forEach(k=>{
+      html += `<div class="field-row">
+        <input type="text" class="key" value="${escapeHtml(k)}" data-orig="${escapeHtml(k)}">
+        <input type="text" class="val" value="${escapeHtml(f.attrs[k])}" data-key="${escapeHtml(k)}">
+        <button class="icon-btn del-attr" data-key="${escapeHtml(k)}" title="حذف الحقل">${trashIcon()}</button>
+      </div>`;
     });
+    html += `<button class="add-btn" id="addAttrBtn" style="padding:5px; font-size:11px;">+ إضافة حقل وصفى</button>`;
+    html += `<button class="danger-btn" id="delFeatureBtn">حذف العنصر من الخريطة</button>`;
 
-    container.innerHTML = `
-      <div class="attr-block">
-        <div class="ftype">${f.type === 'rectangle'?'مستطيل بأبعاد':f.type === 'circle'?'دائرة هندسية':f.type}</div>
-        ${infoHtml}
-      </div>
-      <div class="section-title">جدول البيانات والخصائص</div>
-      ${propsFields}
-      <div class="field-row">
-        <input type="text" id="newKey" class="key" placeholder="الحقل" style="background:transparent; border-style:dashed;">
-        <input type="text" id="newVal" class="val" placeholder="القيمة" style="background:transparent; border-style:dashed;">
-        <button class="icon-btn" id="addFieldBtn" title="إضافة حقل" style="color:var(--teal)"><b>+</b></button>
-      </div>
-      <button class="danger-btn" id="delFeatureBtn">حذف العنصر المختار</button>
-    `;
+    container.innerHTML = html;
 
-    // Dynamic parametric changes listener
-    if(f.type === 'rectangle'){
-      let hasStoredState = false;
-      ['edRW', 'edRL', 'edRRot'].forEach(id => {
-        document.getElementById(id).addEventListener('focus', () => { hasStoredState = false; });
-        document.getElementById(id).addEventListener('input', () => {
-          if (!hasStoredState) { pushStateToUndo(); hasStoredState = true; } // حفظ الحالة عند بداية الكتابة
-          f.rect.width = parseFloat(document.getElementById('edRW').value) || 1;
-          f.rect.length = parseFloat(document.getElementById('edRL').value) || 1;
-          f.rect.rotation = parseFloat(document.getElementById('edRRot').value) || 0;
+    // أحداث حقول المستطيل بالأطوال
+    if(f.type==='rectangle'){
+      ['edW','edL','edR'].forEach(id=>{
+        document.getElementById(id).addEventListener('input', ()=>{
+          f.rect.width = Math.max(0.01, parseFloat(document.getElementById('edW').value)||10);
+          f.rect.length = Math.max(0.01, parseFloat(document.getElementById('edL').value)||20);
+          f.rect.rotation = parseFloat(document.getElementById('edR').value)||0;
           syncRectCoords(f); renderFeatures(); scheduleSave();
         });
       });
-    } else if(f.type === 'circle'){
-      let hasStoredState = false;
-      document.getElementById('edCRad').addEventListener('focus', () => { hasStoredState = false; });
-      document.getElementById('edCRad').addEventListener('input', (e) => {
-        if (!hasStoredState) { pushStateToUndo(); hasStoredState = true; }
-        f.circle.radius = parseFloat(e.target.value) || 1;
+    }
+    if(f.type==='circle'){
+      document.getElementById('edRad').addEventListener('input', e=>{
+        f.circle.radius = Math.max(0.01, parseFloat(e.target.value)||10);
         syncCircleCoords(f); renderFeatures(); scheduleSave();
       });
     }
 
-    // Property value adjustments
-    container.querySelectorAll('.field-row .val').forEach(input => {
-      let hasStoredState = false;
-      input.addEventListener('focus', () => { hasStoredState = false; });
-      input.addEventListener('input', (e) => {
-        if (!hasStoredState) { pushStateToUndo(); hasStoredState = true; }
-        const key = e.target.closest('.field-row').dataset.key;
-        f.properties[key] = e.target.value;
-        scheduleSave();
+    // أحداث الحقول الوصفية
+    container.querySelectorAll('.field-row input.val').forEach(inp=>{
+      inp.addEventListener('input', e=>{ f.attrs[e.target.dataset.key] = e.target.value; scheduleSave(); });
+    });
+    container.querySelectorAll('.field-row input.key').forEach(inp=>{
+      inp.addEventListener('change', e=>{
+        const oldK = e.target.dataset.orig, newK = e.target.value.trim();
+        if(!newK || oldK===newK) { e.target.value = oldK; return; }
+        f.attrs[newK] = f.attrs[oldK]; delete f.attrs[oldK];
+        renderAttrPanel(); scheduleSave();
       });
     });
-
-    document.getElementById('addFieldBtn').addEventListener('click', () => {
-      const k = document.getElementById('newKey').value.trim();
-      const v = document.getElementById('newVal').value.trim();
-      if(!k) return;
-      pushStateToUndo();
-      f.properties[k] = v;
-      renderAttrPanel(); scheduleSave();
+    container.querySelectorAll('.del-attr').forEach(b=>{
+      b.addEventListener('click', e=>{
+        const k = e.target.closest('.del-attr').dataset.key;
+        delete f.attrs[k]; renderAttrPanel(); scheduleSave();
+      });
     });
-
-    document.getElementById('delFeatureBtn').addEventListener('click', () => {
-      pushStateToUndo();
-      const layer = getLayer(selection.layerId);
-      layer.features = layer.features.filter(x => x.id !== selection.featureId);
-      selection = null;
-      renderLayerList(); renderAttrPanel(); renderFeatures(); scheduleSave();
+    document.getElementById('addAttrBtn').addEventListener('click', ()=>{
+      let k = 'حقل_' + Math.floor(Math.random()*1000);
+      f.attrs[k] = ''; renderAttrPanel(); scheduleSave();
+    });
+    document.getElementById('delFeatureBtn').addEventListener('click', ()=>{
+      const l = getLayer(selection.layerId);
+      l.features = l.features.filter(x=>x.id!==selection.featureId);
+      selection = null; renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
     });
   }
 
-  /* ---------- Global Action Buttons ---------- */
-  document.getElementById('addLayerBtn').addEventListener('click', () => {
-    const name = prompt('أدخل اسم الطبقة الجديدة:', `طبقة ${state.layers.length + 1}`);
-    if(!name) return;
-    pushStateToUndo();
-    const nextIdx = state.nextColorIdx % palette.length;
-    const newLayer = { id: 'L_' + uid(), name, color: palette[nextIdx], visible: true, features: [] };
-    state.nextColorIdx++;
-    state.layers.push(newLayer);
-    state.activeLayerId = newLayer.id;
-    renderLayerList(); scheduleSave();
+  function addFeature(type, coords){
+    const l = activeLayer();
+    const f = { id:uid(), type, coords, attrs:{} };
+    l.features.push(f);
+    renderLayerList();
+    return f;
+  }
+
+  /* ---------- HUD Dialogs Creation ---------- */
+  document.getElementById('rectCancel').addEventListener('click', ()=>{ rectHud.style.display='none'; rectPending=null; });
+  document.getElementById('rectCreate').addEventListener('click', ()=>{
+    if(!rectPending)return;
+    const w = Math.max(0.01, parseFloat(document.getElementById('rWidth').value)||10);
+    const l = Math.max(0.01, parseFloat(document.getElementById('rLength').value)||20);
+    const rot = parseFloat(document.getElementById('rRotation').value)||0;
+    const anch = document.getElementById('rAnchor').value;
+    const f = addFeature('rectangle', []);
+    f.rect = { lat:rectPending.lat, lng:rectPending.lng, width:w, length:l, rotation:rot, mode:anch };
+    syncRectCoords(f);
+    rectHud.style.display='none'; rectPending=null;
+    selection = {layerId:activeLayer().id, featureId:f.id};
+    renderFeatures(); renderAttrPanel(); scheduleSave();
   });
 
-  document.getElementById('locateBtn').addEventListener('click', () => {
-    map.locate({setView: true, maxZoom: 17});
+  document.getElementById('circleCancel').addEventListener('click', ()=>{ circleHud.style.display='none'; circlePending=null; });
+  document.getElementById('circleCreate').addEventListener('click', ()=>{
+    if(!circlePending)return;
+    const rad = Math.max(0.01, parseFloat(document.getElementById('cRadius').value)||10);
+    const f = addFeature('circle', []);
+    f.circle = { lat:circlePending.lat, lng:circlePending.lng, radius:rad };
+    syncCircleCoords(f);
+    circleHud.style.display='none'; circlePending=null;
+    selection = {layerId:activeLayer().id, featureId:f.id};
+    renderFeatures(); renderAttrPanel(); scheduleSave();
   });
-  map.on('locationerror', () => alert('عذراً، تعذر الوصول إلى موقعك الجغرافي.'));
 
-  document.getElementById('fitBtn').addEventListener('click', () => {
-    const all = [];
-    state.layers.forEach(l => { if(l.visible) l.features.forEach(f => f.coords.forEach(c => all.push(c))); });
-    if(all.length) map.fitBounds(L.latLngBounds(all), {padding: [30, 30]});
-    else alert('لا توجد عناصر مرسومة في الطبقات النشطة لملائمة العرض.');
+  /* ---------- Map Utilities ---------- */
+  document.getElementById('locateBtn').addEventListener('click', ()=>{
+    map.locate({setView:true, maxZoom:18});
+  });
+  map.on('locationerror', ()=>(document.getElementById('stHint').textContent = '❌ تعذر تحديد موقعك الحالي'));
+  map.on('locationfound', ()=>(document.getElementById('stHint').textContent = '📍 تم تحديد موقعك الحالي بنجاح'));
+
+  document.getElementById('fitBtn').addEventListener('click', ()=>{
+    const all = []; state.layers.forEach(l=>l.features.forEach(f=>f.coords.forEach(c=>all.push(c))));
+    if(all.length) map.fitBounds(L.latLngBounds(all), {padding:[30,30]});
   });
 
-  document.getElementById('exportBtn').addEventListener('click', () => {
+  document.getElementById('exportBtn').addEventListener('click', ()=>{
     const fc = { type: 'FeatureCollection', features: [] };
-    state.layers.forEach(layer => {
-      layer.features.forEach(f => {
-        let geomType = f.type === 'point' ? 'Point' : f.type === 'line' ? 'LineString' : 'Polygon';
-        let geometry = { type: geomType, coordinates: [] };
-        
-        if(f.type === 'point'){
-          geometry.coordinates = [f.coords[0][1], f.coords[0][0]];
-        } else if(f.type === 'line'){
-          geometry.coordinates = f.coords.map(c => [c[1], c[0]]);
-        } else {
-          const ring = f.coords.map(c => [c[1], c[0]]);
-          ring.push([f.coords[0][1], f.coords[0][0]]);
-          geometry.coordinates = [ring];
-        }
-
-        const props = Object.assign({}, f.properties, {
-          _layerName: layer.name,
-          _layerColor: layer.color,
-          _featureType: f.type
-        });
-        if(f.rect) props._rectParam = f.rect;
-        if(f.circle) props._circleParam = f.circle;
-
-        fc.features.push({ type: 'Feature', geometry, properties: props });
+    state.layers.forEach(layer=>{
+      layer.features.forEach(f=>{
+        let gType = f.type==='point'?'Point': (f.type==='line'?'LineString':'Polygon');
+        let gCoords = f.type==='point' ? [f.coords[0][1], f.coords[0][0]] :
+                     (f.type==='line' ? f.coords.map(c=>[c[1],c[0]]) : [f.coords.concat([f.coords[0]]).map(c=>[c[1],c[0]])]);
+        const props = Object.assign({ layer: layer.name, type: f.type }, f.attrs);
+        if(f.type==='rectangle') props.rect_info = f.rect;
+        if(f.type==='circle') props.circle_info = f.circle;
+        fc.features.push({ type:'Feature', properties:props, geometry:{ type:gType, coordinates:gCoords } });
       });
     });
-
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(fc, null, 2));
-    const dlAnchor = document.createElement('a');
-    dlAnchor.setAttribute("href", dataStr);
-    dlAnchor.setAttribute("download", `Spatial_Export_${new Date().toISOString().slice(0,10)}.geojson`);
-    document.body.appendChild(dlAnchor);
-    dlAnchor.click();
-    dlAnchor.remove();
+    const blob = new Blob([JSON.stringify(fc, null, 2)], {type:'application/json'});
+    const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download = `spatial_drawing_${new Date().toISOString().slice(0,10)}.geojson`;
+    a.click();
   });
 
-  /* ---------- Google Drive Simulation Sync ---------- */
-  function setDriveStatus(isConnected, fileName = 'Cloud_Project.json') {
-    const ctrl = document.getElementById('driveControl');
-    const msg = document.getElementById('driveMsg');
-    
-    if (isConnected) {
-      ctrl.className = 'drive-control connected';
-      msg.textContent = `متصل: ${fileName}`;
-      localStorage.setItem('drive_connected', 'true');
-    } else {
-      ctrl.className = 'drive-control disconnected';
-      msg.textContent = 'غير متصل بـ Drive';
-      localStorage.setItem('drive_connected', 'false');
-    }
-  }
+  /* ---------- Google Drive Stub ---------- */
+  document.getElementById('driveConnectBtn').addEventListener('click', ()=>alert('سيتم ربطه بحساب Google Drive قريباً لحفظ ومشاركة الخرائط حياً!'));
+  document.getElementById('driveJoinBtn').addEventListener('click', ()=>{ let id = prompt('أدخل رقم الملف المشترك (File ID):'); if(id) alert('جارٍ جلب البيانات المشتركة...'); });
+  document.getElementById('driveCopyIdBtn').addEventListener('click', ()=>alert('لا يوجد ملف نشط حالياً لمشاركته.'));
 
-  document.getElementById('driveConnectBtn').addEventListener('click', () => {
-    if (navigator.onLine) {
-      setDriveStatus(true);
-      alert('تم الاتصال بـ Google Drive ومزامنة البيانات بنجاح.');
-    } else {
-      alert('لا يمكن الاتصال الآن، يرجى التحقق من جودة شبكة الإنترنت.');
-    }
-  });
-
-  window.addEventListener('online', () => {
-    const wasConnectedBefore = localStorage.getItem('drive_connected') === 'true';
-    if (wasConnectedBefore) {
-      setDriveStatus(true);
-      if (typeof doSave === "function") doSave(); 
-    }
-  });
-
-  window.addEventListener('offline', () => {
-    const msg = document.getElementById('driveMsg');
-    msg.textContent = 'جاري الانتظار... انقطع الاتصال بالشبكة';
-  });
-
-  /* ---------- Startup Initialization ---------- */
-  document.addEventListener('DOMContentLoaded', () => {
-    loadState();
-    
-    const wasConnectedBefore = localStorage.getItem('drive_connected') === 'true';
-    if (wasConnectedBefore && navigator.onLine) {
-      setDriveStatus(true);
-    } else if (wasConnectedBefore && !navigator.onLine) {
-      const msg = document.getElementById('driveMsg');
-      msg.textContent = 'بانتظار شبكة الإنترنت لإعادة المزامنة...';
-    }
-  });
+  // تهيئة التطبيق
+  loadState();
 })();
 </script>
 </body>
