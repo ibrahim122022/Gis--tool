@@ -265,9 +265,10 @@
   const map = L.map('map', {zoomControl:false, center:[29.9792, 31.1342], zoom:16, worldCopyJump:true});
   L.control.zoom({position:'topleft'}).addTo(map);
 
-  const satLayer = L.tileLayer('http://www.google.cn/maps/vt?lyrs=s@189&gl=cn&x={col}&y={row}&z={level}', {
-    attribution: 'Esri, Maxar, Earthstar Geographics, GIS User Community', maxZoom:19
-  }).addTo(map);
+  const satLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+    attribution: '© Google Maps',
+    maxZoom: 20
+});
   const streetsLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors', maxZoom:22, subdomains:'abc'
   });
