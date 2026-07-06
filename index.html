@@ -99,10 +99,10 @@
   ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
 
   .leaflet-popup-content{font-family:var(--sans);direction:rtl;}
-  .vertex-marker{background:var(--bg);border:2px solid var(--teal);border-radius:50%;}
+  .vertex-marker{background:var(--bg);border:2px solid var(--teal);border-radius:50%;touch-action: none;}
   
-  .rect-rotate-marker{background:#e8a33d;border:2px solid #0d2438;border-radius:50%;cursor:alias;}
-  .rect-scale-marker{background:#5ec9c0;border:2px solid #0d2438;border-radius:50%;cursor:se-resize;}
+  .rect-rotate-marker{background:#e8a33d;border:2px solid #0d2438;border-radius:50%;cursor:alias;touch-action: none;}
+  .rect-scale-marker{background:#5ec9c0;border:2px solid #0d2438;border-radius:50%;cursor:se-resize;touch-action: none;}
 
   .mobile-sidebar-toggle{display:none;position:fixed;bottom:calc(76px + env(safe-area-inset-bottom, 0px) + 16px);left:12px;z-index:900;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#1a1200;border:none;box-shadow:0 6px 16px rgba(0,0,0,.4);align-items:center;justify-content:center;}
   .mobile-sidebar-toggle svg{width:22px;height:22px;}
@@ -535,6 +535,7 @@
   function setupDragHandlers(marker, setupCtxFn) {
     const startHandler = (e) => {
       L.DomEvent.stopPropagation(e);
+      if (e.originalEvent && e.originalEvent.cancelable) e.originalEvent.preventDefault();
       map.dragging.disable();
       const startLngLat = getEventLatLng(e);
       dragCtx = setupCtxFn(startLngLat, e);
@@ -565,6 +566,7 @@
         const shapeStartDrag = (e) => {
           if(tool!=='select') return;
           L.DomEvent.stopPropagation(e);
+          if (e.originalEvent && e.originalEvent.cancelable) e.originalEvent.preventDefault();
           selection = {layerId:layer.id, featureId:f.id};
           renderAttrPanel(); renderFeatures();
           map.dragging.disable();
@@ -627,6 +629,8 @@
       currentLatLng = map.containerPointToLatLng(point);
     }
 
+    if (!currentLatLng) return;
+
     const snapped = dragCtx.mode==='vertex' ? effectiveLatLng({latlng: currentLatLng}, dragCtx.feature.id) : currentLatLng;
     
     if(dragCtx.mode==='vertex'){
@@ -685,7 +689,7 @@
 
   map.getContainer().addEventListener('touchmove', e => {
     if(dragCtx) {
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
       handleMove(null, e);
     }
   }, {passive:false});
