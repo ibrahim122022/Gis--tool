@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root{
     --bg:#0d2438;
@@ -40,6 +41,13 @@
   .basemap-toggle{position:absolute;top:10px;left:10px;z-index:450;background:var(--bg-panel);border:1px solid var(--border);border-radius:9px;display:flex;padding:3px;gap:3px;box-shadow:0 4px 14px rgba(0,0,0,.35);}
   .basemap-toggle button{border:none;background:transparent;color:var(--text-muted);font-size:11.5px;padding:6px 10px;border-radius:6px;cursor:pointer;font-family:var(--sans);}
   .basemap-toggle button.active{background:var(--accent-soft);color:var(--accent);font-weight:600;}
+
+  .drive-control{position:absolute;top:10px;right:10px;z-index:450;background:var(--bg-panel);border:1px solid var(--border);border-radius:9px;padding:8px 12px;box-shadow:0 4px 14px rgba(0,0,0,.35);display:flex;align-items:center;gap:8px;font-size:11.5px;}
+  .drive-control svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;flex-shrink:0;}
+  .drive-control.connected{color:var(--teal);}
+  .drive-control.disconnected{color:var(--text-muted);}
+  .drive-control button{border:none;background:var(--accent);color:#1a1200;font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:var(--sans);}
+  .drive-control .drive-msg{font-family:var(--mono);font-size:10.5px;opacity:.85;}
 
   .statusbar{height:30px;background:var(--bg-panel-2);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:18px;font-family:var(--mono);font-size:11.5px;color:var(--text-muted);flex-shrink:0;}
   .statusbar b{color:var(--teal);font-weight:500;}
@@ -127,6 +135,9 @@
     .mobile-sidebar-toggle{display:flex;}
     .basemap-toggle{top:8px;left:8px;padding:2px;}
     .basemap-toggle button{font-size:10px;padding:5px 7px;}
+    .drive-control{top:8px;right:8px;padding:6px 8px;gap:5px;flex-wrap:wrap;max-width:44vw;}
+    .drive-control .drive-msg{font-size:9px;}
+    .drive-control button{font-size:9.5px;padding:4px 6px;}
     .rect-hud{left:50% !important;top:50% !important;transform:translate(-50%,-50%);width:82vw;max-width:260px;}
     .statusbar{font-size:10px;gap:10px;padding:0 8px;flex-wrap:wrap;height:auto;min-height:28px;}
   }
@@ -180,7 +191,7 @@
       <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>ملائمة</span>
     </button>
     <div class="toolbar-sep"></div>
-    <button class="tool-btn" id="exportBtn" title="تصدر GeoJSON">
+    <button class="tool-btn" id="exportBtn" title="حفظ كملف محلي">
       <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 19h14"/></svg><span>تصدير</span>
     </button>
   </div>
@@ -198,7 +209,18 @@
         <button id="btnSat" class="active">قمر صناعي</button>
         <button id="btnStreets">خريطة عادية</button>
       </div>
-
+      <div class="drive-control disconnected" id="driveControl">
+        <svg viewBox="0 0 24 24"><path d="M7 15l-4-7 4-7h10l4 7-4 7z"/><path d="M3 8h18M9 15l3 5 3-5"/></svg>
+        <span class="drive-msg" id="driveMsg">غير متصل بـ Drive</span>
+        <button id="driveConnectBtn">اتصال</button>
+        <button id="driveJoinBtn" title="الانضمام لملف مشترك من زميل">ربط بملف</button>
+        <button id="driveCopyIdBtn" title="نسخ رقم الملف لمشاركته">نسخ ID</button>
+      </div>
+      <div class="drive-control" id="driveUpdateBanner" style="display:none;top:56px;border-color:var(--accent);">
+        <span class="drive-msg" style="color:var(--accent);">🔄 فيه نسخة تانية على Drive</span>
+        <button id="driveImportBtn">استيراد</button>
+        <button id="driveDismissBtn" style="background:var(--bg-panel-2);color:var(--text-muted);">تجاهل</button>
+      </div>
       <div class="rect-hud" id="rectHud">
         <h4>مستطيل بالأطوال</h4>
         <label>العرض (متر)</label>
@@ -269,7 +291,6 @@
   let tempLine = null;
   let snapEnabled = true;
   let snapMarker = null;
-  let userLocationMarker = null;
 
   let undoStack = [];
   let redoStack = [];
@@ -312,9 +333,10 @@
     return layerGroups[layer.id];
   }
 
+  /* ---------- History Management (Undo/Redo) ---------- */
   function pushStateToUndo() {
     undoStack.push(JSON.stringify({ layers: state.layers, activeLayerId: state.activeLayerId, nextColorIdx: state.nextColorIdx }));
-    redoStack = [];
+    redoStack = []; 
     updateHistoryButtons();
   }
 
@@ -379,6 +401,8 @@
   undoBtn.addEventListener('click', (e) => { L.DomEvent.stopPropagation(e); handleUndo(); });
   redoBtn.addEventListener('click', (e) => { L.DomEvent.stopPropagation(e); handleRedo(); });
 
+  /* ---------- Geometry helpers ---------- */
+  function uid(){ return 'f' + Math.random().toString(36).slice(2,10); }
   function toRad(d){ return d*Math.PI/180; }
   function toDeg(r){ return r*180/Math.PI; }
   
@@ -480,6 +504,7 @@
     return e.latlng;
   }
 
+  /* ---------- Persistence ---------- */
   function scheduleSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(doSave, 700); }
   function doSave(){
     try{
@@ -507,45 +532,19 @@
     return e.latlng;
   }
 
-  function bindTouchAndMouseStart(leafletLayer, handler) {
-    leafletLayer.on('mousedown', handler);
-    
-    const bindNativeTouch = () => {
-      if (leafletLayer._path) {
-        leafletLayer._path.removeEventListener('touchstart', leafletLayer._touchHandler);
-        
-        leafletLayer._touchHandler = (e) => {
-          if (e.cancelable) e.preventDefault();
-          L.DomEvent.stopPropagation(e);
-          const fakeEvent = {
-            originalEvent: e,
-            latlng: map.containerPointToLatLng(map.mouseEventToContainerPoint(e.touches[0]))
-          };
-          handler(fakeEvent);
-        };
-        leafletLayer._path.addEventListener('touchstart', leafletLayer._touchHandler, { passive: false });
-      }
-    };
-
-    if (leafletLayer._path) {
-      bindNativeTouch();
-    } else {
-      leafletLayer.on('add', bindNativeTouch);
-    }
-  }
-
   function setupDragHandlers(marker, setupCtxFn) {
     const startHandler = (e) => {
-      if (e.originalEvent && e.originalEvent.cancelable) e.originalEvent.preventDefault();
       L.DomEvent.stopPropagation(e);
       map.dragging.disable();
       const startLngLat = getEventLatLng(e);
       dragCtx = setupCtxFn(startLngLat, e);
-      pushStateToUndo();
+      pushStateToUndo(); 
     };
-    bindTouchAndMouseStart(marker, startHandler);
+    marker.on('mousedown', startHandler);
+    marker.on('touchstart', startHandler);
   }
 
+  /* ---------- Rendering vector features ---------- */
   function renderFeatures(){
     state.layers.forEach(layer=>{
       const lg = ensureLayerGroup(layer);
@@ -565,13 +564,12 @@
         
         const shapeStartDrag = (e) => {
           if(tool!=='select') return;
-          if (e.originalEvent && e.originalEvent.cancelable) e.originalEvent.preventDefault();
           L.DomEvent.stopPropagation(e);
           selection = {layerId:layer.id, featureId:f.id};
           renderAttrPanel(); renderFeatures();
           map.dragging.disable();
           const startLngLat = getEventLatLng(e);
-          pushStateToUndo();
+          pushStateToUndo(); 
           dragCtx = {
             mode:'move', feature:f, startLatLng:startLngLat, 
             origCoords:JSON.parse(JSON.stringify(f.coords)), 
@@ -579,7 +577,8 @@
             origCircle: f.circle?Object.assign({},f.circle):null
           };
         };
-        bindTouchAndMouseStart(shape, shapeStartDrag);
+        shape.on('mousedown', shapeStartDrag);
+        shape.on('touchstart', shapeStartDrag);
         shape.addTo(lg);
 
         if(isSel && f.type==='rectangle') {
@@ -617,6 +616,7 @@
     });
   }
 
+  /* ---------- Drag handling ---------- */
   function handleMove(latlng, originalEvent) {
     if(!dragCtx) return;
     
@@ -685,7 +685,7 @@
 
   map.getContainer().addEventListener('touchmove', e => {
     if(dragCtx) {
-      if (e.cancelable) e.preventDefault();
+      e.preventDefault();
       handleMove(null, e);
     }
   }, {passive:false});
@@ -698,6 +698,7 @@
   document.addEventListener('mouseup', endDrag);
   document.addEventListener('touchend', endDrag);
 
+  /* ---------- Map click: selection clear / drawing ---------- */
   map.on('click', e=>{
     if(tool==='select'){
       selection=null; renderAttrPanel(); renderFeatures(); return;
@@ -787,6 +788,7 @@
     }
   });
 
+  /* ---------- Tools & tabs ---------- */
   document.getElementById('snapBtn').addEventListener('click', ()=>{
     snapEnabled = !snapEnabled;
     document.getElementById('snapBtn').classList.toggle('active', snapEnabled);
@@ -826,6 +828,7 @@
     sidebarEl.classList.toggle('open');
   });
 
+  /* ---------- Layers UI ---------- */
   function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
   function eyeOpenIcon(){ return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>'; }
   function eyeClosedIcon(){ return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'; }
@@ -895,6 +898,7 @@
     renderLayerList(); renderFeatures(); scheduleSave();
   });
 
+  /* ---------- Attributes UI & Editing ---------- */
   function renderAttrPanel(){
     const container = document.getElementById('attrContent');
     if(!selection){
@@ -953,7 +957,7 @@
 
     if(f.type==='rectangle'){
       ['edW','edL','edR'].forEach(id=>{
-        document.getElementById(id).addEventListener('focus', pushStateToUndo);
+        document.getElementById(id).addEventListener('focus', pushStateToUndo); 
         document.getElementById(id).addEventListener('input', ()=>{
           f.rect.width = Math.max(0.01, parseFloat(document.getElementById('edW').value)||10);
           f.rect.length = Math.max(0.01, parseFloat(document.getElementById('edL').value)||20);
@@ -1010,6 +1014,7 @@
     return f;
   }
 
+  /* ---------- HUD Dialogs Creation ---------- */
   document.getElementById('rectCancel').addEventListener('click', ()=>{ rectHud.style.display='none'; rectPending=null; });
   document.getElementById('rectCreate').addEventListener('click', ()=>{
     if(!rectPending)return;
@@ -1039,27 +1044,12 @@
     renderFeatures(); renderAttrPanel(); scheduleSave(); updateHistoryButtons();
   });
 
+  /* ---------- Map Utilities ---------- */
   document.getElementById('locateBtn').addEventListener('click', ()=>{
     map.locate({setView:true, maxZoom:18});
   });
-  
   map.on('locationerror', ()=>(document.getElementById('stHint').textContent = '❌ تعذر تحديد موقعك الحالي'));
-  
-  map.on('locationfound', (e)=>{
-    document.getElementById('stHint').textContent = '📍 تم تحديد موقعك الحالي بنجاح';
-    if (userLocationMarker) {
-      userLocationMarker.setLatLng(e.latlng);
-    } else {
-      userLocationMarker = L.circleMarker(e.latlng, {
-        radius: 8,
-        color: '#ffffff',
-        weight: 2,
-        fillColor: '#4f9ddb',
-        fillOpacity: 0.9,
-        zIndexOffset: 1000
-      }).addTo(map);
-    }
-  });
+  map.on('locationfound', ()=>(document.getElementById('stHint').textContent = '📍 تم تحديد موقعك الحالي بنجاح'));
 
   document.getElementById('fitBtn').addEventListener('click', ()=>{
     const all = []; state.layers.forEach(l=>l.features.forEach(f=>f.coords.forEach(c=>all.push(c))));
@@ -1081,12 +1071,214 @@
     });
     return fc;
   }
-  document.getElementById('exportBtn').addEventListener('click', ()=>{
-    const blob = new Blob([JSON.stringify(buildGeoJSON(), null, 2)], {type:'application/json'});
-    const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
-    a.download = `spatial_drawing_${new Date().toISOString().slice(0,10)}.geojson`;
+
+  /* ---------- التعديل الأساسي: الحفظ المباشر كملف مكاني للموبايل والكمبيوتر ---------- */
+  async function saveToFileSystem() {
+    const geojsonData = JSON.stringify(buildGeoJSON(), null, 2);
+    const defaultFileName = `spatial_drawing_${new Date().toISOString().slice(0,10)}.geojson`;
+
+    // 1. إذا كان جهاز كمبيوتر ومتصفح يدعم الوصول المباشر للملفات (File System Access API)
+    if ('showSaveFilePicker' in window) {
+      try {
+        const options = {
+          suggestedName: defaultFileName,
+          types: [{
+            description: 'GeoJSON Files',
+            accept: { 'application/geo+json': ['.geojson', '.json'] },
+          }],
+        };
+        const handle = await window.showSaveFilePicker(options);
+        const writable = await handle.createWritable();
+        await writable.write(geojsonData);
+        await writable.close();
+        document.getElementById('stHint').textContent = '💾 تم حفظ الملف بنجاح على جهازك';
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') return; // المستخدم كنسل العملية
+        console.warn('File System Picker failed, falling back to download.', err);
+      }
+    }
+
+    // 2. إذا كان موبايل أو متصفح لا يدعم الواجهة السابقة (Fallback للتحميل المباشر)
+    const blob = new Blob([geojsonData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = defaultFileName;
+    document.body.appendChild(a);
     a.click();
+    
+    // تأخير مسح العنصر لضمان عمل التحميل على الموبايل
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 150);
+    
+    document.getElementById('stHint').textContent = '📥 تم تنزيل الملف في مجلد التنزيلات (Downloads)';
+  }
+
+  // ربط الدالة بزر التصدير في شريط الأدوات
+  document.getElementById('exportBtn').addEventListener('click', saveToFileSystem);
+
+  /* ---------- Google Drive integration (real) ---------- */
+  const DRIVE_CLIENT_ID = '677149493471-4gjbg1thbdqt8l8hjplk3bfnr4ni56nh.apps.googleusercontent.com';
+  const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+  let tokenClient=null, driveToken=null, driveTokenExpiry=0, driveConnected=false, lastPushTime=0;
+  const driveMsgEl = document.getElementById('driveMsg');
+  const driveControlEl = document.getElementById('driveControl');
+  const driveUpdateBanner = document.getElementById('driveUpdateBanner');
+  const driveImportBtn = document.getElementById('driveImportBtn');
+  const driveDismissBtn = document.getElementById('driveDismissBtn');
+  let pendingRemote = null;
+
+  function setDriveMsg(text, connected){
+    driveMsgEl.textContent = text;
+    driveControlEl.classList.toggle('connected', !!connected);
+    driveControlEl.classList.toggle('disconnected', !connected);
+  }
+  function initDriveClient(){
+    if(!window.google || !google.accounts || !google.accounts.oauth2){ setTimeout(initDriveClient, 400); return; }
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: DRIVE_CLIENT_ID, scope: DRIVE_SCOPE,
+      callback: (resp)=>{
+        if(resp.error){ setDriveMsg('فشل تسجيل الدخول', false); return; }
+        driveToken = resp.access_token;
+        driveTokenExpiry = Date.now() + (resp.expires_in*1000) - 60000;
+        driveConnected = true;
+        setDriveMsg('متصل — جاري الحفظ الأول...', true);
+        pushToDrive();
+      }
+    });
+  }
+  initDriveClient();
+  function ensureDriveToken(){
+    return new Promise((resolve, reject)=>{
+      if(driveToken && Date.now() < driveTokenExpiry){ resolve(driveToken); return; }
+      if(!tokenClient){ reject('not-init'); return; }
+      const orig = tokenClient.callback;
+      tokenClient.callback = (resp)=>{
+        tokenClient.callback = orig;
+        if(resp.error){ driveConnected=false; setDriveMsg('انتهت الجلسة — اضغط اتصال', false); reject(resp.error); return; }
+        driveToken=resp.access_token; driveTokenExpiry=Date.now()+(resp.expires_in*1000)-60000;
+        resolve(driveToken);
+      };
+      tokenClient.requestAccessToken({prompt:''});
+    });
+  }
+  function buildMultipart(boundary, metadata, content){
+    const delim='\r\n--'+boundary+'\r\n', closeDelim='\r\n--'+boundary+'--';
+    return delim+'Content-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(metadata)+
+           delim+'Content-Type: application/geo+json\r\n\r\n'+content+closeDelim;
+  }
+  let drivePushInFlight=false;
+  async function pushToDrive(){
+    if(!driveConnected || drivePushInFlight) return;
+    drivePushInFlight=true;
+    try{ await ensureDriveToken(); }catch(e){ drivePushInFlight=false; return; }
+    const content = JSON.stringify(buildGeoJSON(), null, 2);
+    const boundary='-------gistool314159265';
+    let url, method, body;
+    if(state.driveFileId){
+      url='https://www.googleapis.com/upload/drive/v3/files/'+state.driveFileId+'?uploadType=multipart';
+      method='PATCH'; body=buildMultipart(boundary, {}, content);
+    } else {
+      url='https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+      method='POST'; body=buildMultipart(boundary, {name:'gis-drawing.geojson', mimeType:'application/geo+json'}, content);
+    }
+    try{
+      const res = await fetch(url, {method, headers:{'Authorization':'Bearer '+driveToken, 'Content-Type':'multipart/related; boundary='+boundary}, body});
+      const data = await res.json();
+      if(data.id){ state.driveFileId=data.id; lastPushTime=Date.now(); setDriveMsg('✓ محفوظ في Drive الآن', true); scheduleSave(); }
+      else { setDriveMsg('فشل رفع الملف', true); }
+    }catch(e){ setDriveMsg('فشل الاتصال بـ Drive', true); }
+    drivePushInFlight=false;
+  }
+  document.getElementById('driveConnectBtn').addEventListener('click', ()=>{
+    if(!tokenClient){ alert('مكتبة تسجيل الدخول لسه بتحمّل، جرّب تاني بعد ثانية.'); return; }
+    tokenClient.requestAccessToken({prompt:'consent'});
   });
+  document.getElementById('driveJoinBtn').addEventListener('click', ()=>{
+    const id = prompt('الصق رقم الملف (File ID) اللي بعته لك زميلك:');
+    if(!id) return;
+    if(!confirm('هيتم استبدال أي رسم موجود عندك دلوقتي برسم الملف المشترك. متأكد؟')) return;
+    state.driveFileId = id.trim(); scheduleSave();
+    if(!driveConnected){ alert('اضغط "اتصال" كمان عشان تسجل دخول Drive.'); }
+    else { pullFromDrive(true); }
+  });
+  document.getElementById('driveCopyIdBtn').addEventListener('click', ()=>{
+    if(!state.driveFileId){ alert('لسه معملتش أي حفظ على Drive. اضغط "اتصال" الأول.'); return; }
+    navigator.clipboard.writeText(state.driveFileId).then(()=>{
+      alert('تم نسخ رقم الملف:\n' + state.driveFileId + '\n\nابعته لزميلك.');
+    }).catch(()=>{ alert('رقم الملف:\n' + state.driveFileId); });
+  });
+  function applyRemoteGeoJSON(geojson, remoteTime){
+    if(!geojson || !geojson.features) return;
+    const byLayer = {};
+    geojson.features.forEach(feat=>{
+      const layerName = (feat.properties && feat.properties.layer) || 'طبقة مشتركة';
+      if(!byLayer[layerName]) byLayer[layerName]=[];
+      byLayer[layerName].push(feat);
+    });
+    const newLayers = []; let ci=0;
+    Object.keys(byLayer).forEach(name=>{
+      const existing = state.layers.find(l=>l.name===name);
+      const color = existing ? existing.color : palette[ci++%palette.length];
+      const visible = existing ? existing.visible : true;
+      const features = byLayer[name].map(feat=>{
+        const props = Object.assign({}, feat.properties);
+        const rectInfo = props.rect_info, circleInfo = props.circle_info;
+        delete props.layer; delete props.type; delete props.rect_info; delete props.circle_info;
+        let coords, type = feat.properties.type;
+        if(feat.geometry.type==='Point'){ type=type||'point'; coords=[[feat.geometry.coordinates[1], feat.geometry.coordinates[0]]]; }
+        else if(feat.geometry.type==='LineString'){ type=type||'line'; coords=feat.geometry.coordinates.map(c=>[c[1],c[0]]); }
+        else { coords=feat.geometry.coordinates[0].slice(0,-1).map(c=>[c[1],c[0]]); type=type||'polygon'; }
+        const nf = {id:uid(), type, coords, attrs: props};
+        if(type==='rectangle' && rectInfo){ nf.rect = rectInfo; syncRectCoords(nf); }
+        if(type==='circle' && circleInfo){ nf.circle = circleInfo; syncCircleCoords(nf); }
+        return nf;
+      });
+      newLayers.push({id:'L'+name+ci, name, color, visible, features});
+    });
+    if(newLayers.length){ state.layers = newLayers; if(!getLayer(state.activeLayerId)) state.activeLayerId = state.layers[0].id; }
+    state.lastPulledTime = remoteTime; selection=null;
+    renderLayerList(); renderFeatures(); renderAttrPanel();
+    doSave();
+    setDriveMsg('✓ تم تحديث الرسم من زميلك', true);
+  }
+  driveImportBtn.addEventListener('click', ()=>{
+    if(pendingRemote){ applyRemoteGeoJSON(pendingRemote.geojson, pendingRemote.remoteTime); }
+    pendingRemote=null; driveUpdateBanner.style.display='none';
+  });
+  driveDismissBtn.addEventListener('click', ()=>{
+    if(pendingRemote){ state.lastPulledTime = pendingRemote.remoteTime; doSave(); }
+    pendingRemote=null; driveUpdateBanner.style.display='none';
+  });
+  async function pullFromDrive(force){
+    if(!driveConnected || !state.driveFileId) return;
+    try{ await ensureDriveToken(); }catch(e){ return; }
+    try{
+      const metaRes = await fetch('https://www.googleapis.com/drive/v3/files/'+state.driveFileId+'?fields=modifiedTime', {headers:{'Authorization':'Bearer '+driveToken}});
+      const meta = await metaRes.json();
+      if(!meta.modifiedTime) return;
+      const remoteTime = new Date(meta.modifiedTime).getTime();
+      if(!force){
+        if(remoteTime <= lastPushTime + 3000) return;
+        if(remoteTime <= (state.lastPulledTime||0)) return;
+      }
+      const fileRes = await fetch('https://www.googleapis.com/drive/v3/files/'+state.driveFileId+'?alt=media', {headers:{'Authorization':'Bearer '+driveToken}});
+      const geojson = await fileRes.json();
+      if(!geojson || !geojson.features) return;
+      if(force){ applyRemoteGeoJSON(geojson, remoteTime); }
+      else { pendingRemote = {geojson, remoteTime}; driveUpdateBanner.style.display='flex'; }
+    }catch(e){ console.error('pull failed', e); }
+  }
+  setInterval(()=>{ if(driveConnected && state.driveFileId) pullFromDrive(false); }, 12000);
+  const origScheduleSaveForDrive = scheduleSave;
+  let drivePushTimer=null;
+  scheduleSave = function(){
+    origScheduleSaveForDrive();
+    if(driveConnected){ clearTimeout(drivePushTimer); drivePushTimer=setTimeout(pushToDrive, 1200); }
+  };
 
   loadState();
 })();
