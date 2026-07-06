@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>أداة الرسم المكاني</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght=400;500;700&family=Inter:wght=400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -100,7 +100,6 @@
 
   .leaflet-popup-content{font-family:var(--sans);direction:rtl;}
   .vertex-marker{background:var(--bg);border:2px solid var(--teal);border-radius:50%;}
-  
   .rect-rotate-marker{background:#e8a33d;border:2px solid #0d2438;border-radius:50%;cursor:alias;}
   .rect-scale-marker{background:#5ec9c0;border:2px solid #0d2438;border-radius:50%;cursor:se-resize;}
 
@@ -111,8 +110,34 @@
     display: none; position: absolute; bottom: 20px; right: 20px; z-index: 999;
     background: var(--teal); color: #0d2438; border: none; border-radius: 30px;
     padding: 12px 20px; font-weight: bold; font-size: 13px; font-family: var(--sans);
-    box-shadow: 0 4px 15px rgba(0,0,0,0.4); cursor: pointer; align-items: center; gap: 6px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4); align-items: center; gap: 6px;
   }
+
+  .mobile-crosshair {
+    display: none; position: absolute; top: 50%; left: 50%; width: 24px; height: 24px;
+    transform: translate(-50%, -50%); z-index: 800; pointer-events: none;
+  }
+  .mobile-crosshair::before, .mobile-crosshair::after {
+    content: ''; position: absolute; background: var(--accent);
+  }
+  .mobile-crosshair::before { top: 11px; left: 0; width: 24px; height: 2px; }
+  .mobile-crosshair::after { top: 0; left: 11px; width: 2px; height: 24px; }
+
+  .mobile-edit-pad {
+    display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--bg-panel); border: 2px solid var(--accent); border-radius: 14px;
+    padding: 8px; z-index: 999; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    flex-direction: column; gap: 6px; width: 90%; max-width: 320px;
+  }
+  .mobile-pad-title { font-size: 11px; color: var(--accent); text-align: center; font-weight: bold; margin-bottom: 2px; }
+  .mobile-pad-row { display: flex; gap: 6px; }
+  .mobile-pad-btn {
+    flex: 1; padding: 10px 4px; background: var(--bg-panel-2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px; font-size: 11.5px; font-weight: bold; cursor: pointer;
+    font-family: var(--sans); display: flex; align-items: center; justify-content: center; gap: 4px;
+  }
+  .mobile-pad-btn.active { background: var(--teal-soft); border-color: var(--teal); color: var(--teal); }
+  .mobile-pad-btn.action-btn { background: var(--accent); color: #1a1200; border: none; }
 
   @media (max-width: 760px){
     .app{flex-direction:column;}
@@ -163,12 +188,7 @@
     <button class="tool-btn" data-tool="polygon" title="مضلع">
       <svg viewBox="0 0 24 24"><path d="M12 3l8 6-3 10H7L4 9z"/></svg><span>مضلع</span>
     </button>
-    
-    <button class="tool-btn" data-tool="ortho" title="مضلع بزوايا قائمة">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 20V4h10v10h6"/></svg><span>زاوية قائمة</span>
-    </button>
-
-    <button class="tool-btn" data-tool="rectangle" title="مستطيل بالأطوال">
+    <button class="tool-btn" data-tool="rectangle" title="مستطيل بالأطوال والاتجاه">
       <svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="9"/><path d="M4 5.5h16M4 4v3M20 4v3"/></svg><span>مستطيل</span>
     </button>
     <button class="tool-btn" data-tool="circle" title="دائرة بنصف قطر">
@@ -196,7 +216,7 @@
       <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>ملائمة</span>
     </button>
     <div class="toolbar-sep"></div>
-    <button class="tool-btn" id="exportBtn" title="تصدر GeoJSON">
+    <button class="tool-btn" id="exportBtn" title="حفظ كملف محلي">
       <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 19h14"/></svg><span>تصدير</span>
     </button>
   </div>
@@ -205,6 +225,26 @@
     <div class="canvas-wrap">
       <div id="map"></div>
       
+      <div class="mobile-crosshair" id="mobileCrosshair"></div>
+
+      <div class="mobile-edit-pad" id="mobileEditPad">
+        <div class="mobile-pad-title" id="mobilePadTitle">تعديل العنصر عبر تحريك الخريطة</div>
+        <div class="mobile-pad-row" id="mobileVertexRow" style="display:none;">
+          <button class="mobile-pad-btn" id="btnPrevVertex">⏮ السابق</button>
+          <button class="mobile-pad-btn" id="btnNextVertex">التالي ⏭</button>
+        </div>
+        <div class="mobile-pad-row">
+          <button class="mobile-pad-btn active" id="btnPadMove">✋ نقل الكل</button>
+          <button class="mobile-pad-btn" id="btnPadVertex" style="display:none;">📍 تعديل النقطة</button>
+          <button class="mobile-pad-btn" id="btnPadRotate" style="display:none;">🔄 تدوير</button>
+          <button class="mobile-pad-btn" id="btnPadScale" style="display:none;">📐 سكيل</button>
+        </div>
+        <div class="mobile-pad-row">
+          <button class="mobile-pad-btn action-btn" id="btnPadApply">تطبيق التغيير هنا</button>
+          <button class="mobile-pad-btn" id="btnPadCancel" style="background:var(--danger); color:var(--text); border:none;">إغلاق</button>
+        </div>
+      </div>
+
       <button class="mobile-finish-btn" id="mobileFinishBtn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align: middle;"><polyline points="20 6 9 17 4 12"></polyline></svg>
         إنهـاء الرسم
@@ -226,13 +266,14 @@
         <button id="driveImportBtn">استيراد</button>
         <button id="driveDismissBtn" style="background:var(--bg-panel-2);color:var(--text-muted);">تجاهل</button>
       </div>
+      
       <div class="rect-hud" id="rectHud">
-        <h4>مستطيل بالأطوال</h4>
+        <h4>مستطيل بالأطوال والزاوية</h4>
         <label>العرض (متر)</label>
         <input type="number" id="rWidth" value="10" step="0.1" min="0.01">
         <label>الطول (متر)</label>
         <input type="number" id="rLength" value="20" step="0.1" min="0.01">
-        <label>زاوية الدوران (°)</label>
+        <label>زاوية الدوران المحسوبة (°)</label>
         <input type="number" id="rRotation" value="0" step="1">
         <label>نقطة الإدراج تمثل</label>
         <select id="rAnchor"><option value="corner">ركن المستطيل</option><option value="center">مركز المستطيل</option></select>
@@ -241,6 +282,7 @@
           <button class="btn-create" id="rectCreate">إنشاء</button>
         </div>
       </div>
+      
       <div class="rect-hud" id="circleHud">
         <h4>دائرة بنصف قطر</h4>
         <label>نصف القطر (متر)</label>
@@ -289,7 +331,7 @@
   let tool = 'select';
   let selection = null;
   let drawingCoords = null;
-  let rectPending = null;
+  let rectPending = null; 
   let circlePending = null;
   let dragCtx = null;
   let saveTimer = null;
@@ -297,7 +339,10 @@
   let snapEnabled = true;
   let snapMarker = null;
 
-  // مخازن نظام التراجع والإعادة (Undo / Redo)
+  let mobileMode = 'move'; 
+  let mobileActiveVertexIdx = 0;
+  let isMobileEnv = false;
+
   let undoStack = [];
   let redoStack = [];
 
@@ -307,6 +352,15 @@
   const mobileFinishBtn = document.getElementById('mobileFinishBtn');
   const undoBtn = document.getElementById('undoBtn');
   const redoBtn = document.getElementById('redoBtn');
+
+  const mobileCrosshair = document.getElementById('mobileCrosshair');
+  const mobileEditPad = document.getElementById('mobileEditPad');
+  const mobileVertexRow = document.getElementById('mobileVertexRow');
+  const mobilePadTitle = document.getElementById('mobilePadTitle');
+  const btnPadMove = document.getElementById('btnPadMove');
+  const btnPadVertex = document.getElementById('btnPadVertex');
+  const btnPadRotate = document.getElementById('btnPadRotate');
+  const btnPadScale = document.getElementById('btnPadScale');
 
   const map = L.map('map', {zoomControl:false, center:[29.9792, 31.1342], zoom:16, worldCopyJump:true});
   L.control.zoom({position:'topleft'}).addTo(map);
@@ -339,7 +393,7 @@
     return layerGroups[layer.id];
   }
 
-  /* ---------- History Management (Undo/Redo) ---------- */
+  /* ---------- History Management ---------- */
   function pushStateToUndo() {
     undoStack.push(JSON.stringify({ layers: state.layers, activeLayerId: state.activeLayerId, nextColorIdx: state.nextColorIdx }));
     redoStack = []; 
@@ -356,6 +410,7 @@
       drawingCoords.pop();
       if (drawingCoords.length === 0) {
         drawingCoords = null;
+        rectPending = null;
         mobileFinishBtn.style.display = 'none';
         if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
         document.getElementById('stTemp').textContent = '';
@@ -377,6 +432,7 @@
       state.nextColorIdx = previous.nextColorIdx;
       
       selection = null;
+      closeMobileEditPad();
       renderLayerList();
       renderFeatures();
       renderAttrPanel();
@@ -396,6 +452,7 @@
       state.nextColorIdx = next.nextColorIdx;
       
       selection = null;
+      closeMobileEditPad();
       renderLayerList();
       renderFeatures();
       renderAttrPanel();
@@ -507,21 +564,6 @@
     } else if(snapMarker){
       map.removeLayer(snapMarker); snapMarker=null;
     }
-    
-    // منطق تقييد الزوايا القائمة للأداة الجديدة (ortho)
-    if (tool === 'ortho' && drawingCoords && drawingCoords.length > 0) {
-      let lastPt = map.latLngToContainerPoint(L.latLng(drawingCoords[drawingCoords.length - 1]));
-      let mousePt = map.latLngToContainerPoint(e.latlng);
-      let dx = mousePt.x - lastPt.x;
-      let dy = mousePt.y - lastPt.y;
-      if (Math.abs(dx) > Math.abs(dy)) {
-        mousePt.y = lastPt.y;
-      } else {
-        mousePt.x = lastPt.x;
-      }
-      return map.containerPointToLatLng(mousePt);
-    }
-
     return e.latlng;
   }
 
@@ -544,37 +586,146 @@
     if(all.length) map.fitBounds(L.latLngBounds(all), {padding:[40,40]});
   }
 
-  function getEventLatLng(e) {
-    if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches.length) {
-      const touch = e.originalEvent.touches[0];
-      const point = map.mouseEventToContainerPoint({ clientX: touch.clientX, clientY: touch.clientY });
-      return map.containerPointToLatLng(point);
-    }
-    return e.latlng;
+  /* ---------- Mobile Control Pad ---------- */
+  function openMobileEditPad(f) {
+    isMobileEnv = window.innerWidth <= 760;
+    if(!isMobileEnv) return;
+
+    mobileCrosshair.style.display = 'block';
+    mobileEditPad.style.display = 'flex';
+    
+    btnPadVertex.style.display = (f.type !== 'rectangle' && f.type !== 'circle') ? 'block' : 'none';
+    btnPadRotate.style.display = (f.type === 'rectangle') ? 'block' : 'none';
+    btnPadScale.style.display = (f.type === 'rectangle') ? 'block' : 'none';
+
+    setMobileEditMode('move');
   }
 
-  function setupDragHandlers(marker, setupCtxFn) {
-    const startHandler = (e) => {
-      L.DomEvent.stopPropagation(e);
-      map.dragging.disable();
-      const startLngLat = getEventLatLng(e);
-      dragCtx = setupCtxFn(startLngLat, e);
-      pushStateToUndo();
-    };
-    marker.on('mousedown', startHandler);
-    marker.on('touchstart', startHandler);
+  function closeMobileEditPad() {
+    mobileCrosshair.style.display = 'none';
+    mobileEditPad.style.display = 'none';
+    mobileVertexRow.style.display = 'none';
+    if(snapMarker) { map.removeLayer(snapMarker); snapMarker = null; }
   }
+
+  function setMobileEditMode(mode) {
+    mobileMode = mode;
+    document.querySelectorAll('.mobile-pad-btn[id^="btnPad"]').forEach(b => b.classList.remove('active'));
+    
+    const f = getFeature(selection.layerId, selection.featureId);
+    if(!f) return;
+
+    if(mode === 'move') {
+      btnPadMove.classList.add('active');
+      mobilePadTitle.textContent = "⚙️ اسحب الخريطة لنقل العنصر بالكامل";
+      mobileVertexRow.style.display = 'none';
+    } 
+    else if(mode === 'vertex') {
+      btnPadVertex.classList.add('active');
+      mobileVertexRow.style.display = 'flex';
+      mobileActiveVertexIdx = 0;
+      focusOnMobileVertex(f);
+    }
+    else if(mode === 'rotate') {
+      btnPadRotate.classList.add('active');
+      mobilePadTitle.textContent = "🔄 حرك الخريطة لتدوير المستطيل حول مركزه";
+      mobileVertexRow.style.display = 'none';
+    }
+    else if(mode === 'scale') {
+      btnPadScale.classList.add('active');
+      mobilePadTitle.textContent = "📐 حرك الخريطة لتغيير حجم وأبعاد المستطيل";
+      mobileVertexRow.style.display = 'none';
+    }
+  }
+
+  function focusOnMobileVertex(f) {
+    if(!f.coords[mobileActiveVertexIdx]) return;
+    const c = f.coords[mobileActiveVertexIdx];
+    mobilePadTitle.textContent = `📍 تعديل النقطة رقم (${mobileActiveVertexIdx + 1} من ${f.coords.length})`;
+    map.setView(c, map.getZoom(), {animate: true});
+  }
+
+  btnPadMove.addEventListener('click', () => setMobileEditMode('move'));
+  if(btnPadVertex) btnPadVertex.addEventListener('click', () => setMobileEditMode('vertex'));
+  if(btnPadRotate) btnPadRotate.addEventListener('click', () => setMobileEditMode('rotate'));
+  if(btnPadScale) btnPadScale.addEventListener('click', () => setMobileEditMode('scale'));
+  
+  document.getElementById('btnNextVertex').addEventListener('click', () => {
+    const f = getFeature(selection.layerId, selection.featureId);
+    if(!f) return;
+    mobileActiveVertexIdx = (mobileActiveVertexIdx + 1) % f.coords.length;
+    focusOnMobileVertex(f);
+  });
+  document.getElementById('btnPrevVertex').addEventListener('click', () => {
+    const f = getFeature(selection.layerId, selection.featureId);
+    if(!f) return;
+    mobileActiveVertexIdx = (mobileActiveVertexIdx - 1 + f.coords.length) % f.coords.length;
+    focusOnMobileVertex(f);
+  });
+
+  document.getElementById('btnPadCancel').addEventListener('click', () => {
+    selection = null; closeMobileEditPad(); renderFeatures(); renderAttrPanel();
+  });
+
+  document.getElementById('btnPadApply').addEventListener('click', () => {
+    const f = getFeature(selection.layerId, selection.featureId);
+    if(!f) return;
+
+    pushStateToUndo();
+    const centerLatLng = map.getCenter();
+
+    if(mobileMode === 'move') {
+      let oldCenterLat = 0, oldCenterLng = 0;
+      if(f.type === 'rectangle' || f.type === 'circle') {
+        oldCenterLat = f[f.type].lat; oldCenterLng = f[f.type].lng;
+      } else {
+        f.coords.forEach(c => { oldCenterLat += c[0]; oldCenterLng += c[1]; });
+        oldCenterLat /= f.coords.length; oldCenterLng /= f.coords.length;
+      }
+      const dLat = centerLatLng.lat - oldCenterLat;
+      const dLng = centerLatLng.lng - oldCenterLng;
+
+      if(f.type === 'rectangle' || f.type === 'circle') {
+        f[f.type].lat = centerLatLng.lat; f[f.type].lng = centerLatLng.lng;
+        f.type === 'rectangle' ? syncRectCoords(f) : syncCircleCoords(f);
+      } else {
+        f.coords = f.coords.map(c => [c[0] + dLat, c[1] + dLng]);
+      }
+    } 
+    else if(mobileMode === 'vertex') {
+      f.coords[mobileActiveVertexIdx] = [centerLatLng.lat, centerLatLng.lng];
+    }
+    else if(mobileMode === 'rotate') {
+      const corners = f.coords;
+      const cLat = (corners[0][0] + corners[2][0]) / 2;
+      const cLng = (corners[0][1] + corners[2][1]) / 2;
+      const angle = Math.atan2(centerLatLng.lat - cLat, centerLatLng.lng - cLng);
+      f.rect.rotation = Math.round(toDeg(angle) % 360);
+      syncRectCoords(f);
+    }
+    else if(mobileMode === 'scale') {
+      const anchor = f.coords[0];
+      const w = haversine(anchor[0], anchor[1], anchor[0], centerLatLng.lng);
+      const l = haversine(anchor[0], anchor[1], centerLatLng.lat, anchor[1]);
+      f.rect.width = Math.max(1, parseFloat(w.toFixed(1)));
+      f.rect.length = Math.max(1, parseFloat(l.toFixed(1)));
+      syncRectCoords(f);
+    }
+
+    renderFeatures();
+    renderAttrPanel();
+    scheduleSave();
+    
+    if(mobileMode === 'vertex') focusOnMobileVertex(f);
+    else mobilePadTitle.textContent = "✅ تم تطبيق التعديل بنجاح!";
+  });
 
   /* ---------- Rendering vector features ---------- */
   function renderFeatures(){
     state.layers.forEach(layer=>{
       const lg = ensureLayerGroup(layer);
       lg.clearLayers();
-      if(layer.visible){
-        if(!map.hasLayer(lg)) lg.addTo(map);
-      } else {
-        if(map.hasLayer(lg)) map.removeLayer(lg);
-      }
+      if(layer.visible){ if(!map.hasLayer(lg)) lg.addTo(map); } else { if(map.hasLayer(lg)) map.removeLayer(lg); }
       layer.features.forEach(f=>{
         const isSel = selection && selection.layerId===layer.id && selection.featureId===f.id;
         const color = layer.color;
@@ -586,615 +737,731 @@
         } else {
           shape = L.polygon(f.coords, {color: isSel?'#5ec9c0':color, weight: isSel?3:2, fillColor:color, fillOpacity: isSel?0.3:0.18});
         }
-        const shapeStartDrag = (e) => {
+        
+        shape.on('click', (e) => {
           if(tool!=='select') return;
           L.DomEvent.stopPropagation(e);
           selection = {layerId:layer.id, featureId:f.id};
-          renderAttrPanel();
+          renderAttrPanel(); 
           renderFeatures();
+          
+          if(window.innerWidth <= 760) {
+            openMobileEditPad(f);
+          }
+        });
+
+        shape.on('mousedown', (e) => {
+          if(tool!=='select' || window.innerWidth <= 760) return;
+          L.DomEvent.stopPropagation(e);
+          selection = {layerId:layer.id, featureId:f.id};
+          renderAttrPanel(); renderFeatures();
           map.dragging.disable();
-          const startLngLat = getEventLatLng(e);
-          pushStateToUndo();
+          pushStateToUndo(); 
           dragCtx = {
-            mode:'move', feature:f, startLatLng:startLngLat, origCoords:JSON.parse(JSON.stringify(f.coords)),
-            origRect: f.rect?Object.assign({},f.rect):null, origCircle: f.circle?Object.assign({},f.circle):null
+            mode:'move', feature:f, startLatLng:e.latlng, 
+            origCoords:JSON.parse(JSON.stringify(f.coords)), 
+            origRect: f.rect?Object.assign({},f.rect):null, 
+            origCircle: f.circle?Object.assign({},f.circle):null
           };
-        };
-        shape.on('mousedown', shapeStartDrag);
-        shape.on('touchstart', shapeStartDrag);
+        });
+
         shape.addTo(lg);
-        
-        if(isSel && f.type==='rectangle') {
-          const corners = f.coords;
-          const centerLat = (corners[0][0] + corners[2][0]) / 2;
-          const centerLng = (corners[0][1] + corners[2][1]) / 2;
-          const th = toRad(f.rect.rotation);
-          const uxN = Math.sin(th), uxE = Math.cos(th);
-          const rotatePt = destPoint(centerLat, centerLng, uxE * 0, uxN * 0 + (f.rect.length / 2) + 5);
-          const rotMarker = L.circleMarker(rotatePt, {radius:9, className:'rect-rotate-marker', color:'#0d2438', weight:1.5, fillColor:'#e8a33d', fillOpacity:1});
-          setupDragHandlers(rotMarker, (startLngLat) => {
-            return { mode:'rect-rotate', feature:f, center:[centerLat, centerLng], origRotation: f.rect.rotation, startAngle: Math.atan2(startLngLat.lat - centerLat, startLngLat.lng - centerLng) };
-          });
-          rotMarker.addTo(lg);
-          const scaleMarker = L.circleMarker(corners[2], {radius:9, className:'rect-scale-marker', color:'#0d2438', weight:1.5, fillColor:'#5ec9c0', fillOpacity:1});
-          setupDragHandlers(scaleMarker, (startLngLat) => {
-            return { mode:'rect-scale', feature:f, anchor: corners[0], origWidth: f.rect.width, origLength: f.rect.length, startLatLng: startLngLat };
-          });
-          scaleMarker.addTo(lg);
-        }
-        
-        if(isSel && f.type!=='rectangle' && f.type!=='circle'){
-          f.coords.forEach((c,idx)=>{
-            const h = L.circleMarker(c, {radius:8, className:'vertex-marker', color:'#5ec9c0', weight:2, fillColor:'#0d2438', fillOpacity:1});
-            setupDragHandlers(h, (startLngLat) => {
-              return { mode:'vertex', feature:f, vertexIdx:idx, startLatLng:startLngLat, origCoord:Object.assign({},L.latLng(c[0],c[1])) };
+
+        if(isSel && window.innerWidth > 760) {
+          if(f.type==='rectangle') {
+            const corners = f.coords;
+            const centerLat = (corners[0][0] + corners[2][0]) / 2;
+            const centerLng = (corners[0][1] + corners[2][1]) / 2;
+            
+            const th = toRad(f.rect.rotation);
+            const uxN = Math.sin(th), uxE = Math.cos(th);
+            const rotatePt = destPoint(centerLat, centerLng, uxE * 0, uxN * 0 + (f.rect.length / 2) + 5);
+            
+            const rotMarker = L.circleMarker(rotatePt, {radius:9, className:'rect-rotate-marker', color:'#0d2438', weight:1.5, fillColor:'#e8a33d', fillOpacity:1});
+            rotMarker.on('mousedown', (se)=>{
+              L.DomEvent.stopPropagation(se); map.dragging.disable(); pushStateToUndo();
+              dragCtx = { mode:'rect-rotate', feature:f, center:[centerLat, centerLng], origRotation: f.rect.rotation, startAngle: Math.atan2(se.latlng.lat - centerLat, se.latlng.lng - centerLng) };
             });
-            h.addTo(lg);
-          });
+            rotMarker.addTo(lg);
+
+            const scaleMarker = L.circleMarker(corners[2], {radius:9, className:'rect-scale-marker', color:'#0d2438', weight:1.5, fillColor:'#5ec9c0', fillOpacity:1});
+            scaleMarker.on('mousedown', (se)=>{
+              L.DomEvent.stopPropagation(se); map.dragging.disable(); pushStateToUndo();
+              dragCtx = { mode:'rect-scale', feature:f, anchor: corners[0], origWidth: f.rect.width, origLength: f.rect.length, startLatLng: se.latlng };
+            });
+            scaleMarker.addTo(lg);
+          }
+
+          if(f.type!=='rectangle' && f.type!=='circle'){
+            f.coords.forEach((c,idx)=>{
+              const h = L.circleMarker(c, {radius:8, className:'vertex-marker', color:'#5ec9c0', weight:2, fillColor:'#0d2438', fillOpacity:1});
+              h.on('mousedown', (se)=>{
+                L.DomEvent.stopPropagation(se); map.dragging.disable(); pushStateToUndo();
+                dragCtx = {mode:'vertex', feature:f, idx};
+              });
+              h.addTo(lg);
+            });
+          }
         }
       });
     });
   }
 
-  /* ---------- Map interaction handlers ---------- */
-  map.on('mousemove', (e)=>{
-    document.getElementById('stLat').textContent = e.latlng.lat.toFixed(5);
-    document.getElementById('stLng').textContent = e.latlng.lng.toFixed(5);
+  /* ---------- Drag handling ---------- */
+  map.on('mousemove', e => {
+    document.getElementById('stLat').textContent = e.latlng.lat.toFixed(6);
+    document.getElementById('stLng').textContent = e.latlng.lng.toFixed(6);
     
-    if(dragCtx){
-      const currentLngLat = getEventLatLng(e);
-      if(dragCtx.mode==='move'){
-        const dLat = currentLngLat.lat - dragCtx.startLatLng.lat;
-        const dLng = currentLngLat.lng - dragCtx.startLatLng.lng;
-        dragCtx.feature.coords = dragCtx.origCoords.map(c=>[c[0]+dLat, c[1]+dLng]);
-        if(dragCtx.feature.rect){ dragCtx.feature.rect.lat = dragCtx.origRect.lat+dLat; dragCtx.feature.rect.lng = dragCtx.origRect.lng+dLng; }
-        if(dragCtx.feature.circle){ dragCtx.feature.circle.lat = dragCtx.origCircle.lat+dLat; dragCtx.feature.circle.lng = dragCtx.origCircle.lng+dLng; }
-      } else if(dragCtx.mode==='vertex'){
-        const snap = findSnap(e.latlng, dragCtx.feature.id);
-        const finalPt = snap ? L.latLng(snap[0], snap[1]) : currentLngLat;
-        dragCtx.feature.coords[dragCtx.vertexIdx] = [finalPt.lat, finalPt.lng];
-      } else if(dragCtx.mode==='rect-rotate'){
-        const currentAngle = Math.atan2(currentLngLat.lat - dragCtx.center[0], currentLngLat.lng - dragCtx.center[1]);
-        let dAng = toDeg(currentAngle - dragCtx.startAngle);
-        if(e.originalEvent.shiftKey) dAng = Math.round(dAng/15)*15; 
-        dragCtx.feature.rect.rotation = (dragCtx.origRotation + dAng) % 360;
+    if(dragCtx) {
+      const snapped = dragCtx.mode==='vertex' ? effectiveLatLng(e, dragCtx.feature.id) : e.latlng;
+      
+      if(dragCtx.mode==='vertex'){
+        dragCtx.feature.coords[dragCtx.idx] = [snapped.lat, snapped.lng];
+      } 
+      else if(dragCtx.mode==='rect-rotate'){
+        const currentAngle = Math.atan2(e.latlng.lat - dragCtx.center[0], e.latlng.lng - dragCtx.center[1]);
+        const angleDiff = toDeg(currentAngle - dragCtx.startAngle);
+        dragCtx.feature.rect.rotation = Math.round((dragCtx.origRotation - angleDiff) % 360);
         syncRectCoords(dragCtx.feature);
-      } else if(dragCtx.mode==='rect-scale'){
-        const corners = rectCorners({ lat: dragCtx.feature.rect.lat, lng: dragCtx.feature.rect.lng, width: dragCtx.feature.rect.width, length: dragCtx.feature.rect.length, rotation: dragCtx.feature.rect.rotation, mode: dragCtx.feature.rect.mode });
-        const th = toRad(dragCtx.feature.rect.rotation);
-        const uxE = Math.cos(th), uxN = Math.sin(th);
-        const uyE = -Math.sin(th), uyN = Math.cos(th);
-        const refLat = dragCtx.anchor[0], refLng = dragCtx.anchor[1];
-        const dNorth = (currentLngLat.lat - refLat)*111320;
-        const dEast = (currentLngLat.lng - refLng)*111320*Math.cos(toRad(refLat));
-        const w = dEast*uxE + dNorth*uxN;
-        const l = dEast*uyE + dNorth*uyN;
-        dragCtx.feature.rect.width = Math.max(0.1, w);
-        dragCtx.feature.rect.length = Math.max(0.1, l);
+      }
+      else if(dragCtx.mode==='rect-scale'){
+        const currentDistToAnchor = haversine(dragCtx.anchor[0], dragCtx.anchor[1], e.latlng.lat, e.latlng.lng);
+        const startDistToAnchor = haversine(dragCtx.anchor[0], dragCtx.anchor[1], dragCtx.startLatLng.lat, dragCtx.startLatLng.lng);
+        const ratio = startDistToAnchor > 0 ? (currentDistToAnchor / startDistToAnchor) : 1;
+        
+        dragCtx.feature.rect.width = Math.max(0.5, parseFloat((dragCtx.origWidth * ratio).toFixed(1)));
+        dragCtx.feature.rect.length = Math.max(0.5, parseFloat((dragCtx.origLength * ratio).toFixed(1)));
         syncRectCoords(dragCtx.feature);
+      }
+      else if(dragCtx.mode==='move'){
+        const dLat = e.latlng.lat - dragCtx.startLatLng.lat;
+        const dLng = e.latlng.lng - dragCtx.startLatLng.lng;
+        if(dragCtx.feature.type==='rectangle'){
+          dragCtx.feature.rect.lat = dragCtx.origRect.lat + dLat;
+          dragCtx.feature.rect.lng = dragCtx.origRect.lng + dLng;
+          syncRectCoords(dragCtx.feature);
+        } else if(dragCtx.feature.type==='circle'){
+          dragCtx.feature.circle.lat = dragCtx.origCircle.lat + dLat;
+          dragCtx.feature.circle.lng = dragCtx.origCircle.lng + dLng;
+          syncCircleCoords(dragCtx.feature);
+        } else {
+          dragCtx.feature.coords = dragCtx.origCoords.map(c=>[c[0]+dLat, c[1]+dLng]);
+        }
       }
       renderFeatures();
-      if(selection && selection.featureId===dragCtx.feature.id) renderAttrPanel();
-      return;
-    }
-
-    if((tool==='line' || tool==='polygon' || tool==='ortho') && drawingCoords && drawingCoords.length>0){
-      const eff = effectiveLatLng(e);
-      const pts = drawingCoords.concat([[eff.lat, eff.lng]]);
-      if(tempLine) map.removeLayer(tempLine);
+    } 
+    else if(drawingCoords && drawingCoords.length){
+      // تحديث الخط المرن أثناء الرسم (للخطوط، المضلعات، أو اتجاه المستطيل)
+      const snapped = effectiveLatLng(e);
+      if(tempLine){ map.removeLayer(tempLine); }
+      const pts = drawingCoords.concat([[snapped.lat, snapped.lng]]);
       tempLine = L.polyline(pts, {color:'#e8a33d', weight:2, dashArray:'6 5'}).addTo(map);
       
-      let info='';
-      if(tool==='line'){ info=`المسافة: ${pathLength(pts).toFixed(1)} م`; }
-      else {
-        if(pts.length>2) info=`المساحة: ${polygonAreaMeters(pts).toFixed(1)} م²`;
-        else info=`المسافة: ${pathLength(pts).toFixed(1)} م`;
+      const last = drawingCoords[drawingCoords.length-1];
+      const segLen = haversine(last[0],last[1], snapped.lat, snapped.lng);
+      
+      if(tool === 'rectangle') {
+        // حساب زاوية الخط اللحظية لعرضها للمستخدم كمؤشر قبل الضغط
+        const angle = Math.atan2(snapped.lat - last[0], snapped.lng - last[1]);
+        let deg = Math.round(toDeg(angle) % 360);
+        if(deg < 0) deg += 360;
+        document.getElementById('stTemp').textContent = `مسافة الاتجاه: ${segLen.toFixed(1)} م | الزاوية الحالية: ${deg}°`;
+      } else {
+        document.getElementById('stTemp').textContent = 'الطول الحالي: ' + segLen.toFixed(2) + ' م';
       }
-      document.getElementById('stTemp').textContent = ' | ' + info;
-    } else {
-      effectiveLatLng(e);
     }
   });
 
-  const mapEndDrag = () => {
-    if(dragCtx){
-      map.dragging.enable(); dragCtx=null; scheduleSave(); pushToDriveThrottle();
-    }
+  const endDrag = () => {
+    if(dragCtx){ map.dragging.enable(); dragCtx=null; renderAttrPanel(); scheduleSave(); updateHistoryButtons(); }
   };
-  map.on('mouseup', mapEndDrag);
-  map.on('touchend', mapEndDrag);
+  map.on('mouseup', endDrag);
+  document.addEventListener('mouseup', endDrag);
 
-  map.on('click', (e)=>{
-    if(dragCtx) return;
-    const eff = effectiveLatLng(e);
-    
+  /* ---------- Map click: selection clear / drawing ---------- */
+  map.on('click', e=>{
     if(tool==='select'){
-      selection = null; renderAttrPanel(); renderFeatures(); return;
+      if(window.innerWidth > 760) { selection=null; renderAttrPanel(); renderFeatures(); }
+      return;
     }
+    const snapped = effectiveLatLng(e);
     
     if(tool==='point'){
       pushStateToUndo();
-      activeLayer().features.push({id:uid(), type:'point', coords:[[eff.lat, eff.lng]], attrs:{name:'نقطة غير مسماة'}});
-      renderLayerList(); renderFeatures(); scheduleSave(); pushToDriveThrottle();
-      return;
-    }
-    
-    if(tool==='line' || tool==='polygon' || tool==='ortho'){
-      if(!drawingCoords){ 
-        drawingCoords=[[eff.lat, eff.lng]]; 
-        mobileFinishBtn.style.display = 'flex';
+      const f = addFeature('point', [[snapped.lat, snapped.lng]]);
+      selection = {layerId: activeLayer().id, featureId:f.id};
+      renderFeatures(); renderAttrPanel(); scheduleSave();
+    } 
+    else if(tool==='line' || tool==='polygon'){
+      if(!drawingCoords) {
+        drawingCoords=[];
+        if(window.innerWidth <= 760) mobileFinishBtn.style.display = 'flex';
       }
-      else {
-        // حماية تكرار النقاط المتطابقة
-        const last = drawingCoords[drawingCoords.length-1];
-        if(last[0]!==eff.lat || last[1]!==eff.lng) drawingCoords.push([eff.lat, eff.lng]);
-      }
+      drawingCoords.push([snapped.lat, snapped.lng]);
       updateHistoryButtons();
-      return;
-    }
-    
-    if(tool==='rectangle'){
-      rectPending = {lat:eff.lat, lng:eff.lng};
-      rectHud.style.display='block';
-      return;
-    }
-    
-    if(tool==='circle'){
-      circlePending = {lat:eff.lat, lng:eff.lng};
-      circleHud.style.display='block';
-      return;
+    } 
+    else if(tool==='rectangle'){
+      if(!rectPending) {
+        // النقرة الأولى: تحديد مكان الإدراج وبدء خط الاتجاه والزاوية
+        rectPending = { lat: snapped.lat, lng: snapped.lng };
+        drawingCoords = [[snapped.lat, snapped.lng]];
+        document.getElementById('stHint').textContent = 'انقر في مكان آخر على الخريطة لتحديد زاوية وميل المستطيل بصرياً...';
+      } else {
+        // النقرة الثانية: حساب زاوية الميل الحقيقية بين النقطتين
+        const start = rectPending;
+        const angle = Math.atan2(snapped.lat - start.lat, snapped.lng - start.lng);
+        let deg = Math.round(toDeg(angle) % 360);
+        if(deg < 0) deg += 360;
+
+        // وضع الزاوية في صندوق المدخلات وتجهيزه للعرض
+        document.getElementById('rRotation').value = deg;
+        
+        if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
+        drawingCoords = null;
+        document.getElementById('stTemp').textContent = '';
+
+        // فتح الـ HUD في موضع النقرة الثانية لإدخال الأبعاد
+        const pt = map.latLngToContainerPoint(snapped);
+        const wrapRect = mapEl.getBoundingClientRect();
+        const hudX = Math.min(Math.max(pt.x+16,8), wrapRect.width-216);
+        const hudY = Math.min(Math.max(pt.y+16,8), wrapRect.height-320);
+        rectHud.style.left = hudX+'px'; rectHud.style.top = hudY+'px'; rectHud.style.display='block';
+      }
+    } 
+    else if(tool==='circle'){
+      circlePending = {lat:snapped.lat, lng:snapped.lng};
+      const pt = map.latLngToContainerPoint(snapped);
+      const wrapRect = mapEl.getBoundingClientRect();
+      const hudX = Math.min(Math.max(pt.x+16,8), wrapRect.width-216);
+      const hudY = Math.min(Math.max(pt.y+16,8), wrapRect.height-160);
+      circleHud.style.left = hudX+'px'; circleHud.style.top = hudY+'px'; circleHud.style.display='block';
     }
   });
 
-  map.on('contextmenu', ()=>{
-    if((tool==='line' || tool==='polygon' || tool==='ortho') && drawingCoords) finishDrawing();
+  map.on('dblclick', e=>{
+    if(tool==='line'||tool==='polygon') finishDrawing();
   });
-  mobileFinishBtn.addEventListener('click', finishDrawing);
+
+  mobileFinishBtn.addEventListener('click', (e)=>{
+    L.DomEvent.stopPropagation(e);
+    finishDrawing();
+  });
 
   function finishDrawing(){
-    if(!drawingCoords || drawingCoords.length<1) return;
-    pushStateToUndo();
-    if(tool==='line'){
-      if(drawingCoords.length>=2) activeLayer().features.push({id:uid(), type:'line', coords:drawingCoords, attrs:{name:'خط جديد'}});
-    } else {
-      if(drawingCoords.length>=3) activeLayer().features.push({id:uid(), type:'polygon', coords:drawingCoords, attrs:{name:'مضلع جديد'}});
-    }
-    drawingCoords=null;
-    mobileFinishBtn.style.display = 'none';
     if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
-    document.getElementById('stTemp').textContent = '';
-    renderLayerList(); renderFeatures(); scheduleSave(); pushToDriveThrottle();
+    document.getElementById('stTemp').textContent='';
+    mobileFinishBtn.style.display = 'none';
+
+    if(tool==='line' && drawingCoords && drawingCoords.length>=2){
+      pushStateToUndo();
+      const f=addFeature('line', drawingCoords); selection={layerId:activeLayer().id, featureId:f.id};
+      drawingCoords=null; renderFeatures(); renderAttrPanel(); scheduleSave();
+    } 
+    else if(tool==='polygon' && drawingCoords && drawingCoords.length>=3){
+      pushStateToUndo();
+      const f=addFeature('polygon', drawingCoords); selection={layerId:activeLayer().id, featureId:f.id};
+      drawingCoords=null; renderFeatures(); renderAttrPanel(); scheduleSave();
+    } 
+    else { drawingCoords=null; }
     updateHistoryButtons();
   }
 
-  /* ---------- HUD Inputs ---------- */
-  document.getElementById('rectCancel').addEventListener('click', ()=>{ rectHud.style.display='none'; rectPending=null; });
-  document.getElementById('rectCreate').addEventListener('click', ()=>{
-    if(!rectPending) return;
-    pushStateToUndo();
-    const f = {
-      id:uid(), type:'rectangle', attrs:{name:'مستطيل قياسي'},
-      rect: {
-        lat: rectPending.lat, lng: rectPending.lng,
-        width: parseFloat(document.getElementById('rWidth').value)||10,
-        length: parseFloat(document.getElementById('rLength').value)||20,
-        rotation: parseFloat(document.getElementById('rRotation').value)||0,
-        mode: document.getElementById('rAnchor').value
-      }
-    };
-    syncRectCoords(f);
-    activeLayer().features.push(f);
-    rectHud.style.display='none'; rectPending=null;
-    renderLayerList(); renderFeatures(); scheduleSave(); pushToDriveThrottle();
+  window.addEventListener('keydown', e=>{
+    const tag=document.activeElement.tagName;
+    const typing = tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA';
+    
+    if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !typing) { e.preventDefault(); handleUndo(); }
+    if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y' && !typing) { e.preventDefault(); handleRedo(); }
+
+    if(e.key==='Enter' && !typing) finishDrawing();
+    if(e.key==='Escape'){
+      drawingCoords=null; rectPending=null; circlePending=null;
+      rectHud.style.display='none'; circleHud.style.display='none';
+      mobileFinishBtn.style.display = 'none';
+      closeMobileEditPad();
+      if(tempLine){map.removeLayer(tempLine); tempLine=null;}
+      document.getElementById('stTemp').textContent='';
+      updateHistoryButtons();
+    }
+    if((e.key==='Delete'||e.key==='Backspace') && !typing && selection){
+      pushStateToUndo();
+      const layer=getLayer(selection.layerId);
+      layer.features = layer.features.filter(x=>x.id!==selection.featureId);
+      selection=null; closeMobileEditPad(); renderLayerList(); renderAttrPanel(); renderFeatures(); scheduleSave();
+    }
   });
 
-  document.getElementById('circleCancel').addEventListener('click', ()=>{ circleHud.style.display='none'; circlePending=null; });
-  document.getElementById('circleCreate').addEventListener('click', ()=>{
-    if(!circlePending) return;
-    pushStateToUndo();
-    const f = {
-      id:uid(), type:'circle', attrs:{name:'دائرة قياسية'},
-      circle: { lat: circlePending.lat, lng: circlePending.lng, radius: parseFloat(document.getElementById('cRadius').value)||10 }
-    };
-    syncCircleCoords(f);
-    activeLayer().features.push(f);
-    circleHud.style.display='none'; circlePending=null;
-    renderLayerList(); renderFeatures(); scheduleSave(); pushToDriveThrottle();
-  });
-
-  /* ---------- Sidebar UI Management ---------- */
-  document.querySelectorAll('.tab').forEach(t=>{
-    t.addEventListener('click', ()=>{
-      document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
-      document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
-      t.classList.add('active');
-      document.getElementById(t.dataset.panel).classList.add('active');
-    });
-  });
-
-  document.querySelectorAll('.toolbar button[data-tool]').forEach(b=>{
-    b.addEventListener('click', ()=>{
-      document.querySelectorAll('.toolbar button[data-tool]').forEach(x=>x.classList.remove('active'));
-      b.classList.add('active');
-      tool = b.dataset.tool;
-      mapEl.className = 'map ' + (tool==='select'?'tool-select':'tool-draw');
-      if(tool!=='line' && tool!=='polygon' && tool!=='ortho' && drawingCoords) finishDrawing();
-      
-      let hint='اختر أداة رسم';
-      if(tool==='select') hint='انقر على عنصر لتعديل خصائصه وأبعاده.';
-      else if(tool==='point') hint='انقر على أي مكان على الخريطة لإدراج نقطة.';
-      else if(tool==='line') hint='انقر لتحديد مسار الخط، كليك يمين للإنهاء.';
-      else if(tool==='polygon') hint='انقر لرسم مضلع عالي الدقة، كليك يمين للإغلاق.';
-      else if(tool==='ortho') hint='رسم مضلع بزوايا قائمة 90 درجة تلقائياً.';
-      else if(tool==='rectangle') hint='انقر لتحديد موقع إدراج المستطيل الهندسي.';
-      else if(tool==='circle') hint='انقر لتحديد مركز الدائرة وحساب المساحة.';
-      document.getElementById('stHint').textContent = hint;
-    });
-  });
-
-  const snapBtn = document.getElementById('snapBtn');
-  snapBtn.addEventListener('click', ()=>{
+  /* ---------- Tools & tabs ---------- */
+  document.getElementById('snapBtn').addEventListener('click', ()=>{
     snapEnabled = !snapEnabled;
-    snapBtn.classList.toggle('active', snapEnabled);
+    document.getElementById('snapBtn').toggleAttribute('active', snapEnabled);
     if(!snapEnabled && snapMarker){ map.removeLayer(snapMarker); snapMarker=null; }
   });
 
-  document.getElementById('locateBtn').addEventListener('click', ()=>{
-    map.locate({setView:true, maxZoom:18});
+  document.getElementById('toolbar').addEventListener('click', e=>{
+    const btn=e.target.closest('.tool-btn');
+    if(!btn || !btn.dataset.tool) return;
+    document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    tool = btn.dataset.tool;
+    drawingCoords=null; rectPending=null; circlePending=null;
+    rectHud.style.display='none'; circleHud.style.display='none';
+    mobileFinishBtn.style.display = 'none';
+    closeMobileEditPad();
+    if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
+    if(snapMarker){ map.removeLayer(snapMarker); snapMarker=null; }
+    document.getElementById('stTemp').textContent='';
+    
+    if (tool === 'rectangle') {
+      document.getElementById('stHint').textContent = 'ارسم المستطيل: انقر نقرة أولى لتحديد موضع البداية (الإدراج)..';
+    } else {
+      document.getElementById('stHint').textContent = tool==='select' ? 'اضغط على عنصر لتحديده أو اسحبه لتحريكه' : 'اضغط على الخريطة للرسم';
+    }
+    
+    mapEl.classList.toggle('tool-select', tool==='select');
+    mapEl.classList.toggle('tool-draw', tool!=='select');
+    map.doubleClickZoom[(tool==='line'||tool==='polygon')?'disable':'enable']();
+    updateHistoryButtons();
   });
-  map.on('locationerror', ()=>alert('تعذر تحديد موقعك الحالي.'));
 
-  document.getElementById('fitBtn').addEventListener('click', ()=>{
-    const all=[]; state.layers.forEach(l=>l.features.forEach(f=>f.coords.forEach(c=>all.push(c))));
-    if(all.length) map.fitBounds(L.latLngBounds(all), {padding:[30,30]});
+  document.querySelectorAll('.tab').forEach(tabEl=>{
+    tabEl.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+      tabEl.classList.add('active');
+      document.getElementById(tabEl.dataset.panel).classList.add('active');
+    });
+  });
+  
+  const sidebarEl = document.querySelector('.sidebar');
+  document.getElementById('mobileSidebarToggle').addEventListener('click', ()=>{
+    sidebarEl.classList.toggle('open');
   });
 
-  /* ---------- Render Lists ---------- */
+  /* ---------- Layers UI ---------- */
+  function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+  function eyeOpenIcon(){ return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>'; }
+  function eyeClosedIcon(){ return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'; }
+  function trashIcon(){ return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'; }
+
   function renderLayerList(){
-    const container = document.getElementById('layerList'); container.innerHTML='';
-    state.layers.forEach(l=>{
-      const row = document.createElement('div'); row.className=`layer-row ${l.id===state.activeLayerId?'active':''}`;
-      row.addEventListener('click', ()=>{ state.activeLayerId=l.id; renderLayerList(); });
+    const container = document.getElementById('layerList');
+    container.innerHTML = '';
+    state.layers.forEach(layer=>{
+      const row = document.createElement('div');
+      row.className = `layer-row ${layer.id===state.activeLayerId?'active':''}`;
+      row.addEventListener('click', ()=>{ state.activeLayerId=layer.id; renderLayerList(); });
       
-      const swatch = document.createElement('div'); swatch.className='swatch'; swatch.style.background=l.color;
-      swatch.addEventListener('click', (e)=>{
-        e.stopPropagation(); pushStateToUndo();
-        const cur = palette.indexOf(l.color);
-        l.color = palette[(cur+1)%palette.length];
-        renderLayerList(); renderFeatures(); scheduleSave(); pushToDriveThrottle();
-      });
-      
-      const name = document.createElement('span'); name.className='lname'; name.textContent=l.name;
-      const count = document.createElement('span'); count.className='lcount'; count.textContent=l.features.length;
-      
-      const del = document.createElement('button'); del.className='icon-btn'; del.innerHTML=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
-      del.disabled = state.layers.length<=1;
-      del.style.opacity = state.layers.length<=1?0.3:1;
-      del.addEventListener('click', (e)=>{
-        e.stopPropagation(); if(state.layers.length<=1) return;
-        if(confirm(`هل أنت متأكد من حذف طبقة "${l.name}" بالكامل؟`)){
-          pushStateToUndo();
-          if(layerGroups[l.id]) { map.removeLayer(layerGroups[l.id]); delete layerGroups[l.id]; }
-          state.layers = state.layers.filter(x=>x.id!==l.id);
-          if(state.activeLayerId===l.id) state.activeLayerId=state.layers[0].id;
-          if(selection && selection.layerId===l.id) selection=null;
-          renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave(); pushToDriveThrottle();
-        }
+      const swatch = document.createElement('div');
+      swatch.className = 'swatch'; swatch.style.background = layer.color;
+      swatch.addEventListener('click', e=>{
+        L.DomEvent.stopPropagation(e);
+        pushStateToUndo();
+        const idx = palette.indexOf(layer.color);
+        layer.color = palette[(idx+1)%palette.length];
+        renderLayerList(); renderFeatures(); scheduleSave();
       });
 
-      row.appendChild(swatch); row.appendChild(name); row.appendChild(count); row.appendChild(del);
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'lname'; nameSpan.textContent = layer.name;
+      
+      const countSpan = document.createElement('span');
+      countSpan.className = 'lcount'; countSpan.textContent = `(${layer.features.length})`;
+
+      const visBtn = document.createElement('button');
+      visBtn.className = 'icon-btn'; visBtn.innerHTML = layer.visible ? eyeOpenIcon() : eyeClosedIcon();
+      visBtn.addEventListener('click', e=>{
+        L.DomEvent.stopPropagation(e);
+        layer.visible = !layer.visible;
+        renderLayerList(); renderFeatures(); scheduleSave();
+      });
+
+      row.appendChild(swatch); row.appendChild(nameSpan); row.appendChild(countSpan); row.appendChild(visBtn);
+      if(state.layers.length > 1){
+        const delBtn = document.createElement('button');
+        delBtn.className = 'icon-btn'; delBtn.innerHTML = trashIcon();
+        delBtn.addEventListener('click', e=>{
+          L.DomEvent.stopPropagation(e);
+          if(confirm(`هل تريد حذف الطبقة "${layer.name}" بجميع عناصرها؟`)){
+            pushStateToUndo();
+            if(layerGroups[layer.id]) { map.removeLayer(layerGroups[layer.id]); delete layerGroups[layer.id]; }
+            state.layers = state.layers.filter(l=>l.id!==layer.id);
+            if(state.activeLayerId===layer.id) state.activeLayerId = state.layers[0].id;
+            if(selection && selection.layerId===layer.id) selection=null;
+            closeMobileEditPad();
+            renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
+          }
+        });
+        row.appendChild(delBtn);
+      }
       container.appendChild(row);
     });
   }
 
   document.getElementById('addLayerBtn').addEventListener('click', ()=>{
+    const name = prompt('أدخل اسم الطبقة الجديدة:', `طبقة ${state.layers.length+1}`);
+    if(!name) return;
     pushStateToUndo();
-    const id = 'L' + Math.random().toString(36).slice(2,7);
-    const num = state.layers.length + 1;
-    const color = palette[state.nextColorIdx % palette.length];
-    state.nextColorIdx++;
-    state.layers.push({id, name:`طبقة ${num}`, color, visible:true, features:[]});
+    const id = 'L' + uid();
+    const color = palette[state.nextColorIdx++ % palette.length];
+    state.layers.push({id, name, color, visible:true, features:[]});
     state.activeLayerId = id;
-    renderLayerList(); scheduleSave(); pushToDriveThrottle();
+    renderLayerList(); renderFeatures(); scheduleSave();
   });
 
-  /* ---------- Attribute Panel Management ---------- */
+  /* ---------- Attributes UI & Editing ---------- */
   function renderAttrPanel(){
-    const c = document.getElementById('attrContent'); c.innerHTML='';
-    if(!selection){ c.innerHTML='<div class="empty-state">اختر عنصر من الخريطة<br>لعرض وتعديل خصائصه</div>'; return; }
-    
+    const container = document.getElementById('attrContent');
+    if(!selection){
+      container.innerHTML = '<div class="empty-state">اختر عنصر من الخريطة<br>لعرض وتعديل خصائصه</div>'; return;
+    }
     const f = getFeature(selection.layerId, selection.featureId);
-    if(!f){ selection=null; c.innerHTML='<div class="empty-state">اختر عنصر من الخريطة<br>لعرض وتعديل خصائصه</div>'; return; }
+    if(!f){ selection=null; container.innerHTML = '<div class="empty-state">العنصر لم يعد موجوداً</div>'; return; }
     
-    const b = document.createElement('div'); b.className='attr-block';
-    
-    let label = 'نقطة';
-    if(f.type==='line') label='مسار / خط';
-    if(f.type==='polygon') label='مضلع حر';
-    if(f.type==='rectangle') label='مستطيل قياسي';
-    if(f.type==='circle') label='دائرة هندسية';
-    
-    const head = document.createElement('div'); head.className='ftype'; head.textContent=label; b.appendChild(head);
-    
-    if(f.type==='line'){
-      const r = document.createElement('div'); r.className='stat-row'; r.innerHTML=`<span>الطول الإجمالي:</span><b>${pathLength(f.coords).toFixed(1)} متر</b>`;
-      b.appendChild(r);
-    } else if(f.type==='polygon'){
-      const r1 = document.createElement('div'); r1.className='stat-row'; r1.innerHTML=`<span>المساحة:</span><b>${polygonAreaMeters(f.coords).toFixed(1)} م²</b>`;
-      const r2 = document.createElement('div'); r2.className='stat-row'; r2.innerHTML=`<span>المحيط:</span><b>${pathPerimeter(f.coords).toFixed(1)} متر</b>`;
-      b.appendChild(r1); b.appendChild(r2);
-    } else if(f.type==='rectangle'){
-      const r1 = document.createElement('div'); r1.className='stat-row'; r1.innerHTML=`<span>المساحة:</span><b>${(f.rect.width * f.rect.length).toFixed(1)} م²</b>`;
-      const r2 = document.createElement('div'); r2.className='stat-row'; r2.innerHTML=`<span>المحيط:</span><b>${((f.rect.width + f.rect.length)*2).toFixed(1)} متر</b>`;
-      b.appendChild(r1); b.appendChild(r2);
-      
-      const grid = document.createElement('div'); grid.className='rect-edit-grid';
-      grid.innerHTML=`
-        <div><label>العرض (م)</label><input type="number" id="eWidth" value="${f.rect.width.toFixed(1)}" step="0.1"></div>
-        <div><label>الطول (م)</label><input type="number" id="eLength" value="${f.rect.length.toFixed(1)}" step="0.1"></div>
-        <div style="grid-column: span 2;"><label>الدوران (°)</label><input type="number" id="eRotation" value="${Math.round(f.rect.rotation)}"></div>
-      `;
-      b.appendChild(grid);
-      
-      setTimeout(()=>{
-        const ew=document.getElementById('eWidth'), el=document.getElementById('eLength'), er=document.getElementById('eRotation');
-        const updateParams=()=>{
-          pushStateToUndo();
-          f.rect.width = Math.max(0.01, parseFloat(ew.value)||1);
-          f.rect.length = Math.max(0.01, parseFloat(el.value)||1);
-          f.rect.rotation = parseFloat(er.value)||0;
-          syncRectCoords(f); renderFeatures(); scheduleSave(); pushToDriveThrottle();
-        };
-        ew.addEventListener('change', updateParams); el.addEventListener('change', updateParams); er.addEventListener('change', updateParams);
-      },10);
-    } else if(f.type==='circle'){
-      const r1 = document.createElement('div'); r1.className='stat-row'; r1.innerHTML=`<span>المساحة الحسابية:</span><b>${(Math.PI * f.circle.radius**2).toFixed(1)} م²</b>`;
-      const r2 = document.createElement('div'); r2.className='stat-row'; r2.innerHTML=`<span>محيط الدائرة:</span><b>${(2 * Math.PI * f.circle.radius).toFixed(1)} م</b>`;
-      b.appendChild(r1); b.appendChild(r2);
-      
-      const div = document.createElement('div'); div.style.marginTop='8px';
-      div.innerHTML=`<label style="font-size:10px;color:var(--text-muted);">نصف القطر (متر)</label><input type="number" id="eRadius" value="${f.circle.radius.toFixed(1)}" step="0.1" style="width:100%;background:var(--bg-panel);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 7px;font-family:var(--mono);font-size:12px;margin-top:2px;">`;
-      b.appendChild(div);
-      
-      setTimeout(()=>{
-        document.getElementById('eRadius').addEventListener('change', (ev)=>{
-          pushStateToUndo();
-          f.circle.radius = Math.max(0.01, parseFloat(ev.target.value)||1);
-          syncCircleCoords(f); renderFeatures(); renderAttrPanel(); scheduleSave(); pushToDriveThrottle();
-        });
-      },10);
+    let html = `<div class="attr-block">`;
+    if(f.type==='rectangle') {
+      html += `<div class="ftype">مستطيل بالأطوال</div>`;
+      html += `<div class="stat-row">المحيط: <b>${pathPerimeter(f.coords).toFixed(1)} م</b></div>`;
+      html += `<div class="stat-row">المساحة: <b>${polygonAreaMeters(f.coords).toFixed(1)} م²</b></div>`;
+      html += `<div class="rect-edit-grid">
+        <div><label>العرض (م)</label><input type="number" id="edW" value="${f.rect.width}" step="0.1"></div>
+        <div><label>الطول (م)</label><input type="number" id="edL" value="${f.rect.length}" step="0.1"></div>
+        <div style="grid-column: span 2"><label>الدوران (°)</label><input type="number" id="edR" value="${f.rect.rotation}"></div>
+      </div>`;
+    } 
+    else if(f.type==='circle') {
+      html += `<div class="ftype">دائرة بنصف قطر</div>`;
+      html += `<div class="stat-row">نصف القطر: <b>${f.circle.radius} م</b></div>`;
+      html += `<div class="stat-row">المحيط: <b> ${(2*Math.PI*f.circle.radius).toFixed(1)} م</b></div>`;
+      html += `<div class="stat-row">المساحة: <b> ${(Math.PI*(f.circle.radius**2)).toFixed(1)} م²</b></div>`;
+      html += `<div class="field-row"><label style="font-size:11px;">نصف القطر (م)</label><input type="number" id="edRad" value="${f.circle.radius}" step="0.1"></div>`;
+    } 
+    else if(f.type==='point') {
+      html += `<div class="ftype">نقطة</div>`;
+      html += `<div class="stat-row">Lat: <b>${f.coords[0][0].toFixed(6)}</b></div>`;
+      html += `<div class="stat-row">Lng: <b>${f.coords[0][1].toFixed(6)}</b></div>`;
+    } 
+    else if(f.type==='line') {
+      html += `<div class="ftype">خط</div>`;
+      html += `<div class="stat-row">الطول الإجمالي: <b>${pathLength(f.coords).toFixed(1)} م</b></div>`;
+      html += `<div class="stat-row">النقاط: <b>${f.coords.length}</b></div>`;
+    } 
+    else {
+      html += `<div class="ftype">مضلع حر</div>`;
+      html += `<div class="stat-row">المحيط: <b>${pathPerimeter(f.coords).toFixed(1)} م</b></div>`;
+      html += `<div class="stat-row">المساحة: <b>${polygonAreaMeters(f.coords).toFixed(1)} م²</b></div>`;
     }
+    html += `</div>`;
 
-    const sTitle = document.createElement('div'); sTitle.className='section-title'; sTitle.style.marginTop='14px'; sTitle.textContent='جدول الحقول المخصصة';
-    b.appendChild(sTitle);
-
-    if(!f.attrs) f.attrs={};
+    html += `<div class="section-title" style="margin-top:12px;">الحقول الوصفية</div>`;
     Object.keys(f.attrs).forEach(k=>{
-      const fRow = document.createElement('div'); fRow.className='field-row';
-      const kInp = document.createElement('input'); kInp.className='key'; kInp.value=k; kInp.disabled=true;
-      const vInp = document.createElement('input'); vInp.value=f.attrs[k];
-      vInp.addEventListener('change', (ev)=>{
-        pushStateToUndo(); f.attrs[k] = ev.target.value; scheduleSave(); pushToDriveThrottle();
-      });
-      const fDel = document.createElement('button'); fDel.className='icon-btn'; fDel.innerHTML=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e2665b" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
-      fDel.addEventListener('click', ()=>{
-        pushStateToUndo(); delete f.attrs[k]; renderAttrPanel(); scheduleSave(); pushToDriveThrottle();
-      });
-      fRow.appendChild(kInp); fRow.appendChild(vInp); fRow.appendChild(fDel); b.appendChild(fRow);
+      html += `<div class="field-row">
+        <input type="text" class="key" value="${escapeHtml(k)}" data-orig="${escapeHtml(k)}">
+        <input type="text" class="val" value="${escapeHtml(f.attrs[k])}" data-key="${escapeHtml(k)}">
+        <button class="icon-btn del-attr" data-key="${escapeHtml(k)}" title="حذف الحقل">${trashIcon()}</button>
+      </div>`;
     });
+    html += `<button class="add-btn" id="addAttrBtn" style="padding:5px; font-size:11px;">+ إضافة حقل وصفى</button>`;
+    html += `<button class="danger-btn" id="delFeatureBtn">حذف العنصر من الخريطة</button>`;
 
-    const addRow = document.createElement('div'); addRow.className='field-row'; addRow.style.marginTop='10px';
-    addRow.innerHTML=`<input type="text" id="newFKey" placeholder="اسم الحقل..." class="key" style="background:var(--bg-panel);"><input type="text" id="newFVAl" placeholder="القيمة..." style="background:var(--bg-panel);"><button class="icon-btn" id="newFBtn" style="color:var(--teal);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>`;
-    b.appendChild(addRow);
+    container.innerHTML = html;
 
-    const fBtnClick = ()=>{
-      const k = document.getElementById('newFKey').value.trim();
-      const v = document.getElementById('newFVAl').value.trim();
-      if(!k) return;
-      pushStateToUndo();
-      f.attrs[k] = v;
-      renderAttrPanel(); scheduleSave(); pushToDriveThrottle();
-    };
-    setTimeout(()=>{
-      document.getElementById('newFBtn').addEventListener('click', fBtnClick);
-    },10);
-
-    const delBtn = document.createElement('button'); delBtn.className='danger-btn'; delBtn.textContent='حذف العنصر نهائياً';
-    delBtn.addEventListener('click', ()=>{
-      if(confirm('هل أنت متأكد من حذف هذا العنصر الجغرافي؟')){
-        pushStateToUndo();
-        const layer = getLayer(selection.layerId);
-        if(layer) layer.features = layer.features.filter(x=>x.id!==selection.featureId);
-        selection=null; renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave(); pushToDriveThrottle();
-      }
-    });
-    b.appendChild(delBtn);
-
-    c.appendChild(b);
-  }
-
-  /* ---------- GeoJSON Export ---------- */
-  document.getElementById('exportBtn').addEventListener('click', ()=>{
-    const coll = {type:'FeatureCollection', features:[]};
-    state.layers.forEach(layer=>{
-      layer.features.forEach(f=>{
-        const props = Object.assign({_layerId:layer.id, _layerName:layer.name, _color:layer.color, _fId:f.id}, f.attrs);
-        if(f.rect) props._rect = f.rect;
-        if(f.circle) props._circle = f.circle;
-        
-        let gType = 'Point';
-        let coords = f.coords[0];
-        if(f.type==='line'){ gType='LineString'; coords=f.coords; }
-        else if(f.type==='polygon'||f.type==='rectangle'||f.type==='circle'){
-          gType='Polygon'; coords=[f.coords.concat([f.coords[0]])];
-        }
-        coll.features.push({type:'Feature', properties:props, geometry:{type:gType, coordinates:crsTransform(coords, f.type)}});
-      });
-    });
-    const blob = new Blob([JSON.stringify(coll, null, 2)], {type:'application/json'});
-    const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`spatial_layers_${Date.now()}.geojson`; a.click();
-  });
-
-  function crsTransform(c, type){
-    if(type==='point') return [c[1], c[0]];
-    if(type==='line') return c.map(x=>[x[1], x[0]]);
-    return c.map(ring=>ring.map(x=>[x[1], x[0]]));
-  }
-
-  /* ---------- Mobile Responsive Sidebar ---------- */
-  const mToggle = document.getElementById('mobileSidebarToggle');
-  const sidebar = document.querySelector('.sidebar');
-  mToggle.addEventListener('click', (e)=>{
-    e.stopPropagation(); sidebar.classList.toggle('open');
-  });
-  map.on('click', ()=>{ sidebar.classList.remove('open'); });
-
-  /* ---------- Google Drive Synchronization Engine ---------- */
-  let driveConnected=false;
-  let driveToken=null;
-  let tokenExpiry=0;
-  const CLIENT_ID='265494200424-j7shvofgphfipj54k4reldkbfpkafc6a.apps.googleusercontent.com';
-  const SCOPES='https://www.googleapis.com/auth/drive.file';
-  let clientToken=null;
-
-  const driveControl=document.getElementById('driveControl');
-  const driveMsg=document.getElementById('driveMsg');
-  const driveConnectBtn=document.getElementById('driveConnectBtn');
-  const driveJoinBtn=document.getElementById('driveJoinBtn');
-  const driveCopyIdBtn=document.getElementById('driveCopyIdBtn');
-  const driveUpdateBanner=document.getElementById('driveUpdateBanner');
-
-  function initGSI(){
-    if(!window.google || !window.google.accounts) return;
-    clientToken = google.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID, scope: SCOPES, callback: (res)=>{
-        if(res.access_token){
-          driveToken=res.access_token; tokenExpiry=Date.now()+(res.expires_in*1000);
-          driveConnected=true; driveControl.className='drive-control connected';
-          driveMsg.textContent='جاري التحقق من السحابة...';
-          localStorage.setItem('drive_conn_v2','1');
-          handleConnectionEstablished();
-        }
-      }
-    });
-  }
-  window.addEventListener('load', ()=>{ setTimeout(initGSI,1000); });
-
-  driveConnectBtn.addEventListener('click', ()=>{
-    if(clientToken) clientToken.requestAccessToken({prompt:''});
-  });
-
-  async function ensureDriveToken(){
-    if(driveToken && Date.now() < tokenExpiry - 60000) return driveToken;
-    return new Promise((resolve,reject)=>{
-      clientToken = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID, scope: SCOPES, callback: (res)=>{
-          if(res.access_token){
-            driveToken=res.access_token; tokenExpiry=Date.now()+(res.expires_in*1000);
-            resolve(driveToken);
-          } else reject();
-        }
-      });
-      clientToken.requestAccessToken({prompt:''});
-    });
-  }
-
-  function compileGeoJSON(){
-    const list=[];
-    state.layers.forEach(layer=>{
-      layer.features.forEach(f=>{
-        list.push({type:'Feature', properties:{layerId:layer.id, layerName:layer.name, color:layer.color, fId:f.id, type:f.type, rect:f.rect||null, circle:f.circle||null, attrs:f.attrs||{}}, geometry:{type:'LineString', coordinates:f.coords}});
-      });
-    });
-    return {type:'FeatureCollection', features:list, _meta:{lastModified:Date.now()}};
-  }
-
-  function applyRemoteGeoJSON(geojson, remoteTime){
-    const layersMap={};
-    state.layers.forEach(l=>layersMap[l.id]={id:l.id, name:l.name, color:l.color, visible:l.visible, features:[]});
-    
-    geojson.features.forEach(feat=>{
-      const p=feat.properties;
-      if(!layersMap[p.layerId]){ layersMap[p.layerId]={id:p.layerId, name:p.layerName, color:p.color, visible:true, features:[]}; }
-      layersMap[p.layerId].features.push({id:p.fId, type:p.type, coords:feat.geometry.coordinates, rect:p.rect, circle:p.circle, attrs:p.attrs});
-    });
-    
-    state.layers = Object.values(layersMap);
-    if(!getLayer(state.activeLayerId) && state.layers.length) state.activeLayerId=state.layers[0].id;
-    
-    lastPushTime = remoteTime;
-    state.lastPulledTime = remoteTime;
-    
-    selection=null; renderLayerList(); renderFeatures(); renderAttrPanel(); doSave();
-    updateHistoryButtons();
-  }
-
-  let lastPushTime=0;
-  async function pushToDrive(){
-    if(!driveConnected || !state.driveFileId) return;
-    try{ await ensureDriveToken(); }catch(e){ return; }
-    try{
-      const body = JSON.stringify(compileGeoJSON());
-      const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${state.driveFileId}?uploadType=media`, {
-        method:'PATCH', headers:{'Authorization':'Bearer '+driveToken, 'Content-Type':'application/json'}, body
-      });
-      if(res.ok){ lastPushTime=Date.now(); state.lastPulledTime=lastPushTime; driveMsg.textContent='🌐 سحابة Drive متزامنة'; }
-    }catch(e){ console.error('push failed', e); }
-  }
-
-  function pushToDriveThrottle(){
-    clearTimeout(drivePushTimer);
-    drivePushTimer = setTimeout(pushToDrive, 2500);
-  }
-
-  async function handleConnectionEstablished(){
-    if(state.driveFileId){
-      driveMsg.textContent='🔄 جاري فحص الملف...';
-      await pullFromDrive(true);
-      driveMsg.textContent='🌐 سحابة Drive متزامنة';
-    } else {
-      try{
-        driveMsg.textContent='🆕 جاري إنشاء مستودع سحابي...';
-        const meta = {name:'gis_cloud_layer.geojson', mimeType:'application/json'};
-        const res1 = await fetch('https://www.googleapis.com/drive/v3/files', {
-          method:'POST', headers:{'Authorization':'Bearer '+driveToken, 'Content-Type':'application/json'}, body:JSON.stringify(meta)
+    if(f.type==='rectangle'){
+      ['edW','edL','edR'].forEach(id=>{
+        document.getElementById(id).addEventListener('focus', pushStateToUndo); 
+        document.getElementById(id).addEventListener('input', ()=>{
+          f.rect.width = Math.max(0.01, parseFloat(document.getElementById('edW').value)||10);
+          f.rect.length = Math.max(0.01, parseFloat(document.getElementById('edL').value)||20);
+          f.rect.rotation = parseFloat(document.getElementById('edR').value)||0;
+          syncRectCoords(f); renderFeatures(); scheduleSave();
         });
-        const file = await res1.json();
-        if(file.id){
-          state.driveFileId = file.id; doSave();
-          await pushToDrive();
-        }
-      }catch(e){ console.error(e); }
+      });
     }
+    if(f.type==='circle'){
+      document.getElementById('edRad').addEventListener('focus', pushStateToUndo);
+      document.getElementById('edRad').addEventListener('input', e=>{
+        f.circle.radius = Math.max(0.01, parseFloat(e.target.value)||10);
+        syncCircleCoords(f); renderFeatures(); scheduleSave();
+      });
+    }
+
+    container.querySelectorAll('.field-row input.val').forEach(inp=>{
+      inp.addEventListener('input', e=>{ f.attrs[e.target.dataset.key] = e.target.value; scheduleSave(); });
+    });
+    container.querySelectorAll('.field-row input.key').forEach(inp=>{
+      inp.addEventListener('change', e=>{
+        pushStateToUndo();
+        const oldK = e.target.dataset.orig, newK = e.target.value.trim();
+        if(!newK || oldK===newK) { e.target.value = oldK; return; }
+        f.attrs[newK] = f.attrs[oldK]; delete f.attrs[oldK];
+        renderAttrPanel(); scheduleSave();
+      });
+    });
+    container.querySelectorAll('.del-attr').forEach(b=>{
+      b.addEventListener('click', e=>{
+        pushStateToUndo();
+        const k = e.target.closest('.del-attr').dataset.key;
+        delete f.attrs[k]; renderAttrPanel(); scheduleSave();
+      });
+    });
+    document.getElementById('addAttrBtn').addEventListener('click', ()=>{
+      pushStateToUndo();
+      let k = 'حقل_' + Math.floor(Math.random()*1000);
+      f.attrs[k] = ''; renderAttrPanel(); scheduleSave();
+    });
+    document.getElementById('delFeatureBtn').addEventListener('click', ()=>{
+      pushStateToUndo();
+      const l = getLayer(selection.layerId);
+      l.features = l.features.filter(x=>x.id!==selection.featureId);
+      selection = null; closeMobileEditPad(); renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
+    });
   }
 
-  driveJoinBtn.addEventListener('click', ()=>{
-    const id = prompt('أدخل رقم الملف المشترك (Drive File ID) الذي أرسله لك زميلك:');
-    if(id && id.trim().length > 10){
-      pushStateToUndo();
-      state.driveFileId = id.trim(); doSave();
-      if(driveConnected) pullFromDrive(true); else alert('تم حفظ رقم الملف، يرجى الضغط على "اتصال بـ Drive" لبدء المزامنة الفورية.');
-    }
+  function addFeature(type, coords){
+    const l = activeLayer();
+    const f = { id:uid(), type, coords, attrs:{} };
+    l.features.push(f);
+    renderLayerList();
+    return f;
+  }
+
+  /* ---------- HUD Dialogs Actions ---------- */
+  document.getElementById('rectCancel').addEventListener('click', ()=>{ rectHud.style.display='none'; rectPending=null; });
+  document.getElementById('rectCreate').addEventListener('click', ()=>{
+    if(!rectPending)return;
+    pushStateToUndo();
+    const w = Math.max(0.01, parseFloat(document.getElementById('rWidth').value)||10);
+    const l = Math.max(0.01, parseFloat(document.getElementById('rLength').value)||20);
+    const rot = parseFloat(document.getElementById('rRotation').value)||0;
+    const anch = document.getElementById('rAnchor').value;
+    const f = addFeature('rectangle', []);
+    f.rect = { lat:rectPending.lat, lng:rectPending.lng, width:w, length:l, rotation:rot, mode:anch };
+    syncRectCoords(f);
+    rectHud.style.display='none'; rectPending=null;
+    selection = {layerId:activeLayer().id, featureId:f.id};
+    renderFeatures(); renderAttrPanel(); scheduleSave(); updateHistoryButtons();
+    if(window.innerWidth <= 760) openMobileEditPad(f);
   });
 
-  driveCopyIdBtn.addEventListener('click', ()=>{
-    if(!state.driveFileId){ alert('يجب الاتصال أولاً لإنشاء ملف.'); return; }
-    navigator.clipboard.writeText(state.driveFileId);
-    alert('تم نسخ الـ ID بنجاح! أرسله لزملائك ليتمكنوا من المشاهدة والرسم معك في نفس الوقت.');
+  document.getElementById('circleCancel').addEventListener('click', ()=>{ circleHud.style.display='none'; circlePending=null; });
+  document.getElementById('circleCreate').addEventListener('click', ()=>{
+    if(!circlePending)return;
+    pushStateToUndo();
+    const rad = Math.max(0.01, parseFloat(document.getElementById('cRadius').value)||10);
+    const f = addFeature('circle', []);
+    f.circle = { lat:circlePending.lat, lng:circlePending.lng, radius:rad };
+    syncCircleCoords(f);
+    circleHud.style.display='none'; circlePending=null;
+    selection = {layerId:activeLayer().id, featureId:f.id};
+    renderFeatures(); renderAttrPanel(); scheduleSave(); updateHistoryButtons();
+    if(window.innerWidth <= 760) openMobileEditPad(f);
   });
 
-  let pendingRemote=null;
-  document.getElementById('driveImportBtn').addEventListener('click', ()=>{
-    if(pendingRemote){
-      pushStateToUndo();
-      applyRemoteGeoJSON(pendingRemote.geojson, pendingRemote.remoteTime);
-      pendingRemote=null; driveUpdateBanner.style.display='none';
-    }
+  /* ---------- Map Utilities ---------- */
+  document.getElementById('locateBtn').addEventListener('click', ()=>{
+    map.locate({setView:true, maxZoom:18});
   });
-  document.getElementById('driveDismissBtn').addEventListener('click', ()=>{
+  map.on('locationerror', ()=>(document.getElementById('stHint').textContent = '❌ تعذر تحديد موقعك الحالي'));
+  map.on('locationfound', ()=>(document.getElementById('stHint').textContent = '📍 تم تحديد موقعك الحالي بنجاح'));
+
+  document.getElementById('fitBtn').addEventListener('click', ()=>{
+    const all = []; state.layers.forEach(l=>l.features.forEach(f=>f.coords.forEach(c=>all.push(c))));
+    if(all.length) map.fitBounds(L.latLngBounds(all), {padding:[30,30]});
+  });
+
+  function buildGeoJSON(){
+    const fc = { type: 'FeatureCollection', features: [] };
+    state.layers.forEach(layer=>{
+      layer.features.forEach(f=>{
+        let gType = f.type==='point'?'Point': (f.type==='line'?'LineString':'Polygon');
+        let gCoords = f.type==='point' ? [f.coords[0][1], f.coords[0][0]] :
+                     (f.type==='line' ? f.coords.map(c=>[c[1],c[0]]) : [f.coords.concat([f.coords[0]]).map(c=>[c[1],c[0]])]);
+        const props = Object.assign({ layer: layer.name, type: f.type }, f.attrs);
+        if(f.type==='rectangle') props.rect_info = f.rect;
+        if(f.type==='circle') props.circle_info = f.circle;
+        fc.features.push({ type:'Feature', properties:props, geometry:{ type:gType, coordinates:gCoords } });
+      });
+    });
+    return fc;
+  }
+
+  async function saveToFileSystem() {
+    const geojsonData = JSON.stringify(buildGeoJSON(), null, 2);
+    const defaultFileName = `spatial_drawing_${new Date().toISOString().slice(0,10)}.geojson`;
+
+    if ('showSaveFilePicker' in window) {
+      try {
+        const options = {
+          suggestedName: defaultFileName,
+          types: [{
+            description: 'GeoJSON Files',
+            accept: { 'application/geo+json': ['.geojson', '.json'] },
+          }],
+        };
+        const handle = await window.showSaveFilePicker(options);
+        const writable = await handle.createWritable();
+        await writable.write(geojsonData);
+        await writable.close();
+        document.getElementById('stHint').textContent = '💾 تم حفظ الملف بنجاح على جهازك';
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        console.warn('File System Picker failed, falling back to download.', err);
+      }
+    }
+
+    const blob = new Blob([geojsonData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = defaultFileName;
+    document.body.appendChild(a);
+    a.click();
+    
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 150);
+    
+    document.getElementById('stHint').textContent = '📥 تم تنزيل الملف في مجلد التنزيلات (Downloads)';
+  }
+
+  document.getElementById('exportBtn').addEventListener('click', saveToFileSystem);
+
+  /* ---------- Google Drive Integration ---------- */
+  const DRIVE_CLIENT_ID = '677149493471-4gjbg1thbdqt8l8hjplk3bfnr4ni56nh.apps.googleusercontent.com';
+  const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+  let tokenClient=null, driveToken=null, driveTokenExpiry=0, driveConnected=false, lastPushTime=0;
+  const driveMsgEl = document.getElementById('driveMsg');
+  const driveControlEl = document.getElementById('driveControl');
+  const driveUpdateBanner = document.getElementById('driveUpdateBanner');
+  const driveImportBtn = document.getElementById('driveImportBtn');
+  const driveDismissBtn = document.getElementById('driveDismissBtn');
+  let pendingRemote = null;
+
+  function setDriveMsg(text, connected){
+    driveMsgEl.textContent = text;
+    driveControlEl.classList.toggle('connected', !!connected);
+    driveControlEl.classList.toggle('disconnected', !connected);
+  }
+  function initDriveClient(){
+    if(!window.google || !google.accounts || !google.accounts.oauth2){ setTimeout(initDriveClient, 400); return; }
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: DRIVE_CLIENT_ID, scope: DRIVE_SCOPE,
+      callback: (resp)=>{
+        if(resp.error){ setDriveMsg('فشل تسجيل الدخول', false); return; }
+        driveToken = resp.access_token;
+        driveTokenExpiry = Date.now() + (resp.expires_in*1000) - 60000;
+        driveConnected = true;
+        setDriveMsg('متصل — جاري الحفظ الأول...', true);
+        pushToDrive();
+      }
+    });
+  }
+  initDriveClient();
+  function ensureDriveToken(){
+    return new Promise((resolve, reject)=>{
+      if(driveToken && Date.now() < driveTokenExpiry){ resolve(driveToken); return; }
+      if(!tokenClient){ reject('not-init'); return; }
+      const orig = tokenClient.callback;
+      tokenClient.callback = (resp)=>{
+        tokenClient.callback = orig;
+        if(resp.error){ driveConnected=false; setDriveMsg('انتهت الجلسة — اضغط اتصال', false); reject(resp.error); return; }
+        driveToken=resp.access_token; driveTokenExpiry=Date.now()+(resp.expires_in*1000)-60000;
+        resolve(driveToken);
+      };
+      tokenClient.requestAccessToken({prompt:''});
+    });
+  }
+  function buildMultipart(boundary, metadata, content){
+    const delim='\r\n--'+boundary+'\r\n', closeDelim='\r\n--'+boundary+'--';
+    return delim+'Content-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(metadata)+
+           delim+'Content-Type: application/geo+json\r\n\r\n'+content+closeDelim;
+  }
+  let drivePushInFlight=false;
+  async function pushToDrive(){
+    if(!driveConnected || drivePushInFlight) return;
+    drivePushInFlight=true;
+    try{ await ensureDriveToken(); }catch(e){ drivePushInFlight=false; return; }
+    const content = JSON.stringify(buildGeoJSON(), null, 2);
+    const boundary='-------gistool314159265';
+    let url, method, body;
+    if(state.driveFileId){
+      url='https://www.googleapis.com/upload/drive/v3/files/'+state.driveFileId+'?uploadType=multipart';
+      method='PATCH'; body=buildMultipart(boundary, {}, content);
+    } else {
+      url='https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
+      method='POST'; body=buildMultipart(boundary, {name:'gis-drawing.geojson', mimeType:'application/geo+json'}, content);
+    }
+    try{
+      const res = await fetch(url, {method, headers:{'Authorization':'Bearer '+driveToken, 'Content-Type':'multipart/related; boundary='+boundary}, body});
+      const data = await res.json();
+      if(data.id){ state.driveFileId=data.id; lastPushTime=Date.now(); setDriveMsg('✓ محفوظ في Drive الآن', true); scheduleSave(); }
+      else { setDriveMsg('فشل رفع الملف', true); }
+    }catch(e){ setDriveMsg('فشل الاتصال بـ Drive', true); }
+    drivePushInFlight=false;
+  }
+  document.getElementById('driveConnectBtn').addEventListener('click', ()=>{
+    if(!tokenClient){ alert('مكتبة تسجيل الدخول لسه بتحمّل، جرّب تاني بعد ثانية.'); return; }
+    tokenClient.requestAccessToken({prompt:'consent'});
+  });
+  document.getElementById('driveJoinBtn').addEventListener('click', ()=>{
+    const id = prompt('الصق رقم الملف (File ID) المشترك من زميلك:');
+    if(!id) return;
+    if(!confirm('هيتم استبدال أي رسم موجود عندك دلوقتي برسم الملف المشترك. متأكد؟')) return;
+    state.driveFileId = id.trim(); scheduleSave();
+    if(!driveConnected){ alert('اضغط "اتصال" كمان عشان تسجل دخول Drive.'); }
+    else { pullFromDrive(true); }
+  });
+  document.getElementById('driveCopyIdBtn').addEventListener('click', ()=>{
+    if(!state.driveFileId){ alert('لسه معملتش أي حفظ على Drive. اضغط "اتصال" الأول.'); return; }
+    navigator.clipboard.writeText(state.driveFileId).then(()=>{
+      alert('تم نسخ رقم الملف:\n' + state.driveFileId + '\n\nابعته لزميلك.');
+    }).catch(()=>{ alert('رقم الملف:\n' + state.driveFileId); });
+  });
+  function applyRemoteGeoJSON(geojson, remoteTime){
+    if(!geojson || !geojson.features) return;
+    const byLayer = {};
+    geojson.features.forEach(feat=>{
+      const layerName = (feat.properties && feat.properties.layer) || 'طبقة مشتركة';
+      if(!byLayer[layerName]) byLayer[layerName]=[];
+      byLayer[layerName].push(feat);
+    });
+    const newLayers = []; let ci=0;
+    Object.keys(byLayer).forEach(name=>{
+      const existing = state.layers.find(l=>l.name===name);
+      const color = existing ? existing.color : palette[ci++%palette.length];
+      const visible = existing ? existing.visible : true;
+      const features = byLayer[name].map(feat=>{
+        const props = Object.assign({}, feat.properties);
+        const rectInfo = props.rect_info, circleInfo = props.circle_info;
+        delete props.layer; delete props.type; delete props.rect_info; delete props.circle_info;
+        let coords, type = feat.properties.type;
+        if(feat.geometry.type==='Point'){ type=type||'point'; coords=[[feat.geometry.coordinates[1], feat.geometry.coordinates[0]]]; }
+        else if(feat.geometry.type==='LineString'){ type=type||'line'; coords=feat.geometry.coordinates.map(c=>[c[1],c[0]]); }
+        else { coords=feat.geometry.coordinates[0].slice(0,-1).map(c=>[c[1],c[0]]); type=type||'polygon'; }
+        const nf = {id:uid(), type, coords, attrs: props};
+        if(type==='rectangle' && rectInfo){ nf.rect = rectInfo; syncRectCoords(nf); }
+        if(type==='circle' && circleInfo){ nf.circle = circleInfo; syncCircleCoords(nf); }
+        return nf;
+      });
+      newLayers.push({id:'L'+name+ci, name, color, visible, features});
+    });
+    if(newLayers.length){ state.layers = newLayers; if(!getLayer(state.activeLayerId)) state.activeLayerId = state.layers[0].id; }
+    state.lastPulledTime = remoteTime; selection=null;
+    closeMobileEditPad();
+    renderLayerList(); renderFeatures(); renderAttrPanel();
+    doSave();
+    setDriveMsg('✓ تم تحديث الرسم من زميلك', true);
+  }
+  driveImportBtn.addEventListener('click', ()=>{
+    if(pendingRemote){ applyRemoteGeoJSON(pendingRemote.geojson, pendingRemote.remoteTime); }
     pendingRemote=null; driveUpdateBanner.style.display='none';
   });
-
+  driveDismissBtn.addEventListener('click', ()=>{
+    if(pendingRemote){ state.lastPulledTime = pendingRemote.remoteTime; doSave(); }
+    pendingRemote=null; driveUpdateBanner.style.display='none';
+  });
   async function pullFromDrive(force){
     if(!driveConnected || !state.driveFileId) return;
     try{ await ensureDriveToken(); }catch(e){ return; }
@@ -1214,29 +1481,15 @@
       else { pendingRemote = {geojson, remoteTime}; driveUpdateBanner.style.display='flex'; }
     }catch(e){ console.error('pull failed', e); }
   }
-
   setInterval(()=>{ if(driveConnected && state.driveFileId) pullFromDrive(false); }, 12000);
-
   const origScheduleSaveForDrive = scheduleSave;
   let drivePushTimer=null;
   scheduleSave = function(){
     origScheduleSaveForDrive();
-    if(driveConnected && state.driveFileId) pushToDriveThrottle();
+    if(driveConnected){ clearTimeout(drivePushTimer); drivePushTimer=setTimeout(pushToDrive, 1200); }
   };
 
-  /* ---------- Keyboard Shortcuts ---------- */
-  window.addEventListener('keydown', (e)=>{
-    if(e.target.tagName==='INPUT' || e.target.tagName==='SELECT') return;
-    if((e.ctrlKey || e.metaKey) && e.key.toLowerCase()==='z'){ e.preventDefault(); handleUndo(); }
-    if((e.ctrlKey || e.metaKey) && e.key.toLowerCase()==='y'){ e.preventDefault(); handleRedo(); }
-  });
-
-  /* ---------- Startup Application Load ---------- */
   loadState();
-  if(localStorage.getItem('drive_conn_v2')==='1'){
-    setTimeout(()=>{ if(!driveConnected && clientToken) clientToken.requestAccessToken({prompt:''}); }, 1500);
-  }
-
 })();
 </script>
 </body>
