@@ -26,7 +26,7 @@
   .toolbar{width:72px;background:var(--bg-panel-2);border-left:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:6px;flex-shrink:0;z-index:500;}
   .tool-btn{width:52px;height:52px;border-radius:10px;border:1px solid transparent;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--text-muted);transition:.15s;}
   .tool-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;}
-  .tool-btn span{font-size:9px;font-family:var(--sans);}
+  .tool-btn span{font-size:9px;font-family:var(--sans);text-align:center;line-height:1.1;}
   .tool-btn:hover:not(:disabled){background:rgba(255,255,255,.05);color:var(--text);}
   .tool-btn.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);}
   .tool-btn:disabled{opacity:0.3;cursor:not-allowed;}
@@ -90,9 +90,6 @@
   .field-row input{background:var(--bg-panel);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 7px;font-size:12px;font-family:var(--sans);flex:1;min-width:0;}
   
   .field-row input.key{flex:0 0 34%;color:var(--teal);font-family:var(--mono);font-size:11px;}
-  .rect-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;}
-  .rect-edit-grid label{font-size:10px;color:var(--text-muted);}
-  .rect-edit-grid input{width:100%;background:var(--bg-panel);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 7px;font-family:var(--mono);font-size:12px;margin-top:2px;}
   .danger-btn{width:100%;margin-top:10px;padding:8px;border-radius:8px;border:1px solid var(--danger);background:transparent;color:var(--danger);cursor:pointer;font-size:12px;font-weight:600;}
   .danger-btn:hover{background:rgba(226,102,91,.12);}
   ::-webkit-scrollbar{width:8px;}
@@ -100,8 +97,6 @@
 
   .leaflet-popup-content{font-family:var(--sans);direction:rtl;}
   .vertex-marker{background:var(--bg);border:2px solid var(--teal);border-radius:50%;}
-  .rect-rotate-marker{background:#e8a33d;border:2px solid #0d2438;border-radius:50%;cursor:alias;}
-  .rect-scale-marker{background:#5ec9c0;border:2px solid #0d2438;border-radius:50%;cursor:se-resize;}
 
   .mobile-sidebar-toggle{display:none;position:fixed;bottom:calc(76px + env(safe-area-inset-bottom, 0px) + 16px);left:12px;z-index:900;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#1a1200;border:none;box-shadow:0 6px 16px rgba(0,0,0,.4);align-items:center;justify-content:center;}
   .mobile-sidebar-toggle svg{width:22px;height:22px;}
@@ -185,8 +180,11 @@
     <button class="tool-btn" data-tool="line" title="خط">
       <svg viewBox="0 0 24 24"><path d="M4 18L20 6"/><circle cx="4" cy="18" r="1.6" fill="currentColor"/><circle cx="20" cy="6" r="1.6" fill="currentColor"/></svg><span>خط</span>
     </button>
-    <button class="tool-btn" data-tool="polygon" title="مضلع">
-      <svg viewBox="0 0 24 24"><path d="M12 3l8 6-3 10H7L4 9z"/></svg><span>مضلع</span>
+    <button class="tool-btn" data-tool="polygon" title="مضلع حر">
+      <svg viewBox="0 0 24 24"><path d="M12 3l8 6-3 10H7L4 9z"/></svg><span>مضلع حر</span>
+    </button>
+    <button class="tool-btn" data-tool="ortho_polygon" title="مضلع بزوايا قائمة">
+      <svg viewBox="0 0 24 24"><path d="M4 4h10v10h6v6H4z"/><circle cx="4" cy="4" r="1.5" fill="currentColor"/><circle cx="14" cy="4" r="1.5" fill="currentColor"/><circle cx="14" cy="14" r="1.5" fill="currentColor"/></svg><span>مضلع قائم</span>
     </button>
     <button class="tool-btn" data-tool="rectangle" title="مستطيل بالأطوال والاتجاه">
       <svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="9"/><path d="M4 5.5h16M4 4v3M20 4v3"/></svg><span>مستطيل</span>
@@ -236,8 +234,6 @@
         <div class="mobile-pad-row">
           <button class="mobile-pad-btn active" id="btnPadMove">✋ نقل الكل</button>
           <button class="mobile-pad-btn" id="btnPadVertex" style="display:none;">📍 تعديل النقطة</button>
-          <button class="mobile-pad-btn" id="btnPadRotate" style="display:none;">🔄 تدوير</button>
-          <button class="mobile-pad-btn" id="btnPadScale" style="display:none;">📐 سكيل</button>
         </div>
         <div class="mobile-pad-row">
           <button class="mobile-pad-btn action-btn" id="btnPadApply">تطبيق التغيير هنا</button>
@@ -359,18 +355,12 @@
   const mobilePadTitle = document.getElementById('mobilePadTitle');
   const btnPadMove = document.getElementById('btnPadMove');
   const btnPadVertex = document.getElementById('btnPadVertex');
-  const btnPadRotate = document.getElementById('btnPadRotate');
-  const btnPadScale = document.getElementById('btnPadScale');
 
   const map = L.map('map', {zoomControl:false, center:[29.9792, 31.1342], zoom:16, worldCopyJump:true});
   L.control.zoom({position:'topleft'}).addTo(map);
 
-  const satLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-    attribution: '© Google Maps', maxZoom: 20
-  });
-  const streetsLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors', maxZoom:22, subdomains:'abc'
-  });
+  const satLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { attribution: '© Google Maps', maxZoom: 20 });
+  const streetsLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors', maxZoom:22, subdomains:'abc' });
   satLayer.addTo(map);
 
   document.getElementById('btnSat').addEventListener('click', ()=>{
@@ -409,35 +399,21 @@
     if (drawingCoords && drawingCoords.length > 0) {
       drawingCoords.pop();
       if (drawingCoords.length === 0) {
-        drawingCoords = null;
-        rectPending = null;
-        mobileFinishBtn.style.display = 'none';
+        drawingCoords = null; rectPending = null; mobileFinishBtn.style.display = 'none';
         if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
         document.getElementById('stTemp').textContent = '';
       } else {
         if (tempLine) { map.removeLayer(tempLine); }
         tempLine = L.polyline(drawingCoords, {color:'#e8a33d', weight:2, dashArray:'6 5'}).addTo(map);
       }
-      updateHistoryButtons();
-      return;
+      updateHistoryButtons(); return;
     }
-
     if (undoStack.length > 0) {
       const currentState = JSON.stringify({ layers: state.layers, activeLayerId: state.activeLayerId, nextColorIdx: state.nextColorIdx });
       redoStack.push(currentState);
-      
       const previous = JSON.parse(undoStack.pop());
-      state.layers = previous.layers;
-      state.activeLayerId = previous.activeLayerId;
-      state.nextColorIdx = previous.nextColorIdx;
-      
-      selection = null;
-      closeMobileEditPad();
-      renderLayerList();
-      renderFeatures();
-      renderAttrPanel();
-      updateHistoryButtons();
-      scheduleSave();
+      state.layers = previous.layers; state.activeLayerId = previous.activeLayerId; state.nextColorIdx = previous.nextColorIdx;
+      selection = null; closeMobileEditPad(); renderLayerList(); renderFeatures(); renderAttrPanel(); updateHistoryButtons(); scheduleSave();
     }
   }
 
@@ -445,19 +421,9 @@
     if (redoStack.length > 0) {
       const currentState = JSON.stringify({ layers: state.layers, activeLayerId: state.activeLayerId, nextColorIdx: state.nextColorIdx });
       undoStack.push(currentState);
-      
       const next = JSON.parse(redoStack.pop());
-      state.layers = next.layers;
-      state.activeLayerId = next.activeLayerId;
-      state.nextColorIdx = next.nextColorIdx;
-      
-      selection = null;
-      closeMobileEditPad();
-      renderLayerList();
-      renderFeatures();
-      renderAttrPanel();
-      updateHistoryButtons();
-      scheduleSave();
+      state.layers = next.layers; state.activeLayerId = next.activeLayerId; state.nextColorIdx = next.nextColorIdx;
+      selection = null; closeMobileEditPad(); renderLayerList(); renderFeatures(); renderAttrPanel(); updateHistoryButtons(); scheduleSave();
     }
   }
 
@@ -477,9 +443,15 @@
   }
   
   function destPoint(lat,lng,dEast,dNorth){
-    const dLat = dNorth/111320;
-    const dLng = dEast/(111320*Math.cos(toRad(lat)));
+    const dLat = dNorth/111320; const dLng = dEast/(111320*Math.cos(toRad(lat)));
     return [lat+dLat, lng+dLng];
+  }
+
+  function getBearing(lat1, lng1, lat2, lng2) {
+    const dLon = toRad(lng2 - lng1);
+    const y = Math.sin(dLon) * Math.cos(toRad(lat2));
+    const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
+    return (toDeg(Math.atan2(y, x)) + 360) % 360;
   }
   
   function pathLength(coords){
@@ -491,43 +463,56 @@
   function polygonAreaMeters(coords){
     const refLat = coords[0][0], refLng = coords[0][1];
     const pts = coords.map(c=>{
-      const north = (c[0]-refLat)*111320;
-      const east = (c[1]-refLng)*111320*Math.cos(toRad(refLat));
+      const north = (c[0]-refLat)*111320; const east = (c[1]-refLng)*111320*Math.cos(toRad(refLat));
       return [east, north];
     });
-    let a=0;
-    for(let i=0;i<pts.length;i++){ const [x1,y1]=pts[i], [x2,y2]=pts[(i+1)%pts.length]; a+=x1*y2-x2*y1; }
+    let a=0; for(let i=0;i<pts.length;i++){ const [x1,y1]=pts[i], [x2,y2]=pts[(i+1)%pts.length]; a+=x1*y2-x2*y1; }
     return Math.abs(a)/2;
+  }
+
+  // حساب النقطة المقيدة بالزاوية القائمة بناءً على آخر ضلع مرسوم
+  function constrainToOrthogonal(lastPt, prevPt, currentInflow) {
+    if (!prevPt) {
+      // الضلع الأول ينجذب للاتجاهات الأربعة الرئيسية (شمال، جنوب، شرق، غرب)
+      const bearing = getBearing(prevPt ? prevPt[0]:lastPt[0], prevPt ? prevPt[1]:lastPt[1], currentInflow.lat, currentInflow.lng);
+      const dist = haversine(lastPt[0], lastPt[1], currentInflow.lat, currentInflow.lng);
+      let roundedBearing = Math.round(bearing / 90) * 90;
+      const rad = toRad(roundedBearing);
+      return destPoint(lastPt[0], lastPt[1], dist * Math.sin(rad), dist * Math.cos(rad));
+    } else {
+      // الأضلاع التالية تلتزم بزاوية 90° قائمة عمودية تماماً على الضلع السابق
+      const baseBearing = getBearing(prevPt[0], prevPt[1], lastPt[0], lastPt[1]);
+      const curBearing = getBearing(lastPt[0], lastPt[1], currentInflow.lat, currentInflow.lng);
+      let diff = (curBearing - baseBearing + 360) % 360;
+      
+      let finalBearing = baseBearing;
+      if (diff > 45 && diff <= 135) finalBearing = (baseBearing + 90) % 360;
+      else if (diff > 135 && diff <= 225) finalBearing = (baseBearing + 180) % 360;
+      else if (diff > 225 && diff <= 315) finalBearing = (baseBearing + 270) % 360;
+      
+      const dist = haversine(lastPt[0], lastPt[1], currentInflow.lat, currentInflow.lng);
+      const rad = toRad(finalBearing);
+      // استخدام حساب المثلثات الكروي المبسط لإسقاط المسافة بدقة
+      const headingRad = toRad((90 - finalBearing + 360) % 360);
+      return destPoint(lastPt[0], lastPt[1], dist * Math.cos(headingRad), dist * Math.sin(headingRad));
+    }
   }
   
   function rectCorners(rect){
     const th = toRad(rect.rotation);
-    const uxE = Math.cos(th), uxN = Math.sin(th);
-    const uyE = -Math.sin(th), uyN = Math.cos(th);
+    const uxE = Math.cos(th), uxN = Math.sin(th); const uyE = -Math.sin(th), uyN = Math.cos(th);
     let baseE=0, baseN=0;
-    if(rect.mode==='center'){ 
-      baseE = -(uxE*rect.width/2+uyE*rect.length/2); 
-      baseN = -(uxN*rect.width/2+uyN*rect.length/2);
-    }
-    const cornersMeters = [
-      [baseE, baseN],
-      [baseE+uxE*rect.width, baseN+uxN*rect.width],
-      [baseE+uxE*rect.width+uyE*rect.length, baseN+uxN*rect.width+uyN*rect.length],
-      [baseE+uyE*rect.length, baseN+uyN*rect.length]
-    ];
+    if(rect.mode==='center'){ baseE = -(uxE*rect.width/2+uyE*rect.length/2); baseN = -(uxN*rect.width/2+uyN*rect.length/2); }
+    const cornersMeters = [[baseE, baseN], [baseE+uxE*rect.width, baseN+uxN*rect.width], [baseE+uxE*rect.width+uyE*rect.length, baseN+uxN*rect.width+uyN*rect.length], [baseE+uyE*rect.length, baseN+uyN*rect.length]];
     return cornersMeters.map(([e,n])=>destPoint(rect.lat, rect.lng, e, n));
   }
-  
   function syncRectCoords(f){ f.coords = rectCorners(f.rect); }
   
   function circlePoints(circle, segments){
-    segments = segments || 64;
-    const pts = [];
+    segments = segments || 64; const pts = [];
     for(let i=0;i<segments;i++){
       const ang = (i/segments)*Math.PI*2;
-      const east = circle.radius*Math.sin(ang);
-      const north = circle.radius*Math.cos(ang);
-      pts.push(destPoint(circle.lat, circle.lng, east, north));
+      pts.push(destPoint(circle.lat, circle.lng, circle.radius*Math.sin(ang), circle.radius*Math.cos(ang)));
     }
     return pts;
   }
@@ -561,9 +546,7 @@
       if(!snapMarker) snapMarker = L.circleMarker(snap, {radius:9, color:'#e8a33d', weight:2, fillOpacity:0}).addTo(map);
       else snapMarker.setLatLng(snap);
       return L.latLng(snap[0], snap[1]);
-    } else if(snapMarker){
-      map.removeLayer(snapMarker); snapMarker=null;
-    }
+    } else if(snapMarker){ map.removeLayer(snapMarker); snapMarker=null; }
     return e.latlng;
   }
 
@@ -571,70 +554,41 @@
   function scheduleSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(doSave, 700); }
   function doSave(){
     try{
-      localStorage.setItem('gis-tool-state-v2', JSON.stringify({state}));
+      localStorage.setItem('gis-tool-state-v3', JSON.stringify({state}));
       const ind=document.getElementById('saveIndicator'); ind.classList.add('show');
       setTimeout(()=>ind.classList.remove('show'),1200);
-    }catch(e){ console.error('save failed', e); }
+    }catch(e){}
   }
   function loadState(){
     try{
-      const raw = localStorage.getItem('gis-tool-state-v2');
+      const raw = localStorage.getItem('gis-tool-state-v3');
       if(raw){ const parsed = JSON.parse(raw); if(parsed.state && parsed.state.layers) state=parsed.state; }
     }catch(e){}
     renderLayerList(); renderFeatures();
-    const all=[]; state.layers.forEach(l=>l.features.forEach(f=>f.coords.forEach(c=>all.push(c))));
-    if(all.length) map.fitBounds(L.latLngBounds(all), {padding:[40,40]});
   }
 
   /* ---------- Mobile Control Pad ---------- */
   function openMobileEditPad(f) {
-    isMobileEnv = window.innerWidth <= 760;
-    if(!isMobileEnv) return;
-
-    mobileCrosshair.style.display = 'block';
-    mobileEditPad.style.display = 'flex';
-    
+    isMobileEnv = window.innerWidth <= 760; if(!isMobileEnv) return;
+    mobileCrosshair.style.display = 'block'; mobileEditPad.style.display = 'flex';
     btnPadVertex.style.display = (f.type !== 'rectangle' && f.type !== 'circle') ? 'block' : 'none';
-    btnPadRotate.style.display = (f.type === 'rectangle') ? 'block' : 'none';
-    btnPadScale.style.display = (f.type === 'rectangle') ? 'block' : 'none';
-
     setMobileEditMode('move');
   }
 
   function closeMobileEditPad() {
-    mobileCrosshair.style.display = 'none';
-    mobileEditPad.style.display = 'none';
-    mobileVertexRow.style.display = 'none';
+    mobileCrosshair.style.display = 'none'; mobileEditPad.style.display = 'none'; mobileVertexRow.style.display = 'none';
     if(snapMarker) { map.removeLayer(snapMarker); snapMarker = null; }
   }
 
   function setMobileEditMode(mode) {
     mobileMode = mode;
     document.querySelectorAll('.mobile-pad-btn[id^="btnPad"]').forEach(b => b.classList.remove('active'));
-    
-    const f = getFeature(selection.layerId, selection.featureId);
-    if(!f) return;
+    const f = getFeature(selection.layerId, selection.featureId); if(!f) return;
 
     if(mode === 'move') {
-      btnPadMove.classList.add('active');
-      mobilePadTitle.textContent = "⚙️ اسحب الخريطة لنقل العنصر بالكامل";
-      mobileVertexRow.style.display = 'none';
-    } 
-    else if(mode === 'vertex') {
-      btnPadVertex.classList.add('active');
-      mobileVertexRow.style.display = 'flex';
-      mobileActiveVertexIdx = 0;
-      focusOnMobileVertex(f);
-    }
-    else if(mode === 'rotate') {
-      btnPadRotate.classList.add('active');
-      mobilePadTitle.textContent = "🔄 حرك الخريطة لتدوير المستطيل حول مركزه";
-      mobileVertexRow.style.display = 'none';
-    }
-    else if(mode === 'scale') {
-      btnPadScale.classList.add('active');
-      mobilePadTitle.textContent = "📐 حرك الخريطة لتغيير حجم وأبعاد المستطيل";
-      mobileVertexRow.style.display = 'none';
+      btnPadMove.classList.add('active'); mobilePadTitle.textContent = "⚙️ اسحب الخريطة لنقل المضلع بالكامل"; mobileVertexRow.style.display = 'none';
+    } else if(mode === 'vertex') {
+      btnPadVertex.classList.add('active'); mobileVertexRow.style.display = 'flex'; mobileActiveVertexIdx = 0; focusOnMobileVertex(f);
     }
   }
 
@@ -647,89 +601,71 @@
 
   btnPadMove.addEventListener('click', () => setMobileEditMode('move'));
   if(btnPadVertex) btnPadVertex.addEventListener('click', () => setMobileEditMode('vertex'));
-  if(btnPadRotate) btnPadRotate.addEventListener('click', () => setMobileEditMode('rotate'));
-  if(btnPadScale) btnPadScale.addEventListener('click', () => setMobileEditMode('scale'));
   
   document.getElementById('btnNextVertex').addEventListener('click', () => {
-    const f = getFeature(selection.layerId, selection.featureId);
-    if(!f) return;
-    mobileActiveVertexIdx = (mobileActiveVertexIdx + 1) % f.coords.length;
-    focusOnMobileVertex(f);
+    const f = getFeature(selection.layerId, selection.featureId); if(!f) return;
+    mobileActiveVertexIdx = (mobileActiveVertexIdx + 1) % f.coords.length; focusOnMobileVertex(f);
   });
   document.getElementById('btnPrevVertex').addEventListener('click', () => {
-    const f = getFeature(selection.layerId, selection.featureId);
-    if(!f) return;
-    mobileActiveVertexIdx = (mobileActiveVertexIdx - 1 + f.coords.length) % f.coords.length;
-    focusOnMobileVertex(f);
+    const f = getFeature(selection.layerId, selection.featureId); if(!f) return;
+    mobileActiveVertexIdx = (mobileActiveVertexIdx - 1 + f.coords.length) % f.coords.length; focusOnMobileVertex(f);
   });
-
   document.getElementById('btnPadCancel').addEventListener('click', () => {
     selection = null; closeMobileEditPad(); renderFeatures(); renderAttrPanel();
   });
 
   document.getElementById('btnPadApply').addEventListener('click', () => {
-    const f = getFeature(selection.layerId, selection.featureId);
-    if(!f) return;
-
-    pushStateToUndo();
-    const centerLatLng = map.getCenter();
+    const f = getFeature(selection.layerId, selection.featureId); if(!f) return;
+    pushStateToUndo(); const centerLatLng = map.getCenter();
 
     if(mobileMode === 'move') {
       let oldCenterLat = 0, oldCenterLng = 0;
-      if(f.type === 'rectangle' || f.type === 'circle') {
-        oldCenterLat = f[f.type].lat; oldCenterLng = f[f.type].lng;
-      } else {
-        f.coords.forEach(c => { oldCenterLat += c[0]; oldCenterLng += c[1]; });
-        oldCenterLat /= f.coords.length; oldCenterLng /= f.coords.length;
-      }
-      const dLat = centerLatLng.lat - oldCenterLat;
-      const dLng = centerLatLng.lng - oldCenterLng;
-
-      if(f.type === 'rectangle' || f.type === 'circle') {
-        f[f.type].lat = centerLatLng.lat; f[f.type].lng = centerLatLng.lng;
-        f.type === 'rectangle' ? syncRectCoords(f) : syncCircleCoords(f);
-      } else {
-        f.coords = f.coords.map(c => [c[0] + dLat, c[1] + dLng]);
-      }
-    } 
-    else if(mobileMode === 'vertex') {
+      f.coords.forEach(c => { oldCenterLat += c[0]; oldCenterLng += c[1]; });
+      oldCenterLat /= f.coords.length; oldCenterLng /= f.coords.length;
+      const dLat = centerLatLng.lat - oldCenterLat; const dLng = centerLatLng.lng - oldCenterLng;
+      f.coords = f.coords.map(c => [c[0] + dLat, c[1] + dLng]);
+    } else if(mobileMode === 'vertex') {
       f.coords[mobileActiveVertexIdx] = [centerLatLng.lat, centerLatLng.lng];
+      if(f.type==='ortho_polygon') enforceOrthogonalGeometry(f, mobileActiveVertexIdx);
     }
-    else if(mobileMode === 'rotate') {
-      const corners = f.coords;
-      const cLat = (corners[0][0] + corners[2][0]) / 2;
-      const cLng = (corners[0][1] + corners[2][1]) / 2;
-      const angle = Math.atan2(centerLatLng.lat - cLat, centerLatLng.lng - cLng);
-      f.rect.rotation = Math.round(toDeg(angle) % 360);
-      syncRectCoords(f);
-    }
-    else if(mobileMode === 'scale') {
-      const anchor = f.coords[0];
-      const w = haversine(anchor[0], anchor[1], anchor[0], centerLatLng.lng);
-      const l = haversine(anchor[0], anchor[1], centerLatLng.lat, anchor[1]);
-      f.rect.width = Math.max(1, parseFloat(w.toFixed(1)));
-      f.rect.length = Math.max(1, parseFloat(l.toFixed(1)));
-      syncRectCoords(f);
-    }
-
-    renderFeatures();
-    renderAttrPanel();
-    scheduleSave();
-    
+    renderFeatures(); renderAttrPanel(); scheduleSave();
     if(mobileMode === 'vertex') focusOnMobileVertex(f);
-    else mobilePadTitle.textContent = "✅ تم تطبيق التعديل بنجاح!";
   });
 
-  /* ---------- Rendering vector features ---------- */
+  /* ---------- الإبقاء على زوايا المضلع القائم متوازية عند التعديل ---------- */
+  function enforceOrthogonalGeometry(f, changedIdx) {
+    const len = f.coords.length;
+    // تعديل النقطة السابقة والتالية تدريجياً لضمان بقاء الأضلاع متعامدة هندسياً تماماً
+    let prevIdx = (changedIdx - 1 + len) % len;
+    let nextIdx = (changedIdx + 1) % len;
+    
+    let current = f.coords[changedIdx];
+    let prev = f.coords[prevIdx];
+    let next = f.coords[nextIdx];
+
+    // تحديد اتجاه التعامد الأقرب وتثبيته
+    if (Math.abs(prev[0] - current[0]) > Math.abs(prev[1] - current[1])) {
+      f.coords[prevIdx][1] = current[1];
+    } else {
+      f.coords[prevIdx][0] = current[0];
+    }
+
+    if (Math.abs(next[0] - current[0]) > Math.abs(next[1] - current[1])) {
+      f.coords[nextIdx][1] = current[1];
+    } else {
+      f.coords[nextIdx][0] = current[0];
+    }
+  }
+
+  /* ---------- Rendering features ---------- */
   function renderFeatures(){
     state.layers.forEach(layer=>{
-      const lg = ensureLayerGroup(layer);
-      lg.clearLayers();
+      const lg = ensureLayerGroup(layer); lg.clearLayers();
       if(layer.visible){ if(!map.hasLayer(lg)) lg.addTo(map); } else { if(map.hasLayer(lg)) map.removeLayer(lg); }
       layer.features.forEach(f=>{
         const isSel = selection && selection.layerId===layer.id && selection.featureId===f.id;
-        const color = layer.color;
-        let shape;
+        const color = layer.color; let shape;
+        
         if(f.type==='point'){
           shape = L.circleMarker(f.coords[0], {radius:7, color: isSel?'#5ec9c0':'#0d2438', weight:isSel?2.5:1.4, fillColor:color, fillOpacity:0.95});
         } else if(f.type==='line'){
@@ -739,69 +675,31 @@
         }
         
         shape.on('click', (e) => {
-          if(tool!=='select') return;
-          L.DomEvent.stopPropagation(e);
-          selection = {layerId:layer.id, featureId:f.id};
-          renderAttrPanel(); 
-          renderFeatures();
-          
-          if(window.innerWidth <= 760) {
-            openMobileEditPad(f);
-          }
+          if(tool!=='select') return; L.DomEvent.stopPropagation(e);
+          selection = {layerId:layer.id, featureId:f.id}; renderAttrPanel(); renderFeatures();
+          if(window.innerWidth <= 760) openMobileEditPad(f);
         });
 
         shape.on('mousedown', (e) => {
-          if(tool!=='select' || window.innerWidth <= 760) return;
-          L.DomEvent.stopPropagation(e);
-          selection = {layerId:layer.id, featureId:f.id};
-          renderAttrPanel(); renderFeatures();
-          map.dragging.disable();
-          pushStateToUndo(); 
+          if(tool!=='select' || window.innerWidth <= 760) return; L.DomEvent.stopPropagation(e);
+          selection = {layerId:layer.id, featureId:f.id}; renderAttrPanel(); renderFeatures();
+          map.dragging.disable(); pushStateToUndo(); 
           dragCtx = {
-            mode:'move', feature:f, startLatLng:e.latlng, 
-            origCoords:JSON.parse(JSON.stringify(f.coords)), 
-            origRect: f.rect?Object.assign({},f.rect):null, 
-            origCircle: f.circle?Object.assign({},f.circle):null
+            mode:'move', feature:f, startLatLng:e.latlng, origCoords:JSON.parse(JSON.stringify(f.coords)),
+            origRect: f.rect?Object.assign({},f.rect):null, origCircle: f.circle?Object.assign({},f.circle):null
           };
         });
-
         shape.addTo(lg);
 
-        if(isSel && window.innerWidth > 760) {
-          if(f.type==='rectangle') {
-            const corners = f.coords;
-            const centerLat = (corners[0][0] + corners[2][0]) / 2;
-            const centerLng = (corners[0][1] + corners[2][1]) / 2;
-            
-            const th = toRad(f.rect.rotation);
-            const uxN = Math.sin(th), uxE = Math.cos(th);
-            const rotatePt = destPoint(centerLat, centerLng, uxE * 0, uxN * 0 + (f.rect.length / 2) + 5);
-            
-            const rotMarker = L.circleMarker(rotatePt, {radius:9, className:'rect-rotate-marker', color:'#0d2438', weight:1.5, fillColor:'#e8a33d', fillOpacity:1});
-            rotMarker.on('mousedown', (se)=>{
+        if(isSel && window.innerWidth > 760 && f.type!=='rectangle' && f.type!=='circle'){
+          f.coords.forEach((c,idx)=>{
+            const h = L.circleMarker(c, {radius:8, className:'vertex-marker', color:'#5ec9c0', weight:2, fillColor:'#0d2438', fillOpacity:1});
+            h.on('mousedown', (se)=>{
               L.DomEvent.stopPropagation(se); map.dragging.disable(); pushStateToUndo();
-              dragCtx = { mode:'rect-rotate', feature:f, center:[centerLat, centerLng], origRotation: f.rect.rotation, startAngle: Math.atan2(se.latlng.lat - centerLat, se.latlng.lng - centerLng) };
+              dragCtx = {mode:'vertex', feature:f, idx};
             });
-            rotMarker.addTo(lg);
-
-            const scaleMarker = L.circleMarker(corners[2], {radius:9, className:'rect-scale-marker', color:'#0d2438', weight:1.5, fillColor:'#5ec9c0', fillOpacity:1});
-            scaleMarker.on('mousedown', (se)=>{
-              L.DomEvent.stopPropagation(se); map.dragging.disable(); pushStateToUndo();
-              dragCtx = { mode:'rect-scale', feature:f, anchor: corners[0], origWidth: f.rect.width, origLength: f.rect.length, startLatLng: se.latlng };
-            });
-            scaleMarker.addTo(lg);
-          }
-
-          if(f.type!=='rectangle' && f.type!=='circle'){
-            f.coords.forEach((c,idx)=>{
-              const h = L.circleMarker(c, {radius:8, className:'vertex-marker', color:'#5ec9c0', weight:2, fillColor:'#0d2438', fillOpacity:1});
-              h.on('mousedown', (se)=>{
-                L.DomEvent.stopPropagation(se); map.dragging.disable(); pushStateToUndo();
-                dragCtx = {mode:'vertex', feature:f, idx};
-              });
-              h.addTo(lg);
-            });
-          }
+            h.addTo(lg);
+          });
         }
       });
     });
@@ -813,37 +711,17 @@
     document.getElementById('stLng').textContent = e.latlng.lng.toFixed(6);
     
     if(dragCtx) {
-      const snapped = dragCtx.mode==='vertex' ? effectiveLatLng(e, dragCtx.feature.id) : e.latlng;
-      
+      const snapped = dragCtx.mode=='vertex' ? effectiveLatLng(e, dragCtx.feature.id) : e.latlng;
       if(dragCtx.mode==='vertex'){
         dragCtx.feature.coords[dragCtx.idx] = [snapped.lat, snapped.lng];
+        if(dragCtx.feature.type==='ortho_polygon') enforceOrthogonalGeometry(dragCtx.feature, dragCtx.idx);
       } 
-      else if(dragCtx.mode==='rect-rotate'){
-        const currentAngle = Math.atan2(e.latlng.lat - dragCtx.center[0], e.latlng.lng - dragCtx.center[1]);
-        const angleDiff = toDeg(currentAngle - dragCtx.startAngle);
-        dragCtx.feature.rect.rotation = Math.round((dragCtx.origRotation - angleDiff) % 360);
-        syncRectCoords(dragCtx.feature);
-      }
-      else if(dragCtx.mode==='rect-scale'){
-        const currentDistToAnchor = haversine(dragCtx.anchor[0], dragCtx.anchor[1], e.latlng.lat, e.latlng.lng);
-        const startDistToAnchor = haversine(dragCtx.anchor[0], dragCtx.anchor[1], dragCtx.startLatLng.lat, dragCtx.startLatLng.lng);
-        const ratio = startDistToAnchor > 0 ? (currentDistToAnchor / startDistToAnchor) : 1;
-        
-        dragCtx.feature.rect.width = Math.max(0.5, parseFloat((dragCtx.origWidth * ratio).toFixed(1)));
-        dragCtx.feature.rect.length = Math.max(0.5, parseFloat((dragCtx.origLength * ratio).toFixed(1)));
-        syncRectCoords(dragCtx.feature);
-      }
       else if(dragCtx.mode==='move'){
-        const dLat = e.latlng.lat - dragCtx.startLatLng.lat;
-        const dLng = e.latlng.lng - dragCtx.startLatLng.lng;
+        const dLat = e.latlng.lat - dragCtx.startLatLng.lat; const dLng = e.latlng.lng - dragCtx.startLatLng.lng;
         if(dragCtx.feature.type==='rectangle'){
-          dragCtx.feature.rect.lat = dragCtx.origRect.lat + dLat;
-          dragCtx.feature.rect.lng = dragCtx.origRect.lng + dLng;
-          syncRectCoords(dragCtx.feature);
+          dragCtx.feature.rect.lat = dragCtx.origRect.lat + dLat; dragCtx.feature.rect.lng = dragCtx.origRect.lng + dLng; syncRectCoords(dragCtx.feature);
         } else if(dragCtx.feature.type==='circle'){
-          dragCtx.feature.circle.lat = dragCtx.origCircle.lat + dLat;
-          dragCtx.feature.circle.lng = dragCtx.origCircle.lng + dLng;
-          syncCircleCoords(dragCtx.feature);
+          dragCtx.feature.circle.lat = dragCtx.origCircle.lat + dLat; dragCtx.feature.circle.lng = dragCtx.origCircle.lng + dLng; syncCircleCoords(dragCtx.feature);
         } else {
           dragCtx.feature.coords = dragCtx.origCoords.map(c=>[c[0]+dLat, c[1]+dLng]);
         }
@@ -851,643 +729,214 @@
       renderFeatures();
     } 
     else if(drawingCoords && drawingCoords.length){
-      // تحديث الخط المرن أثناء الرسم (للخطوط، المضلعات، أو اتجاه المستطيل)
-      const snapped = effectiveLatLng(e);
+      const snapped = effectiveLatLng(e); let finalPt = [snapped.lat, snapped.lng];
+      
+      if(tool === 'ortho_polygon') {
+        const last = drawingCoords[drawingCoords.length-1];
+        const prev = drawingCoords[drawingCoords.length-2] || null;
+        finalPt = constrainToOrthogonal(last, prev, snapped);
+      }
+
       if(tempLine){ map.removeLayer(tempLine); }
-      const pts = drawingCoords.concat([[snapped.lat, snapped.lng]]);
+      const pts = drawingCoords.concat([finalPt]);
       tempLine = L.polyline(pts, {color:'#e8a33d', weight:2, dashArray:'6 5'}).addTo(map);
       
       const last = drawingCoords[drawingCoords.length-1];
-      const segLen = haversine(last[0],last[1], snapped.lat, snapped.lng);
-      
-      if(tool === 'rectangle') {
-        // حساب زاوية الخط اللحظية لعرضها للمستخدم كمؤشر قبل الضغط
-        const angle = Math.atan2(snapped.lat - last[0], snapped.lng - last[1]);
-        let deg = Math.round(toDeg(angle) % 360);
-        if(deg < 0) deg += 360;
-        document.getElementById('stTemp').textContent = `مسافة الاتجاه: ${segLen.toFixed(1)} م | الزاوية الحالية: ${deg}°`;
-      } else {
-        document.getElementById('stTemp').textContent = 'الطول الحالي: ' + segLen.toFixed(2) + ' م';
-      }
+      const segLen = haversine(last[0], last[1], finalPt[0], finalPt[1]);
+      document.getElementById('stTemp').textContent = tool==='ortho_polygon' ? `ضلع قائم متقاطع: ${segLen.toFixed(1)} م` : `الطول الحالي: ${segLen.toFixed(1)} م`;
     }
   });
 
-  const endDrag = () => {
-    if(dragCtx){ map.dragging.enable(); dragCtx=null; renderAttrPanel(); scheduleSave(); updateHistoryButtons(); }
-  };
-  map.on('mouseup', endDrag);
-  document.addEventListener('mouseup', endDrag);
+  const endDrag = () => { if(dragCtx){ map.dragging.enable(); dragCtx=null; renderAttrPanel(); scheduleSave(); updateHistoryButtons(); } };
+  map.on('mouseup', endDrag); document.addEventListener('mouseup', endDrag);
 
-  /* ---------- Map click: selection clear / drawing ---------- */
+  /* ---------- Map click: Drawing logic ---------- */
   map.on('click', e=>{
-    if(tool==='select'){
-      if(window.innerWidth > 760) { selection=null; renderAttrPanel(); renderFeatures(); }
-      return;
-    }
+    if(tool==='select'){ if(window.innerWidth > 760) { selection=null; renderAttrPanel(); renderFeatures(); } return; }
     const snapped = effectiveLatLng(e);
     
     if(tool==='point'){
-      pushStateToUndo();
-      const f = addFeature('point', [[snapped.lat, snapped.lng]]);
-      selection = {layerId: activeLayer().id, featureId:f.id};
-      renderFeatures(); renderAttrPanel(); scheduleSave();
+      pushStateToUndo(); const f = addFeature('point', [[snapped.lat, snapped.lng]]);
+      selection = {layerId: activeLayer().id, featureId:f.id}; renderFeatures(); renderAttrPanel(); scheduleSave();
     } 
-    else if(tool==='line' || tool==='polygon'){
-      if(!drawingCoords) {
-        drawingCoords=[];
-        if(window.innerWidth <= 760) mobileFinishBtn.style.display = 'flex';
+    else if(tool==='line' || tool==='polygon' || tool==='ortho_polygon'){
+      if(!drawingCoords) { drawingCoords=[]; if(window.innerWidth <= 760) mobileFinishBtn.style.display = 'flex'; }
+      
+      let finalPt = [snapped.lat, snapped.lng];
+      if(tool==='ortho_polygon' && drawingCoords.length > 0){
+        const last = drawingCoords[drawingCoords.length-1];
+        const prev = drawingCoords[drawingCoords.length-2] || null;
+        finalPt = constrainToOrthogonal(last, prev, snapped);
       }
-      drawingCoords.push([snapped.lat, snapped.lng]);
-      updateHistoryButtons();
+      drawingCoords.push(finalPt); updateHistoryButtons();
     } 
     else if(tool==='rectangle'){
       if(!rectPending) {
-        // النقرة الأولى: تحديد مكان الإدراج وبدء خط الاتجاه والزاوية
-        rectPending = { lat: snapped.lat, lng: snapped.lng };
-        drawingCoords = [[snapped.lat, snapped.lng]];
-        document.getElementById('stHint').textContent = 'انقر في مكان آخر على الخريطة لتحديد زاوية وميل المستطيل بصرياً...';
+        rectPending = { lat: snapped.lat, lng: snapped.lng }; drawingCoords = [[snapped.lat, snapped.lng]];
       } else {
-        // النقرة الثانية: حساب زاوية الميل الحقيقية بين النقطتين
-        const start = rectPending;
-        const angle = Math.atan2(snapped.lat - start.lat, snapped.lng - start.lng);
-        let deg = Math.round(toDeg(angle) % 360);
-        if(deg < 0) deg += 360;
-
-        // وضع الزاوية في صندوق المدخلات وتجهيزه للعرض
+        const start = rectPending; const angle = Math.atan2(snapped.lat - start.lat, snapped.lng - start.lng);
+        let deg = Math.round(toDeg(angle) % 360); if(deg < 0) deg += 360;
         document.getElementById('rRotation').value = deg;
-        
-        if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
-        drawingCoords = null;
+        if(tempLine){ map.removeLayer(tempLine); tempLine=null; } drawingCoords = null;
         document.getElementById('stTemp').textContent = '';
-
-        // فتح الـ HUD في موضع النقرة الثانية لإدخال الأبعاد
-        const pt = map.latLngToContainerPoint(snapped);
-        const wrapRect = mapEl.getBoundingClientRect();
-        const hudX = Math.min(Math.max(pt.x+16,8), wrapRect.width-216);
-        const hudY = Math.min(Math.max(pt.y+16,8), wrapRect.height-320);
-        rectHud.style.left = hudX+'px'; rectHud.style.top = hudY+'px'; rectHud.style.display='block';
+        const pt = map.latLngToContainerPoint(snapped); const wrapRect = mapEl.getBoundingClientRect();
+        rectHud.style.left = Math.min(Math.max(pt.x+16,8), wrapRect.width-216)+'px';
+        rectHud.style.top = Math.min(Math.max(pt.y+16,8), wrapRect.height-320)+'px'; rectHud.style.display='block';
       }
     } 
     else if(tool==='circle'){
-      circlePending = {lat:snapped.lat, lng:snapped.lng};
-      const pt = map.latLngToContainerPoint(snapped);
-      const wrapRect = mapEl.getBoundingClientRect();
-      const hudX = Math.min(Math.max(pt.x+16,8), wrapRect.width-216);
-      const hudY = Math.min(Math.max(pt.y+16,8), wrapRect.height-160);
-      circleHud.style.left = hudX+'px'; circleHud.style.top = hudY+'px'; circleHud.style.display='block';
+      circlePending = {lat:snapped.lat, lng:snapped.lng}; const pt = map.latLngToContainerPoint(snapped); const wrapRect = mapEl.getBoundingClientRect();
+      circleHud.style.left = Math.min(Math.max(pt.x+16,8), wrapRect.width-216)+'px';
+      circleHud.style.top = Math.min(Math.max(pt.y+16,8), wrapRect.height-160)+'px'; circleHud.style.display='block';
     }
   });
 
-  map.on('dblclick', e=>{
-    if(tool==='line'||tool==='polygon') finishDrawing();
-  });
-
-  mobileFinishBtn.addEventListener('click', (e)=>{
-    L.DomEvent.stopPropagation(e);
-    finishDrawing();
-  });
+  map.on('dblclick', e=>{ if(tool==='line'||tool==='polygon'||tool==='ortho_polygon') finishDrawing(); });
+  mobileFinishBtn.addEventListener('click', (e)=>{ L.DomEvent.stopPropagation(e); finishDrawing(); });
 
   function finishDrawing(){
     if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
-    document.getElementById('stTemp').textContent='';
-    mobileFinishBtn.style.display = 'none';
+    document.getElementById('stTemp').textContent=''; mobileFinishBtn.style.display = 'none';
 
     if(tool==='line' && drawingCoords && drawingCoords.length>=2){
-      pushStateToUndo();
-      const f=addFeature('line', drawingCoords); selection={layerId:activeLayer().id, featureId:f.id};
-      drawingCoords=null; renderFeatures(); renderAttrPanel(); scheduleSave();
+      pushStateToUndo(); const f=addFeature('line', drawingCoords); selection={layerId:activeLayer().id, featureId:f.id};
     } 
-    else if(tool==='polygon' && drawingCoords && drawingCoords.length>=3){
+    else if((tool==='polygon' || tool==='ortho_polygon') && drawingCoords && drawingCoords.length>=3){
       pushStateToUndo();
-      const f=addFeature('polygon', drawingCoords); selection={layerId:activeLayer().id, featureId:f.id};
-      drawingCoords=null; renderFeatures(); renderAttrPanel(); scheduleSave();
-    } 
-    else { drawingCoords=null; }
-    updateHistoryButtons();
+      // في حالة المضلع القائم، نقوم بإغلاق الشكل هندسياً لتأكيد تعامد الضلع الأخير مع الأول
+      if(tool==='ortho_polygon') {
+        let first = drawingCoords[0], last = drawingCoords[drawingCoords.length-1];
+        if (Math.abs(first[0]-last[0]) > Math.abs(first[1]-last[1])) last[1] = first[1]; else last[0] = first[0];
+      }
+      const f=addFeature(tool, drawingCoords); selection={layerId:activeLayer().id, featureId:f.id};
+    }
+    drawingCoords=null; renderFeatures(); renderAttrPanel(); scheduleSave(); updateHistoryButtons();
   }
 
   window.addEventListener('keydown', e=>{
-    const tag=document.activeElement.tagName;
-    const typing = tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA';
-    
+    const tag=document.activeElement.tagName; const typing = tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA';
     if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !typing) { e.preventDefault(); handleUndo(); }
     if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y' && !typing) { e.preventDefault(); handleRedo(); }
-
     if(e.key==='Enter' && !typing) finishDrawing();
     if(e.key==='Escape'){
-      drawingCoords=null; rectPending=null; circlePending=null;
-      rectHud.style.display='none'; circleHud.style.display='none';
-      mobileFinishBtn.style.display = 'none';
-      closeMobileEditPad();
-      if(tempLine){map.removeLayer(tempLine); tempLine=null;}
-      document.getElementById('stTemp').textContent='';
-      updateHistoryButtons();
+      drawingCoords=null; rectPending=null; circlePending=null; rectHud.style.display='none'; circleHud.style.display='none';
+      mobileFinishBtn.style.display = 'none'; closeMobileEditPad(); if(tempLine){map.removeLayer(tempLine); tempLine=null;}
+      document.getElementById('stTemp').textContent=''; updateHistoryButtons();
     }
     if((e.key==='Delete'||e.key==='Backspace') && !typing && selection){
-      pushStateToUndo();
-      const layer=getLayer(selection.layerId);
-      layer.features = layer.features.filter(x=>x.id!==selection.featureId);
+      pushStateToUndo(); const layer=getLayer(selection.layerId); layer.features = layer.features.filter(x=>x.id!==selection.featureId);
       selection=null; closeMobileEditPad(); renderLayerList(); renderAttrPanel(); renderFeatures(); scheduleSave();
     }
   });
 
   /* ---------- Tools & tabs ---------- */
   document.getElementById('snapBtn').addEventListener('click', ()=>{
-    snapEnabled = !snapEnabled;
-    document.getElementById('snapBtn').toggleAttribute('active', snapEnabled);
+    snapEnabled = !snapEnabled; document.getElementById('snapBtn').toggleAttribute('active', snapEnabled);
     if(!snapEnabled && snapMarker){ map.removeLayer(snapMarker); snapMarker=null; }
   });
 
   document.getElementById('toolbar').addEventListener('click', e=>{
-    const btn=e.target.closest('.tool-btn');
-    if(!btn || !btn.dataset.tool) return;
-    document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    tool = btn.dataset.tool;
-    drawingCoords=null; rectPending=null; circlePending=null;
-    rectHud.style.display='none'; circleHud.style.display='none';
-    mobileFinishBtn.style.display = 'none';
-    closeMobileEditPad();
-    if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
-    if(snapMarker){ map.removeLayer(snapMarker); snapMarker=null; }
-    document.getElementById('stTemp').textContent='';
-    
-    if (tool === 'rectangle') {
-      document.getElementById('stHint').textContent = 'ارسم المستطيل: انقر نقرة أولى لتحديد موضع البداية (الإدراج)..';
-    } else {
-      document.getElementById('stHint').textContent = tool==='select' ? 'اضغط على عنصر لتحديده أو اسحبه لتحريكه' : 'اضغط على الخريطة للرسم';
-    }
-    
-    mapEl.classList.toggle('tool-select', tool==='select');
-    mapEl.classList.toggle('tool-draw', tool!=='select');
-    map.doubleClickZoom[(tool==='line'||tool==='polygon')?'disable':'enable']();
+    const btn=e.target.closest('.tool-btn'); if(!btn || !btn.dataset.tool) return;
+    document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>b.classList.remove('active')); btn.classList.add('active');
+    tool = btn.dataset.tool; drawingCoords=null; rectPending=null; circlePending=null; rectHud.style.display='none'; circleHud.style.display='none';
+    mobileFinishBtn.style.display = 'none'; closeMobileEditPad(); if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
+    document.getElementById('stHint').textContent = tool==='ortho_polygon' ? 'ارسم مضلعاً قائماً: انقر لتحديد الزوايا المتعامدة (90 درجة)' : 'اضغط للبدء';
+    mapEl.classList.toggle('tool-select', tool==='select'); mapEl.classList.toggle('tool-draw', tool!=='select');
     updateHistoryButtons();
   });
 
   document.querySelectorAll('.tab').forEach(tabEl=>{
     tabEl.addEventListener('click', ()=>{
-      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-      document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-      tabEl.classList.add('active');
-      document.getElementById(tabEl.dataset.panel).classList.add('active');
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+      tabEl.classList.add('active'); document.getElementById(tabEl.dataset.panel).classList.add('active');
     });
   });
-  
   const sidebarEl = document.querySelector('.sidebar');
-  document.getElementById('mobileSidebarToggle').addEventListener('click', ()=>{
-    sidebarEl.classList.toggle('open');
-  });
+  document.getElementById('mobileSidebarToggle').addEventListener('click', ()=>{ sidebarEl.classList.toggle('open'); });
 
   /* ---------- Layers UI ---------- */
-  function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
-  function eyeOpenIcon(){ return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>'; }
-  function eyeClosedIcon(){ return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'; }
-  function trashIcon(){ return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'; }
-
   function renderLayerList(){
-    const container = document.getElementById('layerList');
-    container.innerHTML = '';
+    const container = document.getElementById('layerList'); container.innerHTML = '';
     state.layers.forEach(layer=>{
-      const row = document.createElement('div');
-      row.className = `layer-row ${layer.id===state.activeLayerId?'active':''}`;
+      const row = document.createElement('div'); row.className = `layer-row ${layer.id===state.activeLayerId?'active':''}`;
       row.addEventListener('click', ()=>{ state.activeLayerId=layer.id; renderLayerList(); });
       
-      const swatch = document.createElement('div');
-      swatch.className = 'swatch'; swatch.style.background = layer.color;
+      const swatch = document.createElement('div'); swatch.className = 'swatch'; swatch.style.background = layer.color;
       swatch.addEventListener('click', e=>{
-        L.DomEvent.stopPropagation(e);
-        pushStateToUndo();
-        const idx = palette.indexOf(layer.color);
-        layer.color = palette[(idx+1)%palette.length];
+        L.DomEvent.stopPropagation(e); pushStateToUndo(); layer.color = palette[(palette.indexOf(layer.color)+1)%palette.length];
         renderLayerList(); renderFeatures(); scheduleSave();
       });
-
-      const nameSpan = document.createElement('span');
-      nameSpan.className = 'lname'; nameSpan.textContent = layer.name;
+      const nameSpan = document.createElement('span'); nameSpan.className = 'lname'; nameSpan.textContent = layer.name;
+      const countSpan = document.createElement('span'); countSpan.className = 'lcount'; countSpan.textContent = `(${layer.features.length})`;
       
-      const countSpan = document.createElement('span');
-      countSpan.className = 'lcount'; countSpan.textContent = `(${layer.features.length})`;
-
-      const visBtn = document.createElement('button');
-      visBtn.className = 'icon-btn'; visBtn.innerHTML = layer.visible ? eyeOpenIcon() : eyeClosedIcon();
-      visBtn.addEventListener('click', e=>{
-        L.DomEvent.stopPropagation(e);
-        layer.visible = !layer.visible;
-        renderLayerList(); renderFeatures(); scheduleSave();
-      });
-
-      row.appendChild(swatch); row.appendChild(nameSpan); row.appendChild(countSpan); row.appendChild(visBtn);
-      if(state.layers.length > 1){
-        const delBtn = document.createElement('button');
-        delBtn.className = 'icon-btn'; delBtn.innerHTML = trashIcon();
-        delBtn.addEventListener('click', e=>{
-          L.DomEvent.stopPropagation(e);
-          if(confirm(`هل تريد حذف الطبقة "${layer.name}" بجميع عناصرها؟`)){
-            pushStateToUndo();
-            if(layerGroups[layer.id]) { map.removeLayer(layerGroups[layer.id]); delete layerGroups[layer.id]; }
-            state.layers = state.layers.filter(l=>l.id!==layer.id);
-            if(state.activeLayerId===layer.id) state.activeLayerId = state.layers[0].id;
-            if(selection && selection.layerId===layer.id) selection=null;
-            closeMobileEditPad();
-            renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
-          }
-        });
-        row.appendChild(delBtn);
-      }
-      container.appendChild(row);
+      row.appendChild(swatch); row.appendChild(nameSpan); row.appendChild(countSpan); container.appendChild(row);
     });
   }
 
   document.getElementById('addLayerBtn').addEventListener('click', ()=>{
-    const name = prompt('أدخل اسم الطبقة الجديدة:', `طبقة ${state.layers.length+1}`);
-    if(!name) return;
-    pushStateToUndo();
-    const id = 'L' + uid();
-    const color = palette[state.nextColorIdx++ % palette.length];
-    state.layers.push({id, name, color, visible:true, features:[]});
-    state.activeLayerId = id;
-    renderLayerList(); renderFeatures(); scheduleSave();
+    const name = prompt('أدخل اسم الطبقة الجديدة:', `طبقة ${state.layers.length+1}`); if(!name) return;
+    pushStateToUndo(); const id = 'L' + uid(); state.layers.push({id, name, color: palette[state.nextColorIdx++ % palette.length], visible:true, features:[]});
+    state.activeLayerId = id; renderLayerList(); renderFeatures(); scheduleSave();
   });
 
   /* ---------- Attributes UI & Editing ---------- */
   function renderAttrPanel(){
     const container = document.getElementById('attrContent');
-    if(!selection){
-      container.innerHTML = '<div class="empty-state">اختر عنصر من الخريطة<br>لعرض وتعديل خصائصه</div>'; return;
-    }
+    if(!selection){ container.innerHTML = '<div class="empty-state">اختر عنصر من الخريطة<br>لعرض وتعديل خصائصه</div>'; return; }
     const f = getFeature(selection.layerId, selection.featureId);
-    if(!f){ selection=null; container.innerHTML = '<div class="empty-state">العنصر لم يعد موجوداً</div>'; return; }
     
     let html = `<div class="attr-block">`;
-    if(f.type==='rectangle') {
-      html += `<div class="ftype">مستطيل بالأطوال</div>`;
+    if(f.type==='ortho_polygon') {
+      html += `<div class="ftype" style="color:var(--teal);">مضلع متعامد (قائم الزوايا)</div>`;
       html += `<div class="stat-row">المحيط: <b>${pathPerimeter(f.coords).toFixed(1)} م</b></div>`;
       html += `<div class="stat-row">المساحة: <b>${polygonAreaMeters(f.coords).toFixed(1)} م²</b></div>`;
-      html += `<div class="rect-edit-grid">
-        <div><label>العرض (م)</label><input type="number" id="edW" value="${f.rect.width}" step="0.1"></div>
-        <div><label>الطول (م)</label><input type="number" id="edL" value="${f.rect.length}" step="0.1"></div>
-        <div style="grid-column: span 2"><label>الدوران (°)</label><input type="number" id="edR" value="${f.rect.rotation}"></div>
-      </div>`;
-    } 
-    else if(f.type==='circle') {
-      html += `<div class="ftype">دائرة بنصف قطر</div>`;
-      html += `<div class="stat-row">نصف القطر: <b>${f.circle.radius} م</b></div>`;
-      html += `<div class="stat-row">المحيط: <b> ${(2*Math.PI*f.circle.radius).toFixed(1)} م</b></div>`;
-      html += `<div class="stat-row">المساحة: <b> ${(Math.PI*(f.circle.radius**2)).toFixed(1)} م²</b></div>`;
-      html += `<div class="field-row"><label style="font-size:11px;">نصف القطر (م)</label><input type="number" id="edRad" value="${f.circle.radius}" step="0.1"></div>`;
-    } 
-    else if(f.type==='point') {
-      html += `<div class="ftype">نقطة</div>`;
-      html += `<div class="stat-row">Lat: <b>${f.coords[0][0].toFixed(6)}</b></div>`;
-      html += `<div class="stat-row">Lng: <b>${f.coords[0][1].toFixed(6)}</b></div>`;
-    } 
-    else if(f.type==='line') {
-      html += `<div class="ftype">خط</div>`;
-      html += `<div class="stat-row">الطول الإجمالي: <b>${pathLength(f.coords).toFixed(1)} م</b></div>`;
-      html += `<div class="stat-row">النقاط: <b>${f.coords.length}</b></div>`;
-    } 
-    else {
+      html += `<div class="stat-row">النقاط: <b>${f.coords.length} نقاط</b></div>`;
+    } else if(f.type==='polygon') {
       html += `<div class="ftype">مضلع حر</div>`;
       html += `<div class="stat-row">المحيط: <b>${pathPerimeter(f.coords).toFixed(1)} م</b></div>`;
       html += `<div class="stat-row">المساحة: <b>${polygonAreaMeters(f.coords).toFixed(1)} م²</b></div>`;
+    } else if(f.type==='rectangle') {
+      html += `<div class="ftype">مستطيل ذكي</div>`;
+    } else {
+      html += `<div class="ftype">عنصر مكاني</div>`;
     }
-    html += `</div>`;
-
-    html += `<div class="section-title" style="margin-top:12px;">الحقول الوصفية</div>`;
-    Object.keys(f.attrs).forEach(k=>{
-      html += `<div class="field-row">
-        <input type="text" class="key" value="${escapeHtml(k)}" data-orig="${escapeHtml(k)}">
-        <input type="text" class="val" value="${escapeHtml(f.attrs[k])}" data-key="${escapeHtml(k)}">
-        <button class="icon-btn del-attr" data-key="${escapeHtml(k)}" title="حذف الحقل">${trashIcon()}</button>
-      </div>`;
-    });
-    html += `<button class="add-btn" id="addAttrBtn" style="padding:5px; font-size:11px;">+ إضافة حقل وصفى</button>`;
-    html += `<button class="danger-btn" id="delFeatureBtn">حذف العنصر من الخريطة</button>`;
-
+    html += `</div><button class="danger-btn" id="delFeatureBtn">حذف العنصر</button>`;
     container.innerHTML = html;
 
-    if(f.type==='rectangle'){
-      ['edW','edL','edR'].forEach(id=>{
-        document.getElementById(id).addEventListener('focus', pushStateToUndo); 
-        document.getElementById(id).addEventListener('input', ()=>{
-          f.rect.width = Math.max(0.01, parseFloat(document.getElementById('edW').value)||10);
-          f.rect.length = Math.max(0.01, parseFloat(document.getElementById('edL').value)||20);
-          f.rect.rotation = parseFloat(document.getElementById('edR').value)||0;
-          syncRectCoords(f); renderFeatures(); scheduleSave();
-        });
-      });
-    }
-    if(f.type==='circle'){
-      document.getElementById('edRad').addEventListener('focus', pushStateToUndo);
-      document.getElementById('edRad').addEventListener('input', e=>{
-        f.circle.radius = Math.max(0.01, parseFloat(e.target.value)||10);
-        syncCircleCoords(f); renderFeatures(); scheduleSave();
-      });
-    }
-
-    container.querySelectorAll('.field-row input.val').forEach(inp=>{
-      inp.addEventListener('input', e=>{ f.attrs[e.target.dataset.key] = e.target.value; scheduleSave(); });
-    });
-    container.querySelectorAll('.field-row input.key').forEach(inp=>{
-      inp.addEventListener('change', e=>{
-        pushStateToUndo();
-        const oldK = e.target.dataset.orig, newK = e.target.value.trim();
-        if(!newK || oldK===newK) { e.target.value = oldK; return; }
-        f.attrs[newK] = f.attrs[oldK]; delete f.attrs[oldK];
-        renderAttrPanel(); scheduleSave();
-      });
-    });
-    container.querySelectorAll('.del-attr').forEach(b=>{
-      b.addEventListener('click', e=>{
-        pushStateToUndo();
-        const k = e.target.closest('.del-attr').dataset.key;
-        delete f.attrs[k]; renderAttrPanel(); scheduleSave();
-      });
-    });
-    document.getElementById('addAttrBtn').addEventListener('click', ()=>{
-      pushStateToUndo();
-      let k = 'حقل_' + Math.floor(Math.random()*1000);
-      f.attrs[k] = ''; renderAttrPanel(); scheduleSave();
-    });
     document.getElementById('delFeatureBtn').addEventListener('click', ()=>{
-      pushStateToUndo();
-      const l = getLayer(selection.layerId);
-      l.features = l.features.filter(x=>x.id!==selection.featureId);
+      pushStateToUndo(); const l = getLayer(selection.layerId); l.features = l.features.filter(x=>x.id!==selection.featureId);
       selection = null; closeMobileEditPad(); renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
     });
   }
 
   function addFeature(type, coords){
-    const l = activeLayer();
-    const f = { id:uid(), type, coords, attrs:{} };
-    l.features.push(f);
-    renderLayerList();
-    return f;
+    const l = activeLayer(); const f = { id:uid(), type, coords, attrs:{} };
+    l.features.push(f); renderLayerList(); return f;
   }
 
   /* ---------- HUD Dialogs Actions ---------- */
   document.getElementById('rectCancel').addEventListener('click', ()=>{ rectHud.style.display='none'; rectPending=null; });
   document.getElementById('rectCreate').addEventListener('click', ()=>{
-    if(!rectPending)return;
     pushStateToUndo();
-    const w = Math.max(0.01, parseFloat(document.getElementById('rWidth').value)||10);
-    const l = Math.max(0.01, parseFloat(document.getElementById('rLength').value)||20);
-    const rot = parseFloat(document.getElementById('rRotation').value)||0;
-    const anch = document.getElementById('rAnchor').value;
     const f = addFeature('rectangle', []);
-    f.rect = { lat:rectPending.lat, lng:rectPending.lng, width:w, length:l, rotation:rot, mode:anch };
-    syncRectCoords(f);
-    rectHud.style.display='none'; rectPending=null;
-    selection = {layerId:activeLayer().id, featureId:f.id};
-    renderFeatures(); renderAttrPanel(); scheduleSave(); updateHistoryButtons();
-    if(window.innerWidth <= 760) openMobileEditPad(f);
+    f.rect = { lat:rectPending.lat, lng:rectPending.lng, width:parseFloat(document.getElementById('rWidth').value), length:parseFloat(document.getElementById('rLength').value), rotation:parseFloat(document.getElementById('rRotation').value), mode:document.getElementById('rAnchor').value };
+    syncRectCoords(f); rectHud.style.display='none'; rectPending=null; selection = {layerId:activeLayer().id, featureId:f.id};
+    renderFeatures(); renderAttrPanel(); scheduleSave();
   });
 
   document.getElementById('circleCancel').addEventListener('click', ()=>{ circleHud.style.display='none'; circlePending=null; });
   document.getElementById('circleCreate').addEventListener('click', ()=>{
-    if(!circlePending)return;
-    pushStateToUndo();
-    const rad = Math.max(0.01, parseFloat(document.getElementById('cRadius').value)||10);
-    const f = addFeature('circle', []);
-    f.circle = { lat:circlePending.lat, lng:circlePending.lng, radius:rad };
-    syncCircleCoords(f);
-    circleHud.style.display='none'; circlePending=null;
-    selection = {layerId:activeLayer().id, featureId:f.id};
-    renderFeatures(); renderAttrPanel(); scheduleSave(); updateHistoryButtons();
-    if(window.innerWidth <= 760) openMobileEditPad(f);
+    pushStateToUndo(); const f = addFeature('circle', []);
+    f.circle = { lat:circlePending.lat, lng:circlePending.lng, radius:parseFloat(document.getElementById('cRadius').value) };
+    syncCircleCoords(f); circleHud.style.display='none'; circlePending=null; selection = {layerId:activeLayer().id, featureId:f.id};
+    renderFeatures(); renderAttrPanel(); scheduleSave();
   });
 
-  /* ---------- Map Utilities ---------- */
-  document.getElementById('locateBtn').addEventListener('click', ()=>{
-    map.locate({setView:true, maxZoom:18});
-  });
-  map.on('locationerror', ()=>(document.getElementById('stHint').textContent = '❌ تعذر تحديد موقعك الحالي'));
-  map.on('locationfound', ()=>(document.getElementById('stHint').textContent = '📍 تم تحديد موقعك الحالي بنجاح'));
-
+  document.getElementById('locateBtn').addEventListener('click', ()=>{ map.locate({setView:true, maxZoom:18}); });
   document.getElementById('fitBtn').addEventListener('click', ()=>{
     const all = []; state.layers.forEach(l=>l.features.forEach(f=>f.coords.forEach(c=>all.push(c))));
     if(all.length) map.fitBounds(L.latLngBounds(all), {padding:[30,30]});
   });
-
-  function buildGeoJSON(){
-    const fc = { type: 'FeatureCollection', features: [] };
-    state.layers.forEach(layer=>{
-      layer.features.forEach(f=>{
-        let gType = f.type==='point'?'Point': (f.type==='line'?'LineString':'Polygon');
-        let gCoords = f.type==='point' ? [f.coords[0][1], f.coords[0][0]] :
-                     (f.type==='line' ? f.coords.map(c=>[c[1],c[0]]) : [f.coords.concat([f.coords[0]]).map(c=>[c[1],c[0]])]);
-        const props = Object.assign({ layer: layer.name, type: f.type }, f.attrs);
-        if(f.type==='rectangle') props.rect_info = f.rect;
-        if(f.type==='circle') props.circle_info = f.circle;
-        fc.features.push({ type:'Feature', properties:props, geometry:{ type:gType, coordinates:gCoords } });
-      });
-    });
-    return fc;
-  }
-
-  async function saveToFileSystem() {
-    const geojsonData = JSON.stringify(buildGeoJSON(), null, 2);
-    const defaultFileName = `spatial_drawing_${new Date().toISOString().slice(0,10)}.geojson`;
-
-    if ('showSaveFilePicker' in window) {
-      try {
-        const options = {
-          suggestedName: defaultFileName,
-          types: [{
-            description: 'GeoJSON Files',
-            accept: { 'application/geo+json': ['.geojson', '.json'] },
-          }],
-        };
-        const handle = await window.showSaveFilePicker(options);
-        const writable = await handle.createWritable();
-        await writable.write(geojsonData);
-        await writable.close();
-        document.getElementById('stHint').textContent = '💾 تم حفظ الملف بنجاح على جهازك';
-        return;
-      } catch (err) {
-        if (err.name === 'AbortError') return;
-        console.warn('File System Picker failed, falling back to download.', err);
-      }
-    }
-
-    const blob = new Blob([geojsonData], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = defaultFileName;
-    document.body.appendChild(a);
-    a.click();
-    
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 150);
-    
-    document.getElementById('stHint').textContent = '📥 تم تنزيل الملف في مجلد التنزيلات (Downloads)';
-  }
-
-  document.getElementById('exportBtn').addEventListener('click', saveToFileSystem);
-
-  /* ---------- Google Drive Integration ---------- */
-  const DRIVE_CLIENT_ID = '677149493471-4gjbg1thbdqt8l8hjplk3bfnr4ni56nh.apps.googleusercontent.com';
-  const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
-  let tokenClient=null, driveToken=null, driveTokenExpiry=0, driveConnected=false, lastPushTime=0;
-  const driveMsgEl = document.getElementById('driveMsg');
-  const driveControlEl = document.getElementById('driveControl');
-  const driveUpdateBanner = document.getElementById('driveUpdateBanner');
-  const driveImportBtn = document.getElementById('driveImportBtn');
-  const driveDismissBtn = document.getElementById('driveDismissBtn');
-  let pendingRemote = null;
-
-  function setDriveMsg(text, connected){
-    driveMsgEl.textContent = text;
-    driveControlEl.classList.toggle('connected', !!connected);
-    driveControlEl.classList.toggle('disconnected', !connected);
-  }
-  function initDriveClient(){
-    if(!window.google || !google.accounts || !google.accounts.oauth2){ setTimeout(initDriveClient, 400); return; }
-    tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: DRIVE_CLIENT_ID, scope: DRIVE_SCOPE,
-      callback: (resp)=>{
-        if(resp.error){ setDriveMsg('فشل تسجيل الدخول', false); return; }
-        driveToken = resp.access_token;
-        driveTokenExpiry = Date.now() + (resp.expires_in*1000) - 60000;
-        driveConnected = true;
-        setDriveMsg('متصل — جاري الحفظ الأول...', true);
-        pushToDrive();
-      }
-    });
-  }
-  initDriveClient();
-  function ensureDriveToken(){
-    return new Promise((resolve, reject)=>{
-      if(driveToken && Date.now() < driveTokenExpiry){ resolve(driveToken); return; }
-      if(!tokenClient){ reject('not-init'); return; }
-      const orig = tokenClient.callback;
-      tokenClient.callback = (resp)=>{
-        tokenClient.callback = orig;
-        if(resp.error){ driveConnected=false; setDriveMsg('انتهت الجلسة — اضغط اتصال', false); reject(resp.error); return; }
-        driveToken=resp.access_token; driveTokenExpiry=Date.now()+(resp.expires_in*1000)-60000;
-        resolve(driveToken);
-      };
-      tokenClient.requestAccessToken({prompt:''});
-    });
-  }
-  function buildMultipart(boundary, metadata, content){
-    const delim='\r\n--'+boundary+'\r\n', closeDelim='\r\n--'+boundary+'--';
-    return delim+'Content-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(metadata)+
-           delim+'Content-Type: application/geo+json\r\n\r\n'+content+closeDelim;
-  }
-  let drivePushInFlight=false;
-  async function pushToDrive(){
-    if(!driveConnected || drivePushInFlight) return;
-    drivePushInFlight=true;
-    try{ await ensureDriveToken(); }catch(e){ drivePushInFlight=false; return; }
-    const content = JSON.stringify(buildGeoJSON(), null, 2);
-    const boundary='-------gistool314159265';
-    let url, method, body;
-    if(state.driveFileId){
-      url='https://www.googleapis.com/upload/drive/v3/files/'+state.driveFileId+'?uploadType=multipart';
-      method='PATCH'; body=buildMultipart(boundary, {}, content);
-    } else {
-      url='https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
-      method='POST'; body=buildMultipart(boundary, {name:'gis-drawing.geojson', mimeType:'application/geo+json'}, content);
-    }
-    try{
-      const res = await fetch(url, {method, headers:{'Authorization':'Bearer '+driveToken, 'Content-Type':'multipart/related; boundary='+boundary}, body});
-      const data = await res.json();
-      if(data.id){ state.driveFileId=data.id; lastPushTime=Date.now(); setDriveMsg('✓ محفوظ في Drive الآن', true); scheduleSave(); }
-      else { setDriveMsg('فشل رفع الملف', true); }
-    }catch(e){ setDriveMsg('فشل الاتصال بـ Drive', true); }
-    drivePushInFlight=false;
-  }
-  document.getElementById('driveConnectBtn').addEventListener('click', ()=>{
-    if(!tokenClient){ alert('مكتبة تسجيل الدخول لسه بتحمّل، جرّب تاني بعد ثانية.'); return; }
-    tokenClient.requestAccessToken({prompt:'consent'});
-  });
-  document.getElementById('driveJoinBtn').addEventListener('click', ()=>{
-    const id = prompt('الصق رقم الملف (File ID) المشترك من زميلك:');
-    if(!id) return;
-    if(!confirm('هيتم استبدال أي رسم موجود عندك دلوقتي برسم الملف المشترك. متأكد؟')) return;
-    state.driveFileId = id.trim(); scheduleSave();
-    if(!driveConnected){ alert('اضغط "اتصال" كمان عشان تسجل دخول Drive.'); }
-    else { pullFromDrive(true); }
-  });
-  document.getElementById('driveCopyIdBtn').addEventListener('click', ()=>{
-    if(!state.driveFileId){ alert('لسه معملتش أي حفظ على Drive. اضغط "اتصال" الأول.'); return; }
-    navigator.clipboard.writeText(state.driveFileId).then(()=>{
-      alert('تم نسخ رقم الملف:\n' + state.driveFileId + '\n\nابعته لزميلك.');
-    }).catch(()=>{ alert('رقم الملف:\n' + state.driveFileId); });
-  });
-  function applyRemoteGeoJSON(geojson, remoteTime){
-    if(!geojson || !geojson.features) return;
-    const byLayer = {};
-    geojson.features.forEach(feat=>{
-      const layerName = (feat.properties && feat.properties.layer) || 'طبقة مشتركة';
-      if(!byLayer[layerName]) byLayer[layerName]=[];
-      byLayer[layerName].push(feat);
-    });
-    const newLayers = []; let ci=0;
-    Object.keys(byLayer).forEach(name=>{
-      const existing = state.layers.find(l=>l.name===name);
-      const color = existing ? existing.color : palette[ci++%palette.length];
-      const visible = existing ? existing.visible : true;
-      const features = byLayer[name].map(feat=>{
-        const props = Object.assign({}, feat.properties);
-        const rectInfo = props.rect_info, circleInfo = props.circle_info;
-        delete props.layer; delete props.type; delete props.rect_info; delete props.circle_info;
-        let coords, type = feat.properties.type;
-        if(feat.geometry.type==='Point'){ type=type||'point'; coords=[[feat.geometry.coordinates[1], feat.geometry.coordinates[0]]]; }
-        else if(feat.geometry.type==='LineString'){ type=type||'line'; coords=feat.geometry.coordinates.map(c=>[c[1],c[0]]); }
-        else { coords=feat.geometry.coordinates[0].slice(0,-1).map(c=>[c[1],c[0]]); type=type||'polygon'; }
-        const nf = {id:uid(), type, coords, attrs: props};
-        if(type==='rectangle' && rectInfo){ nf.rect = rectInfo; syncRectCoords(nf); }
-        if(type==='circle' && circleInfo){ nf.circle = circleInfo; syncCircleCoords(nf); }
-        return nf;
-      });
-      newLayers.push({id:'L'+name+ci, name, color, visible, features});
-    });
-    if(newLayers.length){ state.layers = newLayers; if(!getLayer(state.activeLayerId)) state.activeLayerId = state.layers[0].id; }
-    state.lastPulledTime = remoteTime; selection=null;
-    closeMobileEditPad();
-    renderLayerList(); renderFeatures(); renderAttrPanel();
-    doSave();
-    setDriveMsg('✓ تم تحديث الرسم من زميلك', true);
-  }
-  driveImportBtn.addEventListener('click', ()=>{
-    if(pendingRemote){ applyRemoteGeoJSON(pendingRemote.geojson, pendingRemote.remoteTime); }
-    pendingRemote=null; driveUpdateBanner.style.display='none';
-  });
-  driveDismissBtn.addEventListener('click', ()=>{
-    if(pendingRemote){ state.lastPulledTime = pendingRemote.remoteTime; doSave(); }
-    pendingRemote=null; driveUpdateBanner.style.display='none';
-  });
-  async function pullFromDrive(force){
-    if(!driveConnected || !state.driveFileId) return;
-    try{ await ensureDriveToken(); }catch(e){ return; }
-    try{
-      const metaRes = await fetch('https://www.googleapis.com/drive/v3/files/'+state.driveFileId+'?fields=modifiedTime', {headers:{'Authorization':'Bearer '+driveToken}});
-      const meta = await metaRes.json();
-      if(!meta.modifiedTime) return;
-      const remoteTime = new Date(meta.modifiedTime).getTime();
-      if(!force){
-        if(remoteTime <= lastPushTime + 3000) return;
-        if(remoteTime <= (state.lastPulledTime||0)) return;
-      }
-      const fileRes = await fetch('https://www.googleapis.com/drive/v3/files/'+state.driveFileId+'?alt=media', {headers:{'Authorization':'Bearer '+driveToken}});
-      const geojson = await fileRes.json();
-      if(!geojson || !geojson.features) return;
-      if(force){ applyRemoteGeoJSON(geojson, remoteTime); }
-      else { pendingRemote = {geojson, remoteTime}; driveUpdateBanner.style.display='flex'; }
-    }catch(e){ console.error('pull failed', e); }
-  }
-  setInterval(()=>{ if(driveConnected && state.driveFileId) pullFromDrive(false); }, 12000);
-  const origScheduleSaveForDrive = scheduleSave;
-  let drivePushTimer=null;
-  scheduleSave = function(){
-    origScheduleSaveForDrive();
-    if(driveConnected){ clearTimeout(drivePushTimer); drivePushTimer=setTimeout(pushToDrive, 1200); }
-  };
 
   loadState();
 })();
