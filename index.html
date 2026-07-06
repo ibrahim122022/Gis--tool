@@ -99,7 +99,7 @@
   ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
 
   .leaflet-popup-content{font-family:var(--sans);direction:rtl;}
-  .vertex-marker{background:var(--bg);border:2px solid var(--teal);border-radius:50%;cursor:move;z-index:999 !important;}
+  .vertex-marker{background:var(--bg);border:2px solid var(--teal);border-radius:50%;}
   
   .rect-rotate-marker{background:#e8a33d;border:2px solid #0d2438;border-radius:50%;cursor:alias;}
   .rect-scale-marker{background:#5ec9c0;border:2px solid #0d2438;border-radius:50%;cursor:se-resize;}
@@ -297,6 +297,7 @@
   let snapEnabled = true;
   let snapMarker = null;
 
+  // مخازن نظام التراجع والإعادة (Undo / Redo)
   let undoStack = [];
   let redoStack = [];
 
@@ -418,6 +419,12 @@
     return 2*R*Math.asin(Math.sqrt(a));
   }
   
+  function destPoint(lat,lng,dEast,dNorth){
+    const dLat = dNorth/111320;
+    const dLng = dEast/(111320*Math.cos(toRad(lat)));
+    return [lat+dLat, lng+dLng];
+  }
+  
   function pathLength(coords){
     let s=0; for(let i=0;i<coords.length-1;i++) s+=haversine(coords[i][0],coords[i][1],coords[i+1][0],coords[i+1][1]);
     return s;
@@ -436,12 +443,6 @@
     return Math.abs(a)/2;
   }
   
-  function destPoint(lat,lng,dEast,dNorth){
-    const dLat = dNorth/111320;
-    const dLng = dEast/(111320*Math.cos(toRad(lat)));
-    return [lat+dLat, lng+dLng];
-  }
-
   function rectCorners(rect){
     const th = toRad(rect.rotation);
     const uxE = Math.cos(th), uxN = Math.sin(th);
@@ -507,32 +508,20 @@
       map.removeLayer(snapMarker); snapMarker=null;
     }
     
+    // منطق تقييد الزوايا القائمة للأداة الجديدة (ortho)
     if (tool === 'ortho' && drawingCoords && drawingCoords.length > 0) {
-      if (drawingCoords.length === 1) {
-        return e.latlng;
+      let lastPt = map.latLngToContainerPoint(L.latLng(drawingCoords[drawingCoords.length - 1]));
+      let mousePt = map.latLngToContainerPoint(e.latlng);
+      let dx = mousePt.x - lastPt.x;
+      let dy = mousePt.y - lastPt.y;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        mousePt.y = lastPt.y;
       } else {
-        let pt0 = map.latLngToContainerPoint(L.latLng(drawingCoords[0]));
-        let pt1 = map.latLngToContainerPoint(L.latLng(drawingCoords[1]));
-        let lastPt = map.latLngToContainerPoint(L.latLng(drawingCoords[drawingCoords.length - 1]));
-        let mousePt = map.latLngToContainerPoint(e.latlng);
-        
-        let baseAngle = Math.atan2(pt1.y - pt0.y, pt1.x - pt0.x);
-        let dx = mousePt.x - lastPt.x;
-        let dy = mousePt.y - lastPt.y;
-        
-        let cosB = Math.cos(-baseAngle), sinB = Math.sin(-baseAngle);
-        let localX = dx * cosB - dy * sinB;
-        let localY = dx * sinB + dy * cosB;
-        
-        if (Math.abs(localX) > Math.abs(localY)) { localY = 0; } else { localX = 0; }
-        
-        let cosA = Math.cos(baseAngle), sinA = Math.sin(baseAngle);
-        mousePt.x = lastPt.x + (localX * cosA - localY * sinA);
-        mousePt.y = lastPt.y + (localX * sinA + localY * cosA);
-        
-        return map.containerPointToLatLng(mousePt);
+        mousePt.x = lastPt.x;
       }
+      return map.containerPointToLatLng(mousePt);
     }
+
     return e.latlng;
   }
 
@@ -558,7 +547,8 @@
   function getEventLatLng(e) {
     if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches.length) {
       const touch = e.originalEvent.touches[0];
-      return map.mouseEventToLatLng({ clientX: touch.clientX, clientY: touch.clientY });
+      const point = map.mouseEventToContainerPoint({ clientX: touch.clientX, clientY: touch.clientY });
+      return map.containerPointToLatLng(point);
     }
     return e.latlng;
   }
@@ -566,7 +556,6 @@
   function setupDragHandlers(marker, setupCtxFn) {
     const startHandler = (e) => {
       L.DomEvent.stopPropagation(e);
-      if(e.originalEvent && e.originalEvent.preventDefault) e.originalEvent.preventDefault();
       map.dragging.disable();
       const startLngLat = getEventLatLng(e);
       dragCtx = setupCtxFn(startLngLat, e);
@@ -597,17 +586,12 @@
         } else {
           shape = L.polygon(f.coords, {color: isSel?'#5ec9c0':color, weight: isSel?3:2, fillColor:color, fillOpacity: isSel?0.3:0.18});
         }
-        
-        // التحريك الشامل للمضلع/العنصر بالضغط والسحب من أي مكان بداخله
         const shapeStartDrag = (e) => {
           if(tool!=='select') return;
           L.DomEvent.stopPropagation(e);
-          if(e.originalEvent && e.originalEvent.preventDefault) e.originalEvent.preventDefault();
-          
           selection = {layerId:layer.id, featureId:f.id};
           renderAttrPanel();
           renderFeatures();
-          
           map.dragging.disable();
           const startLngLat = getEventLatLng(e);
           pushStateToUndo();
@@ -620,7 +604,6 @@
         shape.on('touchstart', shapeStartDrag);
         shape.addTo(lg);
         
-        // مقابض التحكم للمستطيل
         if(isSel && f.type==='rectangle') {
           const corners = f.coords;
           const centerLat = (corners[0][0] + corners[2][0]) / 2;
@@ -628,13 +611,11 @@
           const th = toRad(f.rect.rotation);
           const uxN = Math.sin(th), uxE = Math.cos(th);
           const rotatePt = destPoint(centerLat, centerLng, uxE * 0, uxN * 0 + (f.rect.length / 2) + 5);
-          
           const rotMarker = L.circleMarker(rotatePt, {radius:9, className:'rect-rotate-marker', color:'#0d2438', weight:1.5, fillColor:'#e8a33d', fillOpacity:1});
           setupDragHandlers(rotMarker, (startLngLat) => {
             return { mode:'rect-rotate', feature:f, center:[centerLat, centerLng], origRotation: f.rect.rotation, startAngle: Math.atan2(startLngLat.lat - centerLat, startLngLat.lng - centerLng) };
           });
           rotMarker.addTo(lg);
-          
           const scaleMarker = L.circleMarker(corners[2], {radius:9, className:'rect-scale-marker', color:'#0d2438', weight:1.5, fillColor:'#5ec9c0', fillOpacity:1});
           setupDragHandlers(scaleMarker, (startLngLat) => {
             return { mode:'rect-scale', feature:f, anchor: corners[0], origWidth: f.rect.width, origLength: f.rect.length, startLatLng: startLngLat };
@@ -642,7 +623,6 @@
           scaleMarker.addTo(lg);
         }
         
-        // مقابض تحريك النقاط الفردية للمضلعات والخطوط العادية
         if(isSel && f.type!=='rectangle' && f.type!=='circle'){
           f.coords.forEach((c,idx)=>{
             const h = L.circleMarker(c, {radius:8, className:'vertex-marker', color:'#5ec9c0', weight:2, fillColor:'#0d2438', fillOpacity:1});
@@ -680,6 +660,7 @@
         dragCtx.feature.rect.rotation = (dragCtx.origRotation + dAng) % 360;
         syncRectCoords(dragCtx.feature);
       } else if(dragCtx.mode==='rect-scale'){
+        const corners = rectCorners({ lat: dragCtx.feature.rect.lat, lng: dragCtx.feature.rect.lng, width: dragCtx.feature.rect.width, length: dragCtx.feature.rect.length, rotation: dragCtx.feature.rect.rotation, mode: dragCtx.feature.rect.mode });
         const th = toRad(dragCtx.feature.rect.rotation);
         const uxE = Math.cos(th), uxN = Math.sin(th);
         const uyE = -Math.sin(th), uyN = Math.cos(th);
@@ -744,6 +725,7 @@
         mobileFinishBtn.style.display = 'flex';
       }
       else {
+        // حماية تكرار النقاط المتطابقة
         const last = drawingCoords[drawingCoords.length-1];
         if(last[0]!==eff.lat || last[1]!==eff.lng) drawingCoords.push([eff.lat, eff.lng]);
       }
@@ -843,7 +825,7 @@
       else if(tool==='point') hint='انقر على أي مكان على الخريطة لإدراج نقطة.';
       else if(tool==='line') hint='انقر لتحديد مسار الخط، كليك يمين للإنهاء.';
       else if(tool==='polygon') hint='انقر لرسم مضلع عالي الدقة، كليك يمين للإغلاق.';
-      else if(tool==='ortho') hint='الخط الأول يرسم اتجاه المبنى الأساسي، والخطوط التالية تتقيد بزوايا قائمة 90 درجة عليه.';
+      else if(tool==='ortho') hint='رسم مضلع بزوايا قائمة 90 درجة تلقائياً.';
       else if(tool==='rectangle') hint='انقر لتحديد موقع إدراج المستطيل الهندسي.';
       else if(tool==='circle') hint='انقر لتحديد مركز الدائرة وحساب المساحة.';
       document.getElementById('stHint').textContent = hint;
@@ -1187,18 +1169,18 @@
   }
 
   driveJoinBtn.addEventListener('click', ()=>{
-    const id = prompt('أدخل رقم الملف المشترك (Drive File ID):');
+    const id = prompt('أدخل رقم الملف المشترك (Drive File ID) الذي أرسله لك زميلك:');
     if(id && id.trim().length > 10){
       pushStateToUndo();
       state.driveFileId = id.trim(); doSave();
-      if(driveConnected) pullFromDrive(true); else alert('تم ربط الـ ID، اضغط اتصال لبدء المزامنة.');
+      if(driveConnected) pullFromDrive(true); else alert('تم حفظ رقم الملف، يرجى الضغط على "اتصال بـ Drive" لبدء المزامنة الفورية.');
     }
   });
 
   driveCopyIdBtn.addEventListener('click', ()=>{
     if(!state.driveFileId){ alert('يجب الاتصال أولاً لإنشاء ملف.'); return; }
     navigator.clipboard.writeText(state.driveFileId);
-    alert('تم نسخ الـ ID بنجاح لمشاركته مع زملائك للرسم المتزامن!');
+    alert('تم نسخ الـ ID بنجاح! أرسله لزملائك ليتمكنوا من المشاهدة والرسم معك في نفس الوقت.');
   });
 
   let pendingRemote=null;
