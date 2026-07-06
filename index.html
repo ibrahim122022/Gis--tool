@@ -292,6 +292,7 @@
   let tempLine = null;
   let snapEnabled = true;
   let snapMarker = null;
+  let userLocationMarker = null; // مخزن نقطة الموقع الحالي
 
   // مخازن نظام التراجع والإعادة (Undo / Redo)
   let undoStack = [];
@@ -343,13 +344,11 @@
   }
 
   function updateHistoryButtons() {
-    // تفعيل زر التراجع إذا كان هناك مضلع قيد الرسم أو العمليات المحفوظة
     undoBtn.disabled = (undoStack.length === 0) && (!drawingCoords || drawingCoords.length === 0);
     redoBtn.disabled = (redoStack.length === 0);
   }
 
   function handleUndo() {
-    // 1. إذا كنا في وضع رسم مضلع أو خط، نقوم بمسح آخر نقطة فقط
     if (drawingCoords && drawingCoords.length > 0) {
       drawingCoords.pop();
       if (drawingCoords.length === 0) {
@@ -358,7 +357,6 @@
         if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
         document.getElementById('stTemp').textContent = '';
       } else {
-        // تحديث الخط الوهمي لعرض النقاط المتبقية
         if (tempLine) { map.removeLayer(tempLine); }
         tempLine = L.polyline(drawingCoords, {color:'#e8a33d', weight:2, dashArray:'6 5'}).addTo(map);
       }
@@ -366,7 +364,6 @@
       return;
     }
 
-    // 2. إذا لم نكن نرسم، نقوم بالتراجع عن آخر حالة عامة
     if (undoStack.length > 0) {
       const currentState = JSON.stringify({ layers: state.layers, activeLayerId: state.activeLayerId, nextColorIdx: state.nextColorIdx });
       redoStack.push(currentState);
@@ -538,16 +535,40 @@
     return e.latlng;
   }
 
+  // دالة مخصصة لربط أحداث اللمس والماوس على الـ Native DOM لضمان التوافق مع الموبايل
+  function bindTouchAndMouseStart(leafletLayer, handler) {
+    leafletLayer.on('mousedown', handler);
+    
+    const bindNativeTouch = () => {
+      if (leafletLayer._path) {
+        leafletLayer._path.addEventListener('touchstart', (e) => {
+          // محاكاة تركيبة إيفنت الماوس لـ Leaflet
+          const fakeEvent = {
+            originalEvent: e,
+            latlng: map.containerPointToLatLng(map.mouseEventToContainerPoint(e.touches[0]))
+          };
+          handler(fakeEvent);
+        }, { passive: false });
+      }
+    };
+
+    if (leafletLayer._path) {
+      bindNativeTouch();
+    } else {
+      leafletLayer.on('add', bindNativeTouch);
+    }
+  }
+
   function setupDragHandlers(marker, setupCtxFn) {
     const startHandler = (e) => {
+      if (e.originalEvent && e.originalEvent.cancelable) e.originalEvent.preventDefault();
       L.DomEvent.stopPropagation(e);
       map.dragging.disable();
       const startLngLat = getEventLatLng(e);
       dragCtx = setupCtxFn(startLngLat, e);
-      pushStateToUndo(); // حفظ الحالة فور بدء أي عملية سحب وتغيير
+      pushStateToUndo();
     };
-    marker.on('mousedown', startHandler);
-    marker.on('touchstart', startHandler);
+    bindTouchAndMouseStart(marker, startHandler);
   }
 
   /* ---------- Rendering vector features ---------- */
@@ -570,12 +591,13 @@
         
         const shapeStartDrag = (e) => {
           if(tool!=='select') return;
+          if (e.originalEvent && e.originalEvent.cancelable) e.originalEvent.preventDefault();
           L.DomEvent.stopPropagation(e);
           selection = {layerId:layer.id, featureId:f.id};
           renderAttrPanel(); renderFeatures();
           map.dragging.disable();
           const startLngLat = getEventLatLng(e);
-          pushStateToUndo(); // حفظ للتراجع قبل التحريك
+          pushStateToUndo();
           dragCtx = {
             mode:'move', feature:f, startLatLng:startLngLat, 
             origCoords:JSON.parse(JSON.stringify(f.coords)), 
@@ -583,8 +605,7 @@
             origCircle: f.circle?Object.assign({},f.circle):null
           };
         };
-        shape.on('mousedown', shapeStartDrag);
-        shape.on('touchstart', shapeStartDrag);
+        bindTouchAndMouseStart(shape, shapeStartDrag);
         shape.addTo(lg);
 
         if(isSel && f.type==='rectangle') {
@@ -691,7 +712,7 @@
 
   map.getContainer().addEventListener('touchmove', e => {
     if(dragCtx) {
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
       handleMove(null, e);
     }
   }, {passive:false});
@@ -774,7 +795,6 @@
     const tag=document.activeElement.tagName;
     const typing = tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA';
     
-    // شورت كد الكيبورد التراجع (Ctrl + Z) والإعادة (Ctrl + Y)
     if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !typing) { e.preventDefault(); handleUndo(); }
     if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y' && !typing) { e.preventDefault(); handleRedo(); }
 
@@ -964,7 +984,7 @@
 
     if(f.type==='rectangle'){
       ['edW','edL','edR'].forEach(id=>{
-        document.getElementById(id).addEventListener('focus', pushStateToUndo); // حفظ عند تعديل المدخلات
+        document.getElementById(id).addEventListener('focus', pushStateToUndo);
         document.getElementById(id).addEventListener('input', ()=>{
           f.rect.width = Math.max(0.01, parseFloat(document.getElementById('edW').value)||10);
           f.rect.length = Math.max(0.01, parseFloat(document.getElementById('edL').value)||20);
@@ -1055,8 +1075,25 @@
   document.getElementById('locateBtn').addEventListener('click', ()=>{
     map.locate({setView:true, maxZoom:18});
   });
+  
   map.on('locationerror', ()=>(document.getElementById('stHint').textContent = '❌ تعذر تحديد موقعك الحالي'));
-  map.on('locationfound', ()=>(document.getElementById('stHint').textContent = '📍 تم تحديد موقعك الحالي بنجاح'));
+  
+  // تعديل كود العثور على الموقع لرسم علامة زرقاء محاطة بهالة بيضاء تمثلك على الخريطة
+  map.on('locationfound', (e)=>{
+    document.getElementById('stHint').textContent = '📍 تم تحديد موقعك الحالي بنجاح';
+    if (userLocationMarker) {
+      userLocationMarker.setLatLng(e.latlng);
+    } else {
+      userLocationMarker = L.circleMarker(e.latlng, {
+        radius: 8,
+        color: '#ffffff',
+        weight: 2,
+        fillColor: '#4f9ddb',
+        fillOpacity: 0.9,
+        zIndexOffset: 1000
+      }).addTo(map);
+    }
+  });
 
   document.getElementById('fitBtn').addEventListener('click', ()=>{
     const all = []; state.layers.forEach(l=>l.features.forEach(f=>f.coords.forEach(c=>all.push(c))));
