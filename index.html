@@ -113,7 +113,6 @@
     box-shadow: 0 4px 15px rgba(0,0,0,0.4); align-items: center; gap: 6px;
   }
 
-  /* --- عناصر الطريقة الثانية المخصصة للموبايل --- */
   .mobile-crosshair {
     display: none; position: absolute; top: 50%; left: 50%; width: 24px; height: 24px;
     transform: translate(-50%, -50%); z-index: 800; pointer-events: none;
@@ -189,7 +188,7 @@
     <button class="tool-btn" data-tool="polygon" title="مضلع">
       <svg viewBox="0 0 24 24"><path d="M12 3l8 6-3 10H7L4 9z"/></svg><span>مضلع</span>
     </button>
-    <button class="tool-btn" data-tool="rectangle" title="مستطيل بالأطوال">
+    <button class="tool-btn" data-tool="rectangle" title="مستطيل بالأطوال والاتجاه">
       <svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="9"/><path d="M4 5.5h16M4 4v3M20 4v3"/></svg><span>مستطيل</span>
     </button>
     <button class="tool-btn" data-tool="circle" title="دائرة بنصف قطر">
@@ -267,13 +266,14 @@
         <button id="driveImportBtn">استيراد</button>
         <button id="driveDismissBtn" style="background:var(--bg-panel-2);color:var(--text-muted);">تجاهل</button>
       </div>
+      
       <div class="rect-hud" id="rectHud">
-        <h4>مستطيل بالأطوال</h4>
+        <h4>مستطيل بالأطوال والزاوية</h4>
         <label>العرض (متر)</label>
         <input type="number" id="rWidth" value="10" step="0.1" min="0.01">
         <label>الطول (متر)</label>
         <input type="number" id="rLength" value="20" step="0.1" min="0.01">
-        <label>زاوية الدوران (°)</label>
+        <label>زاوية الدوران المحسوبة (°)</label>
         <input type="number" id="rRotation" value="0" step="1">
         <label>نقطة الإدراج تمثل</label>
         <select id="rAnchor"><option value="corner">ركن المستطيل</option><option value="center">مركز المستطيل</option></select>
@@ -282,6 +282,7 @@
           <button class="btn-create" id="rectCreate">إنشاء</button>
         </div>
       </div>
+      
       <div class="rect-hud" id="circleHud">
         <h4>دائرة بنصف قطر</h4>
         <label>نصف القطر (متر)</label>
@@ -330,7 +331,7 @@
   let tool = 'select';
   let selection = null;
   let drawingCoords = null;
-  let rectPending = null;
+  let rectPending = null; 
   let circlePending = null;
   let dragCtx = null;
   let saveTimer = null;
@@ -338,7 +339,6 @@
   let snapEnabled = true;
   let snapMarker = null;
 
-  // متغيرات الطريقة الثانية للموبايل
   let mobileMode = 'move'; 
   let mobileActiveVertexIdx = 0;
   let isMobileEnv = false;
@@ -353,7 +353,6 @@
   const undoBtn = document.getElementById('undoBtn');
   const redoBtn = document.getElementById('redoBtn');
 
-  // عناصر الـ Pad للموبايل
   const mobileCrosshair = document.getElementById('mobileCrosshair');
   const mobileEditPad = document.getElementById('mobileEditPad');
   const mobileVertexRow = document.getElementById('mobileVertexRow');
@@ -394,7 +393,7 @@
     return layerGroups[layer.id];
   }
 
-  /* ---------- History Management (Undo/Redo) ---------- */
+  /* ---------- History Management ---------- */
   function pushStateToUndo() {
     undoStack.push(JSON.stringify({ layers: state.layers, activeLayerId: state.activeLayerId, nextColorIdx: state.nextColorIdx }));
     redoStack = []; 
@@ -411,6 +410,7 @@
       drawingCoords.pop();
       if (drawingCoords.length === 0) {
         drawingCoords = null;
+        rectPending = null;
         mobileFinishBtn.style.display = 'none';
         if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
         document.getElementById('stTemp').textContent = '';
@@ -586,7 +586,7 @@
     if(all.length) map.fitBounds(L.latLngBounds(all), {padding:[40,40]});
   }
 
-  /* ---------- واجهة تحرير الموبايل الجديدة ( الطريقة الثانية ) ---------- */
+  /* ---------- Mobile Control Pad ---------- */
   function openMobileEditPad(f) {
     isMobileEnv = window.innerWidth <= 760;
     if(!isMobileEnv) return;
@@ -594,7 +594,6 @@
     mobileCrosshair.style.display = 'block';
     mobileEditPad.style.display = 'flex';
     
-    // إظهار الأزرار بناءً على نوع العنصر هندسياً
     btnPadVertex.style.display = (f.type !== 'rectangle' && f.type !== 'circle') ? 'block' : 'none';
     btnPadRotate.style.display = (f.type === 'rectangle') ? 'block' : 'none';
     btnPadScale.style.display = (f.type === 'rectangle') ? 'block' : 'none';
@@ -646,7 +645,6 @@
     map.setView(c, map.getZoom(), {animate: true});
   }
 
-  // ربط أحداث لوحة التحكم بالموبايل
   btnPadMove.addEventListener('click', () => setMobileEditMode('move'));
   if(btnPadVertex) btnPadVertex.addEventListener('click', () => setMobileEditMode('vertex'));
   if(btnPadRotate) btnPadRotate.addEventListener('click', () => setMobileEditMode('rotate'));
@@ -677,7 +675,6 @@
     const centerLatLng = map.getCenter();
 
     if(mobileMode === 'move') {
-      // نقل العنصر بالكامل ليكون مركزه في سنتر الخريطة الجديد
       let oldCenterLat = 0, oldCenterLng = 0;
       if(f.type === 'rectangle' || f.type === 'circle') {
         oldCenterLat = f[f.type].lat; oldCenterLng = f[f.type].lng;
@@ -696,7 +693,6 @@
       }
     } 
     else if(mobileMode === 'vertex') {
-      // تعديل إحداثيات النقطة النشطة الحالية لتطابق السنتر
       f.coords[mobileActiveVertexIdx] = [centerLatLng.lat, centerLatLng.lng];
     }
     else if(mobileMode === 'rotate') {
@@ -720,7 +716,6 @@
     renderAttrPanel();
     scheduleSave();
     
-    // البقاء في التعديل ولكن تحديث الواجهة المباشرة
     if(mobileMode === 'vertex') focusOnMobileVertex(f);
     else mobilePadTitle.textContent = "✅ تم تطبيق التعديل بنجاح!";
   });
@@ -743,7 +738,6 @@
           shape = L.polygon(f.coords, {color: isSel?'#5ec9c0':color, weight: isSel?3:2, fillColor:color, fillOpacity: isSel?0.3:0.18});
         }
         
-        // حدث الضغط للتحديد (يعمل للكمبيوتر والموبايل بشكل مستقل ومستقر)
         shape.on('click', (e) => {
           if(tool!=='select') return;
           L.DomEvent.stopPropagation(e);
@@ -756,7 +750,6 @@
           }
         });
 
-        // سحب الفأرة (Mouse Dragging) - يشتغل فقط للكمبيوتر لمنع تجميد الموبايل
         shape.on('mousedown', (e) => {
           if(tool!=='select' || window.innerWidth <= 760) return;
           L.DomEvent.stopPropagation(e);
@@ -774,7 +767,6 @@
 
         shape.addTo(lg);
 
-        // إظهار مقابض التعديل المباشرة فقط لو كان العرض كمبيوتر (Desktop)
         if(isSel && window.innerWidth > 760) {
           if(f.type==='rectangle') {
             const corners = f.coords;
@@ -815,7 +807,7 @@
     });
   }
 
-  /* ---------- Drag handling (Desktop Only) ---------- */
+  /* ---------- Drag handling ---------- */
   map.on('mousemove', e => {
     document.getElementById('stLat').textContent = e.latlng.lat.toFixed(6);
     document.getElementById('stLng').textContent = e.latlng.lng.toFixed(6);
@@ -859,13 +851,24 @@
       renderFeatures();
     } 
     else if(drawingCoords && drawingCoords.length){
+      // تحديث الخط المرن أثناء الرسم (للخطوط، المضلعات، أو اتجاه المستطيل)
       const snapped = effectiveLatLng(e);
       if(tempLine){ map.removeLayer(tempLine); }
       const pts = drawingCoords.concat([[snapped.lat, snapped.lng]]);
       tempLine = L.polyline(pts, {color:'#e8a33d', weight:2, dashArray:'6 5'}).addTo(map);
+      
       const last = drawingCoords[drawingCoords.length-1];
       const segLen = haversine(last[0],last[1], snapped.lat, snapped.lng);
-      document.getElementById('stTemp').textContent = 'الطول الحالي: ' + segLen.toFixed(2) + ' م';
+      
+      if(tool === 'rectangle') {
+        // حساب زاوية الخط اللحظية لعرضها للمستخدم كمؤشر قبل الضغط
+        const angle = Math.atan2(snapped.lat - last[0], snapped.lng - last[1]);
+        let deg = Math.round(toDeg(angle) % 360);
+        if(deg < 0) deg += 360;
+        document.getElementById('stTemp').textContent = `مسافة الاتجاه: ${segLen.toFixed(1)} م | الزاوية الحالية: ${deg}°`;
+      } else {
+        document.getElementById('stTemp').textContent = 'الطول الحالي: ' + segLen.toFixed(2) + ' م';
+      }
     }
   });
 
@@ -882,6 +885,7 @@
       return;
     }
     const snapped = effectiveLatLng(e);
+    
     if(tool==='point'){
       pushStateToUndo();
       const f = addFeature('point', [[snapped.lat, snapped.lng]]);
@@ -897,12 +901,32 @@
       updateHistoryButtons();
     } 
     else if(tool==='rectangle'){
-      rectPending = {lat:snapped.lat, lng:snapped.lng};
-      const pt = map.latLngToContainerPoint(snapped);
-      const wrapRect = mapEl.getBoundingClientRect();
-      const hudX = Math.min(Math.max(pt.x+16,8), wrapRect.width-216);
-      const hudY = Math.min(Math.max(pt.y+16,8), wrapRect.height-260);
-      rectHud.style.left = hudX+'px'; rectHud.style.top = hudY+'px'; rectHud.style.display='block';
+      if(!rectPending) {
+        // النقرة الأولى: تحديد مكان الإدراج وبدء خط الاتجاه والزاوية
+        rectPending = { lat: snapped.lat, lng: snapped.lng };
+        drawingCoords = [[snapped.lat, snapped.lng]];
+        document.getElementById('stHint').textContent = 'انقر في مكان آخر على الخريطة لتحديد زاوية وميل المستطيل بصرياً...';
+      } else {
+        // النقرة الثانية: حساب زاوية الميل الحقيقية بين النقطتين
+        const start = rectPending;
+        const angle = Math.atan2(snapped.lat - start.lat, snapped.lng - start.lng);
+        let deg = Math.round(toDeg(angle) % 360);
+        if(deg < 0) deg += 360;
+
+        // وضع الزاوية في صندوق المدخلات وتجهيزه للعرض
+        document.getElementById('rRotation').value = deg;
+        
+        if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
+        drawingCoords = null;
+        document.getElementById('stTemp').textContent = '';
+
+        // فتح الـ HUD في موضع النقرة الثانية لإدخال الأبعاد
+        const pt = map.latLngToContainerPoint(snapped);
+        const wrapRect = mapEl.getBoundingClientRect();
+        const hudX = Math.min(Math.max(pt.x+16,8), wrapRect.width-216);
+        const hudY = Math.min(Math.max(pt.y+16,8), wrapRect.height-320);
+        rectHud.style.left = hudX+'px'; rectHud.style.top = hudY+'px'; rectHud.style.display='block';
+      }
     } 
     else if(tool==='circle'){
       circlePending = {lat:snapped.lat, lng:snapped.lng};
@@ -987,7 +1011,13 @@
     if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
     if(snapMarker){ map.removeLayer(snapMarker); snapMarker=null; }
     document.getElementById('stTemp').textContent='';
-    document.getElementById('stHint').textContent = tool==='select' ? 'اضغط على عنصر لتحديده أو اسحبه لتحريكه' : 'اضغط على الخريطة للرسم';
+    
+    if (tool === 'rectangle') {
+      document.getElementById('stHint').textContent = 'ارسم المستطيل: انقر نقرة أولى لتحديد موضع البداية (الإدراج)..';
+    } else {
+      document.getElementById('stHint').textContent = tool==='select' ? 'اضغط على عنصر لتحديده أو اسحبه لتحريكه' : 'اضغط على الخريطة للرسم';
+    }
+    
     mapEl.classList.toggle('tool-select', tool==='select');
     mapEl.classList.toggle('tool-draw', tool!=='select');
     map.doubleClickZoom[(tool==='line'||tool==='polygon')?'disable':'enable']();
@@ -1195,7 +1225,7 @@
     return f;
   }
 
-  /* ---------- HUD Dialogs Creation ---------- */
+  /* ---------- HUD Dialogs Actions ---------- */
   document.getElementById('rectCancel').addEventListener('click', ()=>{ rectHud.style.display='none'; rectPending=null; });
   document.getElementById('rectCreate').addEventListener('click', ()=>{
     if(!rectPending)return;
@@ -1298,7 +1328,7 @@
 
   document.getElementById('exportBtn').addEventListener('click', saveToFileSystem);
 
-  /* ---------- Google Drive integration (real) ---------- */
+  /* ---------- Google Drive Integration ---------- */
   const DRIVE_CLIENT_ID = '677149493471-4gjbg1thbdqt8l8hjplk3bfnr4ni56nh.apps.googleusercontent.com';
   const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
   let tokenClient=null, driveToken=null, driveTokenExpiry=0, driveConnected=false, lastPushTime=0;
@@ -1376,7 +1406,7 @@
     tokenClient.requestAccessToken({prompt:'consent'});
   });
   document.getElementById('driveJoinBtn').addEventListener('click', ()=>{
-    const id = prompt('الصق رقم الملف (File ID) اللي بعته لك زميلك:');
+    const id = prompt('الصق رقم الملف (File ID) المشترك من زميلك:');
     if(!id) return;
     if(!confirm('هيتم استبدال أي رسم موجود عندك دلوقتي برسم الملف المشترك. متأكد؟')) return;
     state.driveFileId = id.trim(); scheduleSave();
