@@ -64,7 +64,6 @@
   .btn-create{background:var(--accent);color:#1a1200;}
   .btn-cancel{background:var(--bg-panel-2);color:var(--text-muted);border:1px solid var(--border) !important;}
 
-  /* نافذة الانتقال للإحداثيات الاستايل الخاص بها */
   .go-to-hud { width: 220px; border-color: var(--teal); }
 
   .sidebar{width:280px;background:var(--bg-panel);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
@@ -182,7 +181,7 @@
     <button class="tool-btn active" data-tool="select" title="تحديد وتحرير">
       <svg viewBox="0 0 24 24"><path d="M4 3l7 17 2-7 7-2z"/></svg><span>تحديد</span>
     </button>
-    <button class="tool-btn" data-tool="point" title="نقطة">
+    <button class="tool-btn" data-tool="point" title="ناقة">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="8" stroke-dasharray="2 2"/></svg><span>نقطة</span>
     </button>
     <button class="tool-btn" data-tool="line" title="خط">
@@ -191,7 +190,7 @@
     <button class="tool-btn" data-tool="polygon" title="مضلع">
       <svg viewBox="0 0 24 24"><path d="M12 3l8 6-3 10H7L4 9z"/></svg><span>مضلع</span>
     </button>
-    <button class="tool-btn" data-tool="rectangle" title="مستطيل بالأطوال والاتجاه">
+    <button class="tool-btn" data-tool="rectangle" title="مستطيل بـ 3 نقاط">
       <svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="9"/><path d="M4 5.5h16M4 4v3M20 4v3"/></svg><span>مستطيل</span>
     </button>
     <button class="tool-btn" data-tool="circle" title="دائرة بنصف قطر">
@@ -200,7 +199,6 @@
     
     <div class="toolbar-sep"></div>
 
-    <!-- أداة الانتقال للإحداثيات الجديدة -->
     <button class="tool-btn" id="goToCoordsBtn" title="انتقال إلى إحداثيات (ArcPro Style)">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20M12 7a5 5 0 100 10 5 5 0 000-10z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span>إحداثي</span>
     </button>
@@ -277,12 +275,11 @@
         <button id="driveDismissBtn" style="background:var(--bg-panel-2);color:var(--text-muted);">تجاهل</button>
       </div>
       
-      <!-- نافذة إدخال أبعاد المستطيل -->
       <div class="rect-hud" id="rectHud">
-        <h4>مستطيل بالأطوال والزاوية</h4>
-        <label>العرض (متر)</label>
+        <h4>تأكيد أبعاد المستطيل</h4>
+        <label>العرض المحسوب (متر)</label>
         <input type="number" id="rWidth" value="10" step="0.1" min="0.01">
-        <label>الطول (متر)</label>
+        <label>الطول المحسوب (متر)</label>
         <input type="number" id="rLength" value="20" step="0.1" min="0.01">
         <label>زاوية الدوران المحسوبة (°)</label>
         <input type="number" id="rRotation" value="0" step="1">
@@ -294,7 +291,6 @@
         </div>
       </div>
 
-      <!-- نافذة الانتقال المضافة الجديدة (ArcPro Style) -->
       <div class="rect-hud go-to-hud" id="goToCoordsHud">
         <h4 style="color:var(--teal);">الانتقال لنقطة إحداثية</h4>
         <label>خط العرض (Latitude)</label>
@@ -355,14 +351,16 @@
   let tool = 'select';
   let selection = null;
   let drawingCoords = null;
-  let rectPending = null; 
+  
+  // هيكل المستطيل ذو الـ 3 نقاط المحسن
+  let rect3Point = { pt1: null, pt2: null, pt3: null, step: 0 }; 
   let circlePending = null;
   let dragCtx = null;
   let saveTimer = null;
   let tempLine = null;
   let snapEnabled = true;
   let snapMarker = null;
-  let targetLocationMarker = null; // الماركر الخاص بأداة الـ GoTo
+  let targetLocationMarker = null;
 
   let mobileMode = 'move'; 
   let mobileActiveVertexIdx = 0;
@@ -427,16 +425,31 @@
   }
 
   function updateHistoryButtons() {
-    undoBtn.disabled = (undoStack.length === 0) && (!drawingCoords || drawingCoords.length === 0);
+    undoBtn.disabled = (undoStack.length === 0) && (!drawingCoords || drawingCoords.length === 0) && (rect3Point.step === 0);
     redoBtn.disabled = (redoStack.length === 0);
   }
 
   function handleUndo() {
+    if (tool === 'rectangle' && rect3Point.step > 0) {
+      rect3Point.step--;
+      if(rect3Point.step === 0) {
+        rect3Point.pt1 = null; rect3Point.pt2 = null; drawingCoords = null;
+        document.getElementById('stHint').textContent = 'انقر لوضع النقطة الأولى للمستطيل...';
+      } else if(rect3Point.step === 1) {
+        rect3Point.pt2 = null;
+        drawingCoords = [[rect3Point.pt1.lat, rect3Point.pt1.lng]];
+        document.getElementById('stHint').textContent = 'انقر لوضع النقطة الثانية (لتحديد خط الاتجاه والزاوية)...';
+      }
+      if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
+      document.getElementById('stTemp').textContent = '';
+      updateHistoryButtons();
+      return;
+    }
+
     if (drawingCoords && drawingCoords.length > 0) {
       drawingCoords.pop();
       if (drawingCoords.length === 0) {
         drawingCoords = null;
-        rectPending = null;
         mobileFinishBtn.style.display = 'none';
         if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
         document.getElementById('stTemp').textContent = '';
@@ -506,6 +519,22 @@
     const dLat = dNorth/111320;
     const dLng = dEast/(111320*Math.cos(toRad(lat)));
     return [lat+dLat, lng+dLng];
+  }
+
+  // حساب أقصر مسافة عمودية من نقطة إلى خط مستقيم (بروجكشن) وموقعها
+  function projectPointOnLine(pt, lineStart, lineEnd) {
+    const x = pt.lng, y = pt.lat;
+    const x1 = lineStart.lng, y1 = lineStart.lat;
+    const x2 = lineEnd.lng, y2 = lineEnd.lat;
+    const A = x - x1, B = y - y1, C = x2 - x1, D = y2 - y1;
+    const dot = A * C + B * D;
+    const lenSq = C * C + D * D;
+    let param = -1;
+    if (lenSq !== 0) param = dot / lenSq;
+    const projLng = x1 + param * C;
+    const projLat = y1 + param * D;
+    const dist = haversine(y, x, projLat, projLng);
+    return { latlng: L.latLng(projLat, projLng), distance: dist };
   }
   
   function pathLength(coords){
@@ -770,10 +799,7 @@
           selection = {layerId:layer.id, featureId:f.id};
           renderAttrPanel(); 
           renderFeatures();
-          
-          if(window.innerWidth <= 760) {
-            openMobileEditPad(f);
-          }
+          if(window.innerWidth <= 760) openMobileEditPad(f);
         });
 
         shape.on('mousedown', (e) => {
@@ -840,7 +866,6 @@
     
     if(dragCtx) {
       const snapped = dragCtx.mode==='vertex' ? effectiveLatLng(e, dragCtx.feature.id) : e.latlng;
-      
       if(dragCtx.mode==='vertex'){
         dragCtx.feature.coords[dragCtx.idx] = [snapped.lat, snapped.lng];
       } 
@@ -876,6 +901,50 @@
       }
       renderFeatures();
     } 
+    // رسم المعاينة اللحظية للمستطيل ثلاثي النقاط (3-Point Rectangle Preview)
+    else if(tool==='rectangle' && rect3Point.step > 0) {
+      const snapped = effectiveLatLng(e);
+      if(tempLine) { map.removeLayer(tempLine); tempLine = null; }
+      
+      if(rect3Point.step === 1) {
+        // نتحرك بعد وضع النقطة الأولى: نعاين خط الاتجاه/العرض الأساسي
+        const pts = [[rect3Point.pt1.lat, rect3Point.pt1.lng], [snapped.lat, snapped.lng]];
+        tempLine = L.polyline(pts, {color:'#e8a33d', weight:2, dashArray:'4 4'}).addTo(map);
+        const width = haversine(rect3Point.pt1.lat, rect3Point.pt1.lng, snapped.lat, snapped.lng);
+        const angle = Math.atan2(snapped.lat - rect3Point.pt1.lat, snapped.lng - rect3Point.pt1.lng);
+        let deg = Math.round(toDeg(angle) % 360); if(deg < 0) deg += 360;
+        document.getElementById('stTemp').textContent = `العرض (المسافة): ${width.toFixed(1)} م | الزاوية: ${deg}°`;
+      } 
+      else if(rect3Point.step === 2) {
+        // وضعنا نقطة 1 و 2 والآن نسحب النقطة 3 لرسم الصندوق المتعامد بالكامل بصرياً فوق القمر الصناعي
+        const p1 = rect3Point.pt1;
+        const p2 = rect3Point.pt2;
+        
+        // بروجكشن النقطة الثالثة على خط الاتجاه لحساب الارتفاع المتعامد (الطول)
+        const proj = projectPointOnLine(snapped, p1, p2);
+        const length = proj.distance;
+        const width = haversine(p1.lat, p1.lng, p2.lat, p2.lng);
+        const angle = Math.atan2(p2.lat - p1.lat, p2.lng - p1.lng);
+        
+        // حساب مصفوفة الأركان الأربعة اللحظية للمعاينة
+        const th = angle;
+        const uxE = Math.cos(th), uxN = Math.sin(th);
+        const uyE = -Math.sin(th), uyN = Math.cos(th);
+        
+        // تحديد اتجاه السحب (يمنة أو يسرة الخط)
+        const dotProduct = (snapped.lng - p1.lng) * (-uxN) + (snapped.lat - p1.lat) * uxE;
+        const sideSign = dotProduct >= 0 ? 1 : -1;
+        const signedLength = length * sideSign;
+        
+        const c1 = [p1.lat, p1.lng];
+        const c2 = [p2.lat, p2.lng];
+        const c3 = destPoint(p2.lat, p2.lng, uyE * signedLength, uyN * signedLength);
+        const c4 = destPoint(p1.lat, p1.lng, uyE * signedLength, uyN * signedLength);
+        
+        tempLine = L.polygon([c1, c2, c3, c4], {color:'#5ec9c0', weight:1.5, fillOpacity:0.12, dashArray:'3 3'}).addTo(map);
+        document.getElementById('stTemp').textContent = `العرض المعتمد: ${width.toFixed(1)} م | الطول الحالي (السحب): ${length.toFixed(1)} م`;
+      }
+    }
     else if(drawingCoords && drawingCoords.length){
       const snapped = effectiveLatLng(e);
       if(tempLine){ map.removeLayer(tempLine); }
@@ -884,15 +953,7 @@
       
       const last = drawingCoords[drawingCoords.length-1];
       const segLen = haversine(last[0],last[1], snapped.lat, snapped.lng);
-      
-      if(tool === 'rectangle') {
-        const angle = Math.atan2(snapped.lat - last[0], snapped.lng - last[1]);
-        let deg = Math.round(toDeg(angle) % 360);
-        if(deg < 0) deg += 360;
-        document.getElementById('stTemp').textContent = `مسافة الاتجاه: ${segLen.toFixed(1)} م | الزاوية الحالية: ${deg}°`;
-      } else {
-        document.getElementById('stTemp').textContent = 'الطول الحالي: ' + segLen.toFixed(2) + ' م';
-      }
+      document.getElementById('stTemp').textContent = 'الطول الحالي: ' + segLen.toFixed(2) + ' م';
     }
   });
 
@@ -924,31 +985,65 @@
       drawingCoords.push([snapped.lat, snapped.lng]);
       updateHistoryButtons();
     } 
+    // منطق الـ 3-Points التفاعلي المطلب للمستطيل
     else if(tool==='rectangle'){
-      if(!rectPending) {
-        // النقرة الأولى: زاوية البدء وخط الاتجاه المائل
-        rectPending = { lat: snapped.lat, lng: snapped.lng };
+      if(rect3Point.step === 0) {
+        // النقرة الأولى: ركن البداية الأساسي للمستطيل
+        rect3Point.pt1 = snapped;
+        rect3Point.step = 1;
         drawingCoords = [[snapped.lat, snapped.lng]];
-        document.getElementById('stHint').textContent = 'انقر في مكان آخر لتحديد ميل واتجاه المستطيل بصرياً...';
-      } else {
-        // النقرة الثانية: حساب زاوية الخط المائل الفعلية المرسومة
-        const start = rectPending;
-        const angle = Math.atan2(snapped.lat - start.lat, snapped.lng - start.lng);
-        let deg = Math.round(toDeg(angle) % 360);
-        if(deg < 0) deg += 360;
-
-        // تعبئة قيمة الزاوية تلقائياً وعرض الصندوق لإدخال الأطوال
-        document.getElementById('rRotation').value = deg;
+        document.getElementById('stHint').textContent = 'انقر لتحديد النقطة الثانية (ميل الزاوية وعرض المستطيل المبدئي)...';
+        updateHistoryButtons();
+      } 
+      else if(rect3Point.step === 1) {
+        // النقرة الثانية: اعتماد خط الاتجاه والزاوية والعرض المبدئي
+        rect3Point.pt2 = snapped;
+        rect3Point.step = 2;
+        document.getElementById('stHint').textContent = 'تحرك لتحديد الطول والعمق فوق القمر الصناعي ثم انقر النقرة الثالثة والأخيرة...';
+        updateHistoryButtons();
+      } 
+      else if(rect3Point.step === 2) {
+        // النقرة الثالثة: حساب الأبعاد النهائية وفتح نافذة التأكيد والتعديل الرقمي فوراً
+        const p1 = rect3Point.pt1;
+        const p2 = rect3Point.pt2;
         
+        const proj = projectPointOnLine(snapped, p1, p2);
+        const width = haversine(p1.lat, p1.lng, p2.lat, p2.lng);
+        const length = proj.distance;
+        
+        const angle = Math.atan2(p2.lat - p1.lat, p2.lng - p1.lng);
+        let deg = Math.round(toDeg(angle) % 360); if(deg < 0) deg += 360;
+
+        const uxN = Math.sin(angle), uxE = Math.cos(angle);
+        const dotProduct = (snapped.lng - p1.lng) * (-uxN) + (snapped.lat - p1.lat) * uxE;
+        const sideSign = dotProduct >= 0 ? 1 : -1;
+        
+        // تخزين البيانات مؤقتاً لتمريرها عند الضغط على "إنشاء"
+        rect3Point.finalRect = {
+          lat: p1.lat, lng: p1.lng,
+          width: parseFloat(width.toFixed(2)),
+          length: parseFloat(length.toFixed(2)),
+          rotation: deg,
+          sideSign: sideSign
+        };
+
+        // تعبئة عناصر الـ HUD بالقيم المرسومة من الخريطة فوراً
+        document.getElementById('rWidth').value = width.toFixed(1);
+        document.getElementById('rLength').value = length.toFixed(1);
+        document.getElementById('rRotation').value = deg;
+
         if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
+        rect3Point.step = 0; 
         drawingCoords = null;
         document.getElementById('stTemp').textContent = '';
 
+        // إظهار نافذة تأكيد الأبعاد العائمة بنفس الأسلوب المتاح سابقاً
         const pt = map.latLngToContainerPoint(snapped);
         const wrapRect = mapEl.getBoundingClientRect();
         const hudX = Math.min(Math.max(pt.x+16,8), wrapRect.width-216);
         const hudY = Math.min(Math.max(pt.y+16,8), wrapRect.height-320);
         rectHud.style.left = hudX+'px'; rectHud.style.top = hudY+'px'; rectHud.style.display='block';
+        updateHistoryButtons();
       }
     } 
     else if(tool==='circle'){
@@ -998,7 +1093,7 @@
 
     if(e.key==='Enter' && !typing) finishDrawing();
     if(e.key==='Escape'){
-      drawingCoords=null; rectPending=null; circlePending=null;
+      drawingCoords=null; rect3Point.step = 0; circlePending=null;
       rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none';
       mobileFinishBtn.style.display = 'none';
       closeMobileEditPad();
@@ -1025,12 +1120,10 @@
     const btn=e.target.closest('.tool-btn');
     if(!btn) return;
 
-    // معالجة أداة الانتقال للإحداثيات بشكل منفصل لكي لا تؤثر على اختيار أدوات الرسم الحالية
     if(btn.id === 'goToCoordsBtn') {
       const center = map.getCenter();
       document.getElementById('goLat').value = center.lat.toFixed(6);
       document.getElementById('goLng').value = center.lng.toFixed(6);
-      
       goToCoordsHud.style.left = '90px';
       goToCoordsHud.style.top = '140px';
       goToCoordsHud.style.display = (goToCoordsHud.style.display === 'block') ? 'none' : 'block';
@@ -1041,7 +1134,7 @@
     document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     tool = btn.dataset.tool;
-    drawingCoords=null; rectPending=null; circlePending=null;
+    drawingCoords=null; rect3Point.step = 0; circlePending=null;
     rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none';
     mobileFinishBtn.style.display = 'none';
     closeMobileEditPad();
@@ -1050,7 +1143,7 @@
     document.getElementById('stTemp').textContent='';
     
     if (tool === 'rectangle') {
-      document.getElementById('stHint').textContent = 'ارسم المستطيل: انقر أولاً لتحديد البداية، ثم انقر ثانياً لتحديد الاتجاه والأبعاد..';
+      document.getElementById('stHint').textContent = 'مستطيل بـ 3 نقاط: انقر 1 للبداية، انقر 2 للاتجاه، انقر 3 لتحديد الطول...';
     } else {
       document.getElementById('stHint').textContent = tool==='select' ? 'اضغط على عنصر لتحديده أو اسحبه لتحريكه' : 'اضغط على الخريطة للرسم';
     }
@@ -1263,24 +1356,46 @@
   }
 
   /* ---------- HUD Dialogs Actions ---------- */
-  document.getElementById('rectCancel').addEventListener('click', ()=>{ rectHud.style.display='none'; rectPending=null; });
+  document.getElementById('rectCancel').addEventListener('click', ()=>{ rectHud.style.display='none'; });
+  
   document.getElementById('rectCreate').addEventListener('click', ()=>{
-    if(!rectPending)return;
     pushStateToUndo();
     const w = Math.max(0.01, parseFloat(document.getElementById('rWidth').value)||10);
     const l = Math.max(0.01, parseFloat(document.getElementById('rLength').value)||20);
     const rot = parseFloat(document.getElementById('rRotation').value)||0;
     const anch = document.getElementById('rAnchor').value;
+    
     const f = addFeature('rectangle', []);
-    f.rect = { lat:rectPending.lat, lng:rectPending.lng, width:w, length:l, rotation:rot, mode:anch };
+    
+    // إذا تم الحفظ بناءً على الرسم التفاعلي المباشر، نأخذ الـ sideSign المظبوط من السحب
+    let finalLat = map.getCenter().lat, finalLng = map.getCenter().lng;
+    let sSign = 1;
+    if(rect3Point.finalRect) {
+      finalLat = rect3Point.finalRect.lat;
+      finalLng = rect3Point.finalRect.lng;
+      sSign = rect3Point.finalRect.sideSign;
+    }
+
+    // لكي يعتمد السحب المتعامد الصحيح، نضرب الطول في إشارة السحب لإنشاء الأركان
+    f.rect = { lat: finalLat, lng: finalLng, width: w, length: l * sSign, rotation: rot, mode: anch };
+    
+    // تصحيح فوري إذا كانت القيم سالبة بالخطأ لتظل البنية سليمة في الجدول والـ HUD
+    f.rect.length = Math.abs(f.rect.length);
+    if(sSign < 0) {
+      f.rect.length = l * sSign;
+    }
+
     syncRectCoords(f);
-    rectHud.style.display='none'; rectPending=null;
+    // تنظيف وعودة القيم موجبة للعرض النظيف في لوحة الخصائص
+    f.rect.length = w; f.rect.width = w; f.rect.length = l; 
+
+    rectHud.style.display='none';
+    rect3Point.finalRect = null;
     selection = {layerId:activeLayer().id, featureId:f.id};
     renderFeatures(); renderAttrPanel(); scheduleSave(); updateHistoryButtons();
     if(window.innerWidth <= 760) openMobileEditPad(f);
   });
 
-  /* إجرائيات الـ GoTo وعمل زووم لموقع الإحداثيات المكتوب */
   document.getElementById('goToCancel').addEventListener('click', () => { goToCoordsHud.style.display='none'; });
   document.getElementById('goToExecute').addEventListener('click', () => {
     const lat = parseFloat(document.getElementById('goLat').value);
@@ -1291,12 +1406,9 @@
     map.setView(targetLatLng, 18, { animate: true });
     
     if(targetLocationMarker) { map.removeLayer(targetLocationMarker); }
-    
-    // إنشاء علامة مميزة ومؤقتة عند النقطة المنتقل إليها مع خيار حذفها
     targetLocationMarker = L.marker(targetLatLng).addTo(map)
       .bindPopup(`<div style="text-align:center;"><b>الموقع المستهدف</b><br>Lat: ${lat}<br>Lng: ${lng}<br><button onclick="window.removeTargetMarker()" style="margin-top:6px; background:var(--danger); color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">حذف العلامة</button></div>`)
       .openPopup();
-      
     goToCoordsHud.style.display = 'none';
   });
   
@@ -1378,12 +1490,10 @@
     a.download = defaultFileName;
     document.body.appendChild(a);
     a.click();
-    
     setTimeout(() => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     }, 150);
-    
     document.getElementById('stHint').textContent = '📥 تم تنزيل الملف في مجلد التنزيلات (Downloads)';
   }
 
@@ -1555,3 +1665,5 @@
 </script>
 </body>
 </html>
+
+```
