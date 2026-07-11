@@ -1778,6 +1778,29 @@
       tryRequest();
     });
   }
+  function buildGeoJSON(){
+    const features = [];
+    state.layers.forEach(layer=>{
+      layer.features.forEach(f=>{
+        const props = Object.assign({}, f.attrs, {layer: layer.name, type: f.type});
+        if(f.rect) props.rect_info = f.rect;
+        if(f.circle) props.circle_info = f.circle;
+        let geometry;
+        if(f.type === 'point'){
+          const c = f.coords[0];
+          geometry = {type:'Point', coordinates:[c[1], c[0]]};
+        } else if(f.type === 'line'){
+          geometry = {type:'LineString', coordinates: f.coords.map(c=>[c[1],c[0]])};
+        } else {
+          const ring = f.coords.map(c=>[c[1],c[0]]);
+          if(ring.length) ring.push(ring[0]);
+          geometry = {type:'Polygon', coordinates:[ring]};
+        }
+        features.push({type:'Feature', geometry, properties: props});
+      });
+    });
+    return {type:'FeatureCollection', features};
+  }
   function buildMultipart(boundary, metadata, content){
     const delim='\r\n--'+boundary+'\r\n', closeDelim='\r\n--'+boundary+'--';
     return delim+'Content-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(metadata)+
@@ -1813,6 +1836,19 @@
     }catch(e){ setDriveMsg('فشل الاتصال بـ Drive: ' + e.message, true); console.error('Drive push exception:', e); }
     drivePushInFlight=false;
   }
+  document.getElementById('exportBtn').addEventListener('click', ()=>{
+    const data = JSON.stringify(buildGeoJSON(), null, 2);
+    const blob = new Blob([data], {type:'application/geo+json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+    a.href = url;
+    a.download = 'gis-drawing-' + stamp + '.geojson';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  });
   document.getElementById('driveConnectBtn').addEventListener('click', ()=>{
     if(!tokenClient){ alert('مكتبة تسجيل الدخول لسه بتحمّل، جرّب تاني بعد ثانية.'); return; }
     if(authRequestInFlight){ return; } // لو في طلب جاري، تجاهل الضغطة
