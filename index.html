@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>أداة الرسم المكانى المهنية - دقة الزوايا</title>
+<title>أداة الرسم المكانى المهنية </title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght=400;500;700&family=Inter:wght=400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -84,6 +84,20 @@
   .add-btn{width:100%;padding:8px;border-radius:8px;border:1px dashed var(--border);background:transparent;color:var(--text-muted);cursor:pointer;font-size:12px;margin-top:4px;}
   .add-btn:hover{border-color:var(--teal);color:var(--teal);}
   .empty-state{color:var(--text-muted);font-size:12px;text-align:center;padding:40px 10px;line-height:1.7;}
+
+  /* ---- expand / feature-list ---- */
+  .layer-expand-btn{background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px 3px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color .15s;}
+  .layer-expand-btn:hover{color:var(--teal);}
+  .layer-expand-btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.5;transition:transform .18s;}
+  .layer-expand-btn.open svg{transform:rotate(90deg);}
+  .feature-list{display:none;margin:-3px 0 6px 0;border-radius:0 0 8px 8px;overflow:hidden;background:var(--bg);border:1px solid var(--border);border-top:none;}
+  .feature-list.open{display:block;}
+  .feature-item{display:flex;align-items:center;gap:7px;padding:5px 10px;cursor:pointer;font-size:11.5px;color:var(--text-muted);transition:background .1s,color .1s;}
+  .feature-item:hover{background:var(--teal-soft);color:var(--teal);}
+  .feature-item .fi-type{font-size:9px;font-family:var(--mono);background:var(--bg-panel-2);padding:1px 5px;border-radius:3px;border:1px solid var(--border);color:var(--text-muted);flex-shrink:0;}
+  .feature-item .fi-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--mono);}
+  .feature-item .fi-zoom{opacity:0;font-size:10px;color:var(--teal);}
+  .feature-item:hover .fi-zoom{opacity:1;}
   .attr-block{background:var(--bg-panel-2);border-radius:10px;padding:12px;margin-bottom:12px;}
   .attr-block .ftype{color:var(--accent);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
   .stat-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11.5px;color:var(--text-muted);margin-top:6px;}
@@ -316,6 +330,26 @@
           <button class="btn-create" id="circleCreate">إنشاء</button>
         </div>
       </div>
+
+      <div class="rect-hud" id="featureInfoHud" style="width:250px;border-color:var(--teal);display:none;">
+        <h4 id="featureInfoTitle" style="color:var(--teal);">معلومات العنصر</h4>
+        <div id="fiNameRow">
+          <label>الاسم</label>
+          <input type="text" id="fiName" placeholder="أدخل اسم العنصر...">
+        </div>
+        <div id="fiDescRow">
+          <label>الوصف</label>
+          <input type="text" id="fiDesc" placeholder="وصف مختصر للعنصر...">
+        </div>
+        <div id="fiNeighborRow" style="display:none;">
+          <label>الجار</label>
+          <input type="text" id="fiNeighbor" placeholder="أدخل اسم الجار...">
+        </div>
+        <div class="row-btns">
+          <button class="btn-cancel" id="featureInfoSkip">تخطى</button>
+          <button class="btn-create" id="featureInfoOk" style="background:var(--teal);">حفظ</button>
+        </div>
+      </div>
     </div>
     <div class="statusbar">
       <span>Lat: <b id="stLat">--</b></span>
@@ -356,6 +390,8 @@
   };
   let friendLayers = [];      // read-only layers pulled from friends' Drive files (each layer carries .fid = owning friend's File ID)
   let friendLayerGroups = {}; // separate Leaflet layer groups for friend data, keyed by fid+'__'+layer.id
+  let layerExpandState = {};  // tracks which layer IDs are expanded in the list
+  let featureInfoPendingF = null; // feature waiting for name/description input
   let tool = 'select';
   let selection = null;
   let drawingCoords = null;
@@ -1097,6 +1133,7 @@
       const f = addFeature('point', [[snapped.lat, snapped.lng]]);
       selection = {layerId: activeLayer().id, featureId:f.id};
       renderFeatures(); renderAttrPanel(); scheduleSave();
+      showFeatureInfoHud(f, 'point');
     } 
     else if(tool==='line' || tool==='polygon'){
       if(!drawingCoords) {
@@ -1201,6 +1238,7 @@
       pushStateToUndo();
       const f=addFeature('polygon', drawingCoords); selection={layerId:activeLayer().id, featureId:f.id};
       drawingCoords=null; renderFeatures(); renderAttrPanel(); scheduleSave();
+      showFeatureInfoHud(f, 'polygon');
     } 
     else { drawingCoords=null; }
     updateHistoryButtons();
@@ -1296,16 +1334,49 @@
   function eyeClosedIcon(){ return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'; }
   function trashIcon(){ return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'; }
 
+  /* ---------- Zoom to a feature on the map ---------- */
+  function zoomToFeature(f){
+    if(!f || !f.coords || !f.coords.length) return;
+    if(f.type === 'point'){
+      map.setView(f.coords[0], Math.max(map.getZoom(), 18), {animate:true});
+    } else {
+      try { map.fitBounds(L.latLngBounds(f.coords), {padding:[30,30], animate:true, maxZoom:19}); }
+      catch(e){ if(f.coords[0]) map.setView(f.coords[0], 16, {animate:true}); }
+    }
+  }
+
+  /* ---------- Human-readable label for a feature ---------- */
+  function featureLabel(f){
+    if(f.attrs && f.attrs.name && String(f.attrs.name).trim()) return String(f.attrs.name).trim();
+    const typeAr = {point:'نقطة', line:'خط', polygon:'مضلع', rectangle:'مستطيل', circle:'دائرة'};
+    return (typeAr[f.type]||f.type) + ' ' + f.id.slice(0,5);
+  }
+
   function renderLayerList(){
     const container = document.getElementById('layerList');
     container.innerHTML = '';
 
     // ---- رسوماتي (قابلة للتعديل) ----
     state.layers.forEach(layer=>{
+      const wrapper = document.createElement('div');
+      wrapper.style.marginBottom = '6px';
+
       const row = document.createElement('div');
       row.className = `layer-row ${layer.id===state.activeLayerId?'active':''}`;
+      row.style.marginBottom = '0';
       row.addEventListener('click', ()=>{ state.activeLayerId=layer.id; renderLayerList(); });
-      
+
+      // ---- Expand/Collapse button ----
+      const expandBtn = document.createElement('button');
+      expandBtn.className = 'layer-expand-btn' + (layerExpandState[layer.id] ? ' open' : '');
+      expandBtn.title = 'عرض/إخفاء العناصر';
+      expandBtn.innerHTML = `<svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>`;
+      expandBtn.addEventListener('click', e=>{
+        L.DomEvent.stopPropagation(e);
+        layerExpandState[layer.id] = !layerExpandState[layer.id];
+        renderLayerList();
+      });
+
       const swatch = document.createElement('div');
       swatch.className = 'swatch'; swatch.style.background = layer.color;
       swatch.addEventListener('click', e=>{
@@ -1330,7 +1401,7 @@
         renderLayerList(); renderFeatures(); scheduleSave();
       });
 
-      row.appendChild(swatch); row.appendChild(nameSpan); row.appendChild(countSpan); row.appendChild(visBtn);
+      row.appendChild(expandBtn); row.appendChild(swatch); row.appendChild(nameSpan); row.appendChild(countSpan); row.appendChild(visBtn);
       if(state.layers.length > 1){
         const delBtn = document.createElement('button');
         delBtn.className = 'icon-btn'; delBtn.innerHTML = trashIcon();
@@ -1342,13 +1413,64 @@
             state.layers = state.layers.filter(l=>l.id!==layer.id);
             if(state.activeLayerId===layer.id) state.activeLayerId = state.layers[0].id;
             if(selection && selection.layerId===layer.id) selection=null;
+            delete layerExpandState[layer.id];
             closeMobileEditPad();
             renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
           }
         });
         row.appendChild(delBtn);
       }
-      container.appendChild(row);
+      wrapper.appendChild(row);
+
+      // ---- Feature sub-list ----
+      const featureList = document.createElement('div');
+      featureList.className = 'feature-list' + (layerExpandState[layer.id] ? ' open' : '');
+      if(layer.features.length === 0){
+        const empty = document.createElement('div');
+        empty.style.cssText = 'padding:8px 12px;font-size:11px;color:var(--text-muted);font-family:var(--mono);';
+        empty.textContent = 'لا يوجد عناصر في هذه الطبقة';
+        featureList.appendChild(empty);
+      } else {
+        layer.features.forEach(f=>{
+          const typeAr = {point:'نقطة', line:'خط', polygon:'مضلع', rectangle:'مستطيل', circle:'دائرة'};
+          const item = document.createElement('div');
+          item.className = 'feature-item';
+          const isSel = selection && selection.layerId===layer.id && selection.featureId===f.id;
+          if(isSel) item.style.cssText = 'background:var(--teal-soft);color:var(--teal);';
+
+          const typeTag = document.createElement('span');
+          typeTag.className = 'fi-type';
+          typeTag.textContent = typeAr[f.type] || f.type;
+
+          const label = document.createElement('span');
+          label.className = 'fi-label';
+          label.textContent = featureLabel(f);
+
+          const zoomIcon = document.createElement('span');
+          zoomIcon.className = 'fi-zoom';
+          zoomIcon.title = 'تكبير على العنصر';
+          zoomIcon.innerHTML = '&#x25CE;';
+
+          item.appendChild(typeTag); item.appendChild(label); item.appendChild(zoomIcon);
+
+          item.addEventListener('click', e=>{
+            L.DomEvent.stopPropagation(e);
+            state.activeLayerId = layer.id;
+            selection = {layerId: layer.id, featureId: f.id};
+            zoomToFeature(f);
+            renderFeatures(); renderAttrPanel(); renderLayerList();
+            // switch to attributes tab
+            document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+            const attrTab = document.querySelector('[data-panel="attrPanel"]');
+            if(attrTab){ attrTab.classList.add('active'); document.getElementById('attrPanel').classList.add('active'); }
+          });
+
+          featureList.appendChild(item);
+        });
+      }
+      wrapper.appendChild(featureList);
+      container.appendChild(wrapper);
     });
 
     // ---- رسم أصدقائك (للعرض فقط) ----
@@ -1553,6 +1675,55 @@
     return f;
   }
 
+  /* ---------- Feature Info HUD (name / description / neighbor) ---------- */
+  function showFeatureInfoHud(f, type){
+    featureInfoPendingF = f;
+    const isPoint = (type === 'point');
+    const titles = {point:'معلومات النقطة', polygon:'معلومات المضلع', rectangle:'معلومات المستطيل'};
+    document.getElementById('featureInfoTitle').textContent = titles[type] || 'معلومات العنصر';
+    document.getElementById('fiNameRow').style.display     = isPoint ? 'none' : 'block';
+    document.getElementById('fiDescRow').style.display     = isPoint ? 'none' : 'block';
+    document.getElementById('fiNeighborRow').style.display = isPoint ? 'block' : 'none';
+    document.getElementById('fiName').value     = '';
+    document.getElementById('fiDesc').value     = '';
+    document.getElementById('fiNeighbor').value = '';
+    const hud = document.getElementById('featureInfoHud');
+    hud.style.left = '50%'; hud.style.top = '50%';
+    hud.style.transform = 'translate(-50%, -50%)';
+    hud.style.display = 'block';
+    setTimeout(()=>{
+      const inp = isPoint ? document.getElementById('fiNeighbor') : document.getElementById('fiName');
+      if(inp) inp.focus();
+    }, 60);
+  }
+
+  function applyFeatureInfoHud(){
+    document.getElementById('featureInfoHud').style.display = 'none';
+    const f = featureInfoPendingF; featureInfoPendingF = null;
+    if(!f) return;
+    if(f.type === 'point'){
+      const neighbor = document.getElementById('fiNeighbor').value.trim();
+      if(neighbor) f.attrs['الجار'] = neighbor;
+    } else {
+      const name = document.getElementById('fiName').value.trim();
+      const desc = document.getElementById('fiDesc').value.trim();
+      if(name) f.attrs['name'] = name;
+      if(desc) f.attrs['الوصف'] = desc;
+    }
+    renderAttrPanel(); renderLayerList(); scheduleSave();
+  }
+
+  document.getElementById('featureInfoOk').addEventListener('click', applyFeatureInfoHud);
+  document.getElementById('featureInfoSkip').addEventListener('click', ()=>{
+    document.getElementById('featureInfoHud').style.display = 'none';
+    featureInfoPendingF = null;
+  });
+  // Allow Enter key to confirm the dialog
+  document.getElementById('featureInfoHud').addEventListener('keydown', e=>{
+    if(e.key === 'Enter'){ e.preventDefault(); applyFeatureInfoHud(); }
+    if(e.key === 'Escape'){ document.getElementById('featureInfoHud').style.display='none'; featureInfoPendingF=null; }
+  });
+
   /* ---------- HUD Dialogs Actions ---------- */
   document.getElementById('rectCancel').addEventListener('click', ()=>{ rectHud.style.display='none'; });
   
@@ -1585,6 +1756,7 @@
     selection = {layerId:activeLayer().id, featureId:f.id};
     renderFeatures(); renderAttrPanel(); scheduleSave(); updateHistoryButtons();
     if(window.innerWidth <= 760) openMobileEditPad(f);
+    showFeatureInfoHud(f, 'rectangle');
   });
 
   document.getElementById('goToCancel').addEventListener('click', () => { goToCoordsHud.style.display='none'; });
