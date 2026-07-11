@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>أداة الرسم المكانى المهنية </title>
+<title>أداة الرسم المكانى المهنية - دقة الزوايا</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght=400;500;700&family=Inter:wght=400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -640,10 +640,22 @@
     if(!snapEnabled) return null;
     const pt = map.latLngToContainerPoint(latlng);
     let best=null, bestDist=12;
+    // طبقاتي
     state.layers.forEach(layer=>{
       if(!layer.visible) return;
       layer.features.forEach(f=>{
         if(f.id===excludeFeatureId) return;
+        f.coords.forEach(c=>{
+          const cp = map.latLngToContainerPoint(L.latLng(c[0],c[1]));
+          const d = Math.hypot(cp.x-pt.x, cp.y-pt.y);
+          if(d<bestDist){ bestDist=d; best=c; }
+        });
+      });
+    });
+    // طبقات الأصدقاء (للعرض فقط لكن الإسناب عليها مسموح أثناء الرسم)
+    friendLayers.forEach(layer=>{
+      if(layer.visible === false) return;
+      layer.features.forEach(f=>{
         f.coords.forEach(c=>{
           const cp = map.latLngToContainerPoint(L.latLng(c[0],c[1]));
           const d = Math.hypot(cp.x-pt.x, cp.y-pt.y);
