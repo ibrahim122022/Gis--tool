@@ -11,11 +11,11 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root{
-    --bg:#0d2438;
-    --bg-panel:#123152; --bg-panel-2:#0f2b47;
-    --accent:#e8a33d; --accent-soft:rgba(232,163,61,.16);
-    --teal:#5ec9c0; --teal-soft:rgba(94,201,192,.16);
-    --text:#eef2f0; --text-muted:#84a0b6; --danger:#e2665b; --border:#1c4a73;
+    --bg:#ede4d4;
+    --bg-panel:#faf4ed; --bg-panel-2:#f2e9d8;
+    --accent:#e8604a; --accent-soft:rgba(232,96,74,.16);
+    --teal:#3a8e82; --teal-soft:rgba(58,142,130,.15);
+    --text:#1e3a38; --text-muted:#8a7060; --danger:#c84040; --border:#dcc9b2;
     --mono:'JetBrains Mono', ui-monospace, Consolas, monospace;
     --sans:'Inter', system-ui, -apple-system, sans-serif;
   }
@@ -23,34 +23,86 @@
   html,body{margin:0;height:100%;height:100dvh;background:var(--bg);color:var(--text);font-family:var(--sans);overflow:hidden;}
   .app{display:flex;flex-direction:row;height:100vh;height:100dvh;width:100vw;}
 
-  .toolbar{width:72px;background:var(--bg-panel-2);border-left:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:6px;flex-shrink:0;z-index:500;}
-  .tool-btn{width:52px;height:52px;border-radius:10px;border:1px solid transparent;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--text-muted);transition:.15s;}
-  .tool-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7;}
-  .tool-btn span{font-size:9px;font-family:var(--sans);}
-  .tool-btn:hover:not(:disabled){background:rgba(255,255,255,.05);color:var(--text);}
-  .tool-btn.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);}
-  .tool-btn:disabled{opacity:0.3;cursor:not-allowed;}
-  .toolbar-sep{width:36px;height:1px;background:var(--border);margin:4px 0;}
+  .toolbar{
+    width:80px;
+    background:linear-gradient(180deg,#f5ead8 0%,#e6d5be 100%);
+    border-left:1px solid var(--border);
+    box-shadow:-2px 0 18px rgba(160,120,70,.18);
+    display:flex;flex-direction:column;align-items:center;
+    padding:10px 0;gap:4px;flex-shrink:0;z-index:500;
+  }
+  .tool-btn{
+    width:58px;height:58px;border-radius:14px;border:1px solid transparent;
+    background:transparent;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:3px;cursor:pointer;color:var(--text-muted);
+    transition:all .2s cubic-bezier(.25,.8,.25,1);
+  }
+  .tool-btn svg{
+    width:23px;height:23px;stroke:currentColor;fill:none;
+    stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:inherit;
+  }
+  .tool-btn span{font-size:8px;font-family:var(--sans);font-weight:500;letter-spacing:.01em;}
+
+  /* ── Per-tool accent colors — desert & coral palette ── */
+  .tool-btn[data-tool="select"]  {--tc:#3a8e82;}
+  .tool-btn[data-tool="point"]   {--tc:#e8604a;}
+  .tool-btn[data-tool="line"]    {--tc:#4a9e8a;}
+  .tool-btn[data-tool="polygon"] {--tc:#b06a28;}
+  .tool-btn[data-tool="rectangle"]{--tc:#c87840;}
+  .tool-btn[data-tool="circle"]  {--tc:#7060a8;}
+  .tool-btn[data-tool="measure"] {--tc:#b08020;}
+  #goToCoordsBtn {--tc:#4a9e8a;}
+  #undoBtn,#redoBtn{--tc:#9a8878;}
+  #snapBtn   {--tc:#b09020;}
+  #locateBtn {--tc:#e8604a;}
+  #fitBtn    {--tc:#4a9e8a;}
+  #exportBtn {--tc:#3a8e82;}
+  #importBtn {--tc:#b08020;}
+  #labelsBtn {--tc:#7060a8;}
+  #screenshotBtn{--tc:#9a8878;}
+
+  .tool-btn:hover:not(:disabled){
+    color:var(--tc, var(--teal));
+    background:color-mix(in srgb,var(--tc,var(--teal)) 14%,transparent);
+    border-color:color-mix(in srgb,var(--tc,var(--teal)) 35%,transparent);
+    transform:translateY(-1px);
+  }
+  .tool-btn.active{
+    color:var(--tc, var(--accent));
+    background:color-mix(in srgb,var(--tc,var(--accent)) 18%,transparent);
+    border-color:color-mix(in srgb,var(--tc,var(--accent)) 60%,transparent);
+    box-shadow:0 0 16px color-mix(in srgb,var(--tc,var(--accent)) 22%,transparent),
+               0 2px 8px rgba(0,0,0,.1);
+  }
+  .tool-btn:disabled{opacity:0.28;cursor:not-allowed;}
+  .toolbar-sep{width:42px;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:1px 0;}
 
   .main{flex:1;position:relative;display:flex;flex-direction:column;min-width:0;}
   .canvas-wrap{flex:1;position:relative;overflow:hidden;}
-  #map{width:100%;height:100%;background:#0d2438;}
+  #map{width:100%;height:100%;background:#c8d8d0;}
   #map.tool-select{cursor:default;}
   #map.tool-draw{cursor:crosshair;}
 
-  .basemap-toggle{position:absolute;top:10px;left:10px;z-index:450;background:var(--bg-panel);border:1px solid var(--border);border-radius:9px;display:flex;padding:3px;gap:3px;box-shadow:0 4px 14px rgba(0,0,0,.35);}
-  .basemap-toggle button{border:none;background:transparent;color:var(--text-muted);font-size:11.5px;padding:6px 10px;border-radius:6px;cursor:pointer;font-family:var(--sans);}
-  .basemap-toggle button.active{background:var(--accent-soft);color:var(--accent);font-weight:600;}
+  .basemap-toggle{position:absolute;top:10px;left:10px;z-index:450;background:rgba(250,244,237,.93);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:10px;display:flex;padding:3px;gap:3px;box-shadow:0 4px 18px rgba(140,100,60,.2);}
+  .basemap-toggle button{border:none;background:transparent;color:var(--text-muted);font-size:11px;padding:6px 11px;border-radius:7px;cursor:pointer;font-family:var(--sans);transition:all .15s;}
+  .basemap-toggle button.active{background:var(--teal-soft);color:var(--teal);font-weight:700;}
+  .basemap-toggle button:hover:not(.active){color:var(--text);background:rgba(0,0,0,.05);}
 
-  .drive-control{position:absolute;top:10px;right:10px;z-index:450;background:var(--bg-panel);border:1px solid var(--border);border-radius:9px;padding:8px 12px;box-shadow:0 4px 14px rgba(0,0,0,.35);display:flex;align-items:center;gap:8px;font-size:11.5px;}
+  .drive-control{position:absolute;top:10px;right:10px;z-index:450;background:rgba(250,244,237,.93);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:9px;padding:8px 12px;box-shadow:0 4px 16px rgba(140,100,60,.18);display:flex;align-items:center;gap:8px;font-size:11.5px;}
   .drive-control svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;flex-shrink:0;}
   .drive-control.connected{color:var(--teal);}
   .drive-control.disconnected{color:var(--text-muted);}
-  .drive-control button{border:none;background:var(--accent);color:#1a1200;font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:var(--sans);}
+  .drive-control button{border:none;background:var(--accent);color:#fff;font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:var(--sans);}
   .drive-control .drive-msg{font-family:var(--mono);font-size:10.5px;opacity:.85;}
 
-  .statusbar{height:30px;background:var(--bg-panel-2);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:18px;font-family:var(--mono);font-size:11.5px;color:var(--text-muted);flex-shrink:0;}
-  .statusbar b{color:var(--teal);font-weight:500;}
+  .statusbar{
+    height:32px;
+    background:linear-gradient(90deg,#e8dcc8 0%,#ede4d4 100%);
+    border-top:1px solid var(--border);
+    display:flex;align-items:center;padding:0 16px;gap:16px;
+    font-family:var(--mono);font-size:11px;color:var(--text-muted);flex-shrink:0;
+  }
+  .statusbar b{color:var(--teal);font-weight:600;}
   .statusbar .spacer{flex:1;}
   .save-indicator{opacity:0;transition:opacity .3s;color:var(--teal);}
   .save-indicator.show{opacity:1;}
@@ -61,28 +113,30 @@
   .rect-hud input, .rect-hud select{width:100%;background:var(--bg-panel-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 7px;font-family:var(--mono);font-size:12px;margin-top:2px;}
   .rect-hud .row-btns{display:flex;gap:6px;margin-top:10px;}
   .rect-hud .row-btns button{flex:1;border-radius:6px;border:none;padding:7px 0;font-size:11.5px;cursor:pointer;font-family:var(--sans);font-weight:600;}
-  .btn-create{background:var(--accent);color:#1a1200;}
+  .btn-create{background:var(--accent);color:#fff;}
   .btn-cancel{background:var(--bg-panel-2);color:var(--text-muted);border:1px solid var(--border) !important;}
 
   .go-to-hud { width: 220px; border-color: var(--teal); }
 
-  .sidebar{width:280px;background:var(--bg-panel);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
-  .tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
-  .tab{flex:1;text-align:center;padding:11px 0;font-size:12.5px;color:var(--text-muted);cursor:pointer;font-weight:600;border-bottom:2px solid transparent;}
+  .sidebar{width:280px;background:linear-gradient(180deg,#faf4ed 0%,#f0e6d6 100%);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
+  .tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;background:#f0e6d6;}
+  .tab{flex:1;text-align:center;padding:12px 0;font-size:12px;color:var(--text-muted);cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;}
   .tab.active{color:var(--teal);border-bottom-color:var(--teal);}
+  .tab:hover:not(.active){color:var(--text);border-bottom-color:rgba(0,0,0,.12);}
   .panel{flex:1;overflow-y:auto;padding:12px;display:none;}
   .panel.active{display:block;}
 
   .section-title{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin:4px 0 8px;font-weight:600;}
-  .layer-row{display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;background:var(--bg-panel-2);margin-bottom:6px;border:1px solid transparent;cursor:pointer;}
-  .layer-row.active{border-color:var(--teal);}
-  .swatch{width:16px;height:16px;border-radius:4px;flex-shrink:0;border:1px solid rgba(255,255,255,.2);cursor:pointer;}
+  .layer-row{display:flex;align-items:center;gap:8px;padding:8px;border-radius:10px;background:rgba(255,250,242,.85);margin-bottom:6px;border:1px solid var(--border);cursor:pointer;transition:all .15s;box-shadow:0 1px 4px rgba(150,110,60,.08);}
+  .layer-row:hover{border-color:rgba(58,142,130,.35);background:rgba(58,142,130,.05);}
+  .layer-row.active{border-color:var(--teal);background:rgba(58,142,130,.1);box-shadow:0 0 10px rgba(58,142,130,.15);}
+  .swatch{width:16px;height:16px;border-radius:5px;flex-shrink:0;border:1px solid rgba(0,0,0,.15);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15);}
   .layer-row .lname{flex:1;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .layer-row .lcount{font-size:10.5px;color:var(--text-muted);font-family:var(--mono);}
   .icon-btn{background:none;border:none;color:var(--text-muted);cursor:pointer;padding:3px;display:flex;}
   .icon-btn:hover{color:var(--text);}
-  .add-btn{width:100%;padding:8px;border-radius:8px;border:1px dashed var(--border);background:transparent;color:var(--text-muted);cursor:pointer;font-size:12px;margin-top:4px;}
-  .add-btn:hover{border-color:var(--teal);color:var(--teal);}
+  .add-btn{width:100%;padding:8px;border-radius:8px;border:1px dashed var(--border);background:transparent;color:var(--text-muted);cursor:pointer;font-size:12px;margin-top:4px;transition:all .15s;}
+  .add-btn:hover{border-color:var(--teal);color:var(--teal);background:var(--teal-soft);}
   .empty-state{color:var(--text-muted);font-size:12px;text-align:center;padding:40px 10px;line-height:1.7;}
 
   /* ---- expand / feature-list ---- */
@@ -94,11 +148,11 @@
   .feature-list.open{display:block;}
   .feature-item{display:flex;align-items:center;gap:7px;padding:5px 10px;cursor:pointer;font-size:11.5px;color:var(--text-muted);transition:background .1s,color .1s;}
   .feature-item:hover{background:var(--teal-soft);color:var(--teal);}
-  .feature-item .fi-type{font-size:9px;font-family:var(--mono);background:var(--bg-panel-2);padding:1px 5px;border-radius:3px;border:1px solid var(--border);color:var(--text-muted);flex-shrink:0;}
+  .feature-item .fi-type{font-size:9px;font-family:var(--mono);background:var(--bg-panel-2);padding:1px 5px;border-radius:3px;border:1px solid var(--border);color:var(--text-muted);flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,.06);}
   .feature-item .fi-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--mono);}
   .feature-item .fi-zoom{opacity:0;font-size:10px;color:var(--teal);}
   .feature-item:hover .fi-zoom{opacity:1;}
-  .attr-block{background:var(--bg-panel-2);border-radius:10px;padding:12px;margin-bottom:12px;}
+  .attr-block{background:rgba(255,250,243,.8);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px;}
   .attr-block .ftype{color:var(--accent);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
   .stat-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11.5px;color:var(--text-muted);margin-top:6px;}
   .stat-row b{color:var(--text);font-weight:500;}
@@ -110,9 +164,11 @@
   .rect-edit-grid label{font-size:10px;color:var(--text-muted);}
   .rect-edit-grid input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 7px;font-family:var(--mono);font-size:12px;margin-top:2px;}
   .danger-btn{width:100%;margin-top:10px;padding:8px;border-radius:8px;border:1px solid var(--danger);background:transparent;color:var(--danger);cursor:pointer;font-size:12px;font-weight:600;}
-  .danger-btn:hover{background:rgba(226,102,91,.12);}
-  ::-webkit-scrollbar{width:8px;}
-  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+  .danger-btn:hover{background:rgba(200,64,64,.12);}
+  ::-webkit-scrollbar{width:6px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:#cbb99e;border-radius:3px;}
+  ::-webkit-scrollbar-thumb:hover{background:#b8a080;}
 
   /* ---- Live Location Dot (Google Maps style) ---- */
   .loc-dot-wrap{position:relative;width:22px;height:22px;}
@@ -142,17 +198,17 @@
   }
 
   .leaflet-popup-content{font-family:var(--sans);direction:rtl;}
-  .vertex-marker{background:var(--bg);border:2px solid var(--teal);border-radius:50%;cursor:move;}
-  .vertex-ghost-marker{background:transparent;border:2px dashed rgba(94,201,192,0.6);border-radius:50%;cursor:pointer;}
-  .rect-rotate-marker{background:#e8a33d;border:2px solid #0d2438;border-radius:50%;cursor:alias;}
-  .rect-scale-marker{background:#5ec9c0;border:2px solid #0d2438;border-radius:50%;cursor:se-resize;}
+  .vertex-marker{background:var(--bg-panel);border:2px solid var(--teal);border-radius:50%;cursor:move;box-shadow:0 1px 4px rgba(0,0,0,.2);}
+  .vertex-ghost-marker{background:transparent;border:2px dashed rgba(58,142,130,.6);border-radius:50%;cursor:pointer;}
+  .rect-rotate-marker{background:var(--accent);border:2px solid var(--bg-panel);border-radius:50%;cursor:alias;}
+  .rect-scale-marker{background:var(--teal);border:2px solid var(--bg-panel);border-radius:50%;cursor:se-resize;}
 
-  .mobile-sidebar-toggle{display:none;position:fixed;bottom:calc(76px + env(safe-area-inset-bottom, 0px) + 16px);left:12px;z-index:900;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#1a1200;border:none;box-shadow:0 6px 16px rgba(0,0,0,.4);align-items:center;justify-content:center;}
+  .mobile-sidebar-toggle{display:none;position:fixed;bottom:calc(76px + env(safe-area-inset-bottom, 0px) + 16px);left:12px;z-index:900;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;border:none;box-shadow:0 6px 16px rgba(160,80,50,.35);align-items:center;justify-content:center;}
   .mobile-sidebar-toggle svg{width:22px;height:22px;}
 
   .mobile-finish-btn {
     display: none; position: absolute; bottom: 20px; right: 20px; z-index: 999;
-    background: var(--teal); color: #0d2438; border: none; border-radius: 30px;
+    background: var(--teal); color: #fff; border: none; border-radius: 30px;
     padding: 12px 20px; font-weight: bold; font-size: 13px; font-family: var(--sans);
     box-shadow: 0 4px 15px rgba(0,0,0,0.4); align-items: center; gap: 6px;
   }
@@ -181,19 +237,20 @@
     font-family: var(--sans); display: flex; align-items: center; justify-content: center; gap: 4px;
   }
   .mobile-pad-btn.active { background: var(--teal-soft); border-color: var(--teal); color: var(--teal); }
-  .mobile-pad-btn.action-btn { background: var(--accent); color: #1a1200; border: none; }
+  .mobile-pad-btn.action-btn { background: var(--accent); color: #fff; border: none; }
 
   @media (max-width: 760px){
     .app{flex-direction:column;}
     .toolbar{
-      width:100%;height:calc(66px + env(safe-area-inset-bottom, 0px) + 16px);
+      width:100%;height:calc(68px + env(safe-area-inset-bottom, 0px) + 16px);
       padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 16px);
       flex-direction:row;border-left:none;border-top:1px solid var(--border);
       order:3;overflow-x:auto;padding-right:6px;padding-left:6px;padding-top:6px;
       -webkit-overflow-scrolling:touch;justify-content:flex-start;box-sizing:border-box;
+      background:linear-gradient(90deg,#f5ead8 0%,#e6d5be 100%);
     }
-    .toolbar-sep{width:1px;height:34px;margin:0 5px;flex-shrink:0;}
-    .tool-btn{width:46px;height:46px;flex-shrink:0;}
+    .toolbar-sep{width:1px;height:36px;margin:0 4px;flex-shrink:0;}
+    .tool-btn{width:48px;height:48px;flex-shrink:0;}
     .tool-btn span{font-size:7.5px;}
     .main{order:1;min-height:0;}
     .sidebar{
@@ -210,6 +267,33 @@
     .rect-hud{left:50% !important;top:50% !important;transform:translate(-50%,-50%);width:82vw;max-width:260px;}
     .statusbar{font-size:10px;gap:10px;padding:0 8px;flex-wrap:wrap;height:auto;min-height:28px;}
   }
+
+  /* ---- Feature label tooltips ---- */
+  .feature-label-tip{
+    background:rgba(30,58,56,.92);color:#faf4ed;border:1px solid rgba(58,142,130,.5);
+    border-radius:6px;font-size:10.5px;font-family:var(--mono);padding:2px 9px;
+    box-shadow:0 2px 10px rgba(30,58,56,.3);white-space:nowrap;pointer-events:none;
+  }
+  .feature-label-tip.leaflet-tooltip-top::before{display:none;}
+
+  /* ---- Per-feature color swatch in attr panel ---- */
+  .fcolor-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;
+    padding-bottom:10px;border-bottom:1px solid var(--border);}
+  .fcolor-row span{font-size:11px;color:var(--text-muted);}
+  .fcolor-row input[type=color]{width:30px;height:26px;border:1px solid var(--border);
+    padding:1px;background:var(--bg-panel);cursor:pointer;border-radius:5px;}
+  .fcolor-row button{font-size:10.5px;color:var(--text-muted);background:none;
+    border:1px solid var(--border);border-radius:4px;padding:3px 8px;cursor:pointer;}
+  .fcolor-row button:hover{color:var(--teal);border-color:var(--teal);}
+
+  /* ---- Print: map only ---- */
+  @media print{
+    .toolbar,.sidebar,.statusbar,.basemap-toggle,.drive-control,
+    .rect-hud,.mobile-sidebar-toggle,.mobile-finish-btn,.mobile-edit-pad,
+    .leaflet-control,.leaflet-top,.leaflet-bottom{display:none!important;}
+    .app,.main,.canvas-wrap{height:100vh!important;display:block!important;}
+    #map{height:100vh!important;width:100vw!important;}
+  }
 </style>
 </head>
 <body>
@@ -220,55 +304,165 @@
   </button>
 
   <div class="toolbar" id="toolbar">
+
+    <!-- رسم -->
     <button class="tool-btn active" data-tool="select" title="تحديد وتحرير">
-      <svg viewBox="0 0 24 24"><path d="M4 3l7 17 2-7 7-2z"/></svg><span>تحديد</span>
+      <svg viewBox="0 0 24 24">
+        <path d="M5 2l13.5 9.5-7.5 1.3-2.8 7.7z" fill="currentColor" opacity=".22"/>
+        <path d="M5 2l13.5 9.5-7.5 1.3-2.8 7.7z" stroke-width="1.8"/>
+        <circle cx="5" cy="2" r="1.8" fill="currentColor" stroke="none"/>
+      </svg><span>تحديد</span>
     </button>
+
     <button class="tool-btn" data-tool="point" title="نقطة">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="8" stroke-dasharray="2 2"/></svg><span>نقطة</span>
+      <svg viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="4.5" fill="currentColor" opacity=".2"/>
+        <circle cx="12" cy="12" r="4.5" stroke-width="2"/>
+        <circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"/>
+        <path d="M12 4.5v2M12 17.5v2M4.5 12h2M17.5 12h2" stroke-width="1.5"/>
+      </svg><span>نقطة</span>
     </button>
+
     <button class="tool-btn" data-tool="line" title="خط">
-      <svg viewBox="0 0 24 24"><path d="M4 18L20 6"/><circle cx="4" cy="18" r="1.6" fill="currentColor"/><circle cx="20" cy="6" r="1.6" fill="currentColor"/></svg><span>خط</span>
+      <svg viewBox="0 0 24 24">
+        <line x1="5" y1="19" x2="19" y2="5" stroke-width="2.3"/>
+        <circle cx="5" cy="19" r="2.6" fill="currentColor" stroke="none"/>
+        <circle cx="19" cy="5" r="2.6" fill="currentColor" stroke="none"/>
+      </svg><span>خط</span>
     </button>
+
     <button class="tool-btn" data-tool="polygon" title="مضلع">
-      <svg viewBox="0 0 24 24"><path d="M12 3l8 6-3 10H7L4 9z"/></svg><span>مضلع</span>
+      <svg viewBox="0 0 24 24">
+        <polygon points="12,3 21,9 18,20 6,20 3,9" fill="currentColor" opacity=".18" stroke-width="2" stroke-linejoin="round"/>
+        <circle cx="12" cy="3"  r="2" fill="currentColor" stroke="none"/>
+        <circle cx="21" cy="9"  r="2" fill="currentColor" stroke="none"/>
+        <circle cx="18" cy="20" r="2" fill="currentColor" stroke="none"/>
+        <circle cx="6"  cy="20" r="2" fill="currentColor" stroke="none"/>
+        <circle cx="3"  cy="9"  r="2" fill="currentColor" stroke="none"/>
+      </svg><span>مضلع</span>
     </button>
+
     <button class="tool-btn" data-tool="rectangle" title="مستطيل بـ 3 نقاط">
-      <svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="9"/><path d="M4 5.5h16M4 4v3M20 4v3"/></svg><span>مستطيل</span>
+      <svg viewBox="0 0 24 24">
+        <rect x="3" y="7" width="18" height="12" rx="1.5" fill="currentColor" opacity=".16" stroke-width="2"/>
+        <circle cx="3"  cy="7"  r="2.2" fill="currentColor" stroke="none"/>
+        <circle cx="21" cy="7"  r="2.2" fill="currentColor" stroke="none"/>
+        <circle cx="21" cy="19" r="2.2" fill="currentColor" stroke="none"/>
+        <circle cx="3"  cy="19" r="2.2" fill="currentColor" stroke="none"/>
+        <circle cx="12" cy="7"  r="1.4" fill="currentColor" opacity=".5" stroke="none"/>
+      </svg><span>مستطيل</span>
     </button>
+
     <button class="tool-btn" data-tool="circle" title="دائرة بنصف قطر">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 12h8"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg><span>دائرة</span>
+      <svg viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="8" fill="currentColor" opacity=".13" stroke-width="2"/>
+        <line x1="12" y1="12" x2="20" y2="12" stroke-width="2.2"/>
+        <circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/>
+        <circle cx="20" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+      </svg><span>دائرة</span>
     </button>
-    
+
     <div class="toolbar-sep"></div>
 
+    <!-- أدوات -->
     <button class="tool-btn" id="goToCoordsBtn" title="انتقال إلى إحداثيات">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20M12 7a5 5 0 100 10 5 5 0 000-10z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span>إحداثي</span>
-    </button>
-    
-    <div class="toolbar-sep"></div>
-    
-    <button class="tool-btn" id="undoBtn" title="تراجع (Ctrl+Z)" disabled>
-      <svg viewBox="0 0 24 24"><path d="M3 7v6h6M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/></svg><span>تراجع</span>
-    </button>
-    <button class="tool-btn" id="redoBtn" title="إعادة (Ctrl+Y)" disabled>
-      <svg viewBox="0 0 24 24"><path d="M21 7v6h-6M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7"/></svg><span>إعادة</span>
+      <svg viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9" fill="currentColor" opacity=".1" stroke-width="1.8"/>
+        <path d="M12 3v3.5M12 17.5V21M3 12h3.5M17.5 12H21" stroke-width="2.2"/>
+        <circle cx="12" cy="12" r="2.8" fill="currentColor" opacity=".65" stroke="none"/>
+      </svg><span>إحداثي</span>
     </button>
 
     <div class="toolbar-sep"></div>
+
+    <button class="tool-btn" id="undoBtn" title="تراجع (Ctrl+Z)" disabled>
+      <svg viewBox="0 0 24 24">
+        <path d="M3 9.5V15h5.5" stroke-width="2.2"/>
+        <path d="M3 15A9 9 0 1012 3c-2.6 0-4.9 1-6.6 2.7L3 8" stroke-width="2"/>
+      </svg><span>تراجع</span>
+    </button>
+
+    <button class="tool-btn" id="redoBtn" title="إعادة (Ctrl+Y)" disabled>
+      <svg viewBox="0 0 24 24">
+        <path d="M21 9.5V15h-5.5" stroke-width="2.2"/>
+        <path d="M21 15A9 9 0 1012 3c2.6 0 4.9 1 6.6 2.7L21 8" stroke-width="2"/>
+      </svg><span>إعادة</span>
+    </button>
+
+    <div class="toolbar-sep"></div>
+
     <button class="tool-btn active" id="snapBtn" title="تفعيل/تعطيل السناب">
-      <svg viewBox="0 0 24 24"><path d="M4 12h4M16 12h4M12 4v4M12 16v4"/><circle cx="12" cy="12" r="3"/></svg><span>سناب</span>
+      <svg viewBox="0 0 24 24">
+        <path d="M7 4.5v6.5a5 5 0 0010 0V4.5" stroke-width="2.2"/>
+        <path d="M5 4.5h4M15 4.5h4" stroke-width="2.2"/>
+        <line x1="12" y1="17" x2="12" y2="21" stroke-width="2" opacity=".55"/>
+        <path d="M9.5 21h5" stroke-width="2.2"/>
+      </svg><span>سناب</span>
     </button>
+
     <div class="toolbar-sep"></div>
+
     <button class="tool-btn" id="locateBtn" title="تحديد موقعي الحالي">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span>موقعي</span>
+      <svg viewBox="0 0 24 24">
+        <path d="M12 21S4 14.5 4 9.5a8 8 0 0116 0C20 14.5 12 21 12 21z" fill="currentColor" opacity=".18" stroke-width="2"/>
+        <circle cx="12" cy="9.5" r="3.2" stroke-width="2"/>
+        <circle cx="12" cy="9.5" r="1.4" fill="currentColor" stroke="none"/>
+      </svg><span>موقعي</span>
     </button>
+
     <button class="tool-btn" id="fitBtn" title="ملائمة العرض">
-      <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>ملائمة</span>
+      <svg viewBox="0 0 24 24">
+        <path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6" stroke-width="2.3"/>
+        <circle cx="12" cy="12" r="1.8" fill="currentColor" opacity=".45" stroke="none"/>
+      </svg><span>ملائمة</span>
     </button>
+
     <div class="toolbar-sep"></div>
-    <button class="tool-btn" id="exportBtn" title="حفظ كملف محلي">
-      <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 19h14"/></svg><span>تصدير</span>
+
+    <button class="tool-btn" id="exportBtn" title="حفظ كملف GeoJSON">
+      <svg viewBox="0 0 24 24">
+        <path d="M12 4v13" stroke-width="2.3"/>
+        <path d="M7 12l5 5 5-5" stroke-width="2.3"/>
+        <rect x="3" y="18" width="18" height="3.5" rx="1.5" fill="currentColor" opacity=".22" stroke-width="1.4"/>
+      </svg><span>تصدير</span>
     </button>
+
+    <input type="file" id="importFileInput" accept=".geojson,.json" style="display:none;">
+    <button class="tool-btn" id="importBtn" title="استيراد ملف GeoJSON">
+      <svg viewBox="0 0 24 24">
+        <path d="M12 15.5V2.5" stroke-width="2.3"/>
+        <path d="M7 7l5-5 5 5" stroke-width="2.3"/>
+        <rect x="3" y="18" width="18" height="3.5" rx="1.5" fill="currentColor" opacity=".22" stroke-width="1.4"/>
+      </svg><span>استيراد</span>
+    </button>
+
+    <div class="toolbar-sep"></div>
+
+    <button class="tool-btn" data-tool="measure" title="قياس المسافة بين نقطتين">
+      <svg viewBox="0 0 24 24">
+        <line x1="3.5" y1="20.5" x2="20.5" y2="3.5" stroke-width="2.4"/>
+        <path d="M7 17l-1.5 1.7M10.5 13.5l-1.5 1.7M14 10l1.5-1.7M17.5 6.5l1.5-1.7" stroke-width="1.8"/>
+        <circle cx="3.5"  cy="20.5" r="2" fill="currentColor" stroke="none"/>
+        <circle cx="20.5" cy="3.5"  r="2" fill="currentColor" stroke="none"/>
+      </svg><span>قياس</span>
+    </button>
+
+    <button class="tool-btn" id="labelsBtn" title="إظهار / إخفاء أسماء العناصر">
+      <svg viewBox="0 0 24 24">
+        <path d="M20.5 4H9.3a1 1 0 00-.8.4L4 12l4.5 7.6a1 1 0 00.8.4H20.5a1 1 0 001-1V5a1 1 0 00-1-1z" fill="currentColor" opacity=".18" stroke-width="1.8"/>
+        <path d="M12 9h5M12 12h5M12 15h3" stroke-width="2"/>
+      </svg><span>تسميات</span>
+    </button>
+
+    <button class="tool-btn" id="screenshotBtn" title="طباعة / تصدير الخريطة كصورة">
+      <svg viewBox="0 0 24 24">
+        <rect x="2" y="7" width="20" height="14" rx="2" fill="currentColor" opacity=".14" stroke-width="1.8"/>
+        <path d="M7 7V4h10v3" stroke-width="1.8"/>
+        <circle cx="12" cy="14" r="3.5" fill="currentColor" opacity=".3" stroke-width="1.8"/>
+        <circle cx="12" cy="14" r="1.5" fill="currentColor" stroke="none"/>
+      </svg><span>طباعة</span>
+    </button>
+
   </div>
 
   <div class="main">
@@ -439,6 +633,11 @@
   let undoStack = [];
   let redoStack = [];
 
+  // --- Measure tool state ---
+  let measurePt1 = null, measureMarker = null, measureLine = null;
+  // --- Labels toggle ---
+  let labelsVisible = false;
+
   const mapEl = document.getElementById('map');
   const rectHud = document.getElementById('rectHud');
   const goToCoordsHud = document.getElementById('goToCoordsHud');
@@ -468,6 +667,7 @@
     attribution: '© OpenStreetMap contributors', maxZoom:22, subdomains:'abc'
   });
   satLayer.addTo(map);
+  const labelsLayerGroup = L.layerGroup().addTo(map);
 
   document.getElementById('btnSat').addEventListener('click', ()=>{
     map.removeLayer(streetsLayer); map.addLayer(satLayer);
@@ -918,7 +1118,7 @@
       if(layer.visible){ if(!map.hasLayer(lg)) lg.addTo(map); } else { if(map.hasLayer(lg)) map.removeLayer(lg); }
       layer.features.forEach(f=>{
         const isSel = selection && selection.layerId===layer.id && selection.featureId===f.id;
-        const color = layer.color;
+        const color = f.color || layer.color;
         let shape;
         if(f.type==='point'){
           shape = L.circleMarker(f.coords[0], {radius:7, color: isSel?'#5ec9c0':'#0d2438', weight:isSel?2.5:1.4, fillColor:color, fillOpacity:0.95});
@@ -1021,6 +1221,7 @@
         }
       });
     });
+    renderLabels();
   }
 
   /* ---------- Rendering friend (read-only) layers ---------- */
@@ -1151,6 +1352,17 @@
       const segLen = haversine(last[0],last[1], snapped.lat, snapped.lng);
       document.getElementById('stTemp').textContent = 'طول الضلع: ' + segLen.toFixed(2) + ' م';
     }
+    else if(tool==='measure' && measurePt1){
+      const snM = effectiveLatLng(e);
+      if(measureLine){ map.removeLayer(measureLine); measureLine=null; }
+      measureLine = L.polyline(
+        [[measurePt1.lat,measurePt1.lng],[snM.lat,snM.lng]],
+        {color:'#e8a33d',weight:2,dashArray:'5 5'}
+      ).addTo(map);
+      const d = haversine(measurePt1.lat,measurePt1.lng,snM.lat,snM.lng);
+      document.getElementById('stTemp').textContent =
+        '📏 ' + (d>=1000?(d/1000).toFixed(2)+' كم':d.toFixed(1)+' م');
+    }
   });
 
   const endDrag = () => {
@@ -1252,6 +1464,28 @@
       const hudY = Math.min(Math.max(pt.y+16,8), wrapRect.height-160);
       circleHud.style.left = hudX+'px'; circleHud.style.top = hudY+'px'; circleHud.style.display='block';
     }
+    else if(tool==='measure'){
+      if(!measurePt1){
+        measurePt1 = snapped;
+        if(measureMarker) map.removeLayer(measureMarker);
+        measureMarker = L.circleMarker([snapped.lat,snapped.lng],
+          {radius:7,color:'#e8a33d',weight:2,fillColor:'#e8a33d',fillOpacity:.85}).addTo(map);
+        document.getElementById('stHint').textContent = '📏 انقر على النقطة الثانية لإتمام القياس...';
+      } else {
+        const dist = haversine(measurePt1.lat,measurePt1.lng,snapped.lat,snapped.lng);
+        const bearing = ((Math.atan2(snapped.lng-measurePt1.lng,snapped.lat-measurePt1.lat)*180/Math.PI)+360)%360;
+        const distStr = dist>=1000?(dist/1000).toFixed(3)+' كم':dist.toFixed(2)+' م';
+        if(measureLine){ map.removeLayer(measureLine); measureLine=null; }
+        measureLine = L.polyline(
+          [[measurePt1.lat,measurePt1.lng],[snapped.lat,snapped.lng]],
+          {color:'#e8a33d',weight:2.5}
+        ).addTo(map);
+        document.getElementById('stTemp').textContent = `📏 ${distStr} | اتجاه: ${bearing.toFixed(1)}°`;
+        document.getElementById('stHint').textContent = 'انقر نقطة جديدة لقياس مسافة أخرى';
+        if(measureMarker){ map.removeLayer(measureMarker); measureMarker=null; }
+        measurePt1 = null;
+      }
+    }
   });
 
   map.on('dblclick', e=>{
@@ -1297,6 +1531,9 @@
       mobileFinishBtn.style.display = 'none';
       closeMobileEditPad();
       if(tempLine){map.removeLayer(tempLine); tempLine=null;}
+      if(measurePt1){ measurePt1=null; }
+      if(measureMarker){ map.removeLayer(measureMarker); measureMarker=null; }
+      if(measureLine){ map.removeLayer(measureLine); measureLine=null; }
       document.getElementById('stTemp').textContent='';
       updateHistoryButtons();
     }
@@ -1339,6 +1576,9 @@
     closeMobileEditPad();
     if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
     if(snapMarker){ map.removeLayer(snapMarker); snapMarker=null; }
+    if(measurePt1){ measurePt1=null; }
+    if(measureMarker){ map.removeLayer(measureMarker); measureMarker=null; }
+    if(measureLine){ map.removeLayer(measureLine); measureLine=null; }
     document.getElementById('stTemp').textContent='';
     
     if (tool === 'rectangle') {
@@ -1642,7 +1882,14 @@
     }
     html += `</div>`;
 
-    html += `<div class="section-title" style="margin-top:12px;">الحقول الوصفية</div>`;
+    const _fLayer = getLayer(selection.layerId);
+    html += `<div class="fcolor-row">
+      <span>لون العنصر:</span>
+      <input type="color" id="fcPicker" value="${f.color || (_fLayer ? _fLayer.color : '#e8a33d')}">
+      ${f.color ? '<button id="fcReset">↩ لون الطبقة</button>' : ''}
+    </div>`;
+
+    html += `<div class="section-title" style="margin-top:0;">الحقول الوصفية</div>`;
     Object.keys(f.attrs).forEach(k=>{
       html += `<div class="field-row">
         <input type="text" class="key" value="${escapeHtml(k)}" data-orig="${escapeHtml(k)}">
@@ -1703,6 +1950,14 @@
       const l = getLayer(selection.layerId);
       l.features = l.features.filter(x=>x.id!==selection.featureId);
       selection = null; closeMobileEditPad(); renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
+    });
+    const fcPicker = document.getElementById('fcPicker');
+    if(fcPicker) fcPicker.addEventListener('input', e=>{
+      f.color = e.target.value; renderFeatures(); scheduleSave();
+    });
+    const fcReset = document.getElementById('fcReset');
+    if(fcReset) fcReset.addEventListener('click', ()=>{
+      delete f.color; renderAttrPanel(); renderFeatures(); scheduleSave();
     });
   }
 
@@ -1966,6 +2221,106 @@
     } else {
       startLocationTracking();
     }
+  });
+
+  /* ---------- Import GeoJSON from file ---------- */
+  function importGeoJSON(geojson){
+    if(!geojson || !Array.isArray(geojson.features) || !geojson.features.length){
+      alert('الملف لا يحتوي على عناصر GeoJSON صالحة'); return;
+    }
+    pushStateToUndo();
+    const byLayer = {};
+    geojson.features.forEach(feat=>{
+      const lName = (feat.properties && feat.properties.layer) || 'مستورد';
+      if(!byLayer[lName]) byLayer[lName] = [];
+      byLayer[lName].push(feat);
+    });
+    Object.keys(byLayer).forEach(lName=>{
+      let layer = state.layers.find(l=>l.name===lName);
+      if(!layer){
+        const id='L'+uid(), color=palette[state.nextColorIdx++%palette.length];
+        layer={id, name:lName, color, visible:true, features:[]};
+        state.layers.push(layer);
+      }
+      byLayer[lName].forEach(feat=>{
+        try{
+          const props=Object.assign({},feat.properties||{});
+          const rectInfo=props.rect_info, circleInfo=props.circle_info;
+          delete props.layer; delete props.type; delete props.rect_info; delete props.circle_info;
+          let coords, type=feat.properties&&feat.properties.type;
+          const g=feat.geometry;
+          if(g.type==='Point'){
+            type=type||'point'; coords=[[g.coordinates[1],g.coordinates[0]]];
+          } else if(g.type==='LineString'){
+            type=type||'line'; coords=g.coordinates.map(c=>[c[1],c[0]]);
+          } else {
+            const ring=g.coordinates[0]||g.coordinates;
+            coords=ring.map(c=>[c[1],c[0]]);
+            if(coords.length>1){const a=coords[0],b=coords[coords.length-1];if(a[0]===b[0]&&a[1]===b[1])coords.pop();}
+            type=type||'polygon';
+          }
+          const nf={id:uid(),type,coords,attrs:props};
+          if(type==='rectangle'&&rectInfo){nf.rect=rectInfo;syncRectCoords(nf);}
+          if(type==='circle'&&circleInfo){nf.circle=circleInfo;syncCircleCoords(nf);}
+          layer.features.push(nf);
+        }catch(e){ console.warn('تعذّر استيراد عنصر:',e); }
+      });
+    });
+    const total=geojson.features.length;
+    renderLayerList(); renderFeatures(); scheduleSave();
+    document.getElementById('stHint').textContent=`✓ تم استيراد ${total} عنصر بنجاح`;
+  }
+
+  document.getElementById('importBtn').addEventListener('click',()=>{
+    document.getElementById('importFileInput').click();
+  });
+  document.getElementById('importFileInput').addEventListener('change', e=>{
+    const file=e.target.files[0]; if(!file) return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      try{ importGeoJSON(JSON.parse(ev.target.result)); }
+      catch(err){ alert('خطأ في تحليل الملف:\n'+err.message); }
+    };
+    reader.readAsText(file);
+    e.target.value='';
+  });
+
+  /* ---------- Feature Labels on map ---------- */
+  function renderLabels(){
+    labelsLayerGroup.clearLayers();
+    if(!labelsVisible) return;
+    state.layers.forEach(layer=>{
+      if(!layer.visible) return;
+      layer.features.forEach(f=>{
+        const name=f.attrs&&(f.attrs['name']||f.attrs['الجار']||f.attrs['اسم']);
+        if(!name) return;
+        let latlng;
+        if(f.type==='point'){
+          latlng=L.latLng(f.coords[0][0],f.coords[0][1]);
+        } else {
+          let lat=0,lng=0;
+          f.coords.forEach(c=>{lat+=c[0];lng+=c[1];});
+          latlng=L.latLng(lat/f.coords.length,lng/f.coords.length);
+        }
+        L.tooltip({permanent:true,direction:'top',className:'feature-label-tip',offset:[0,-4]})
+          .setLatLng(latlng).setContent(String(name)).addTo(labelsLayerGroup);
+      });
+    });
+  }
+
+  document.getElementById('labelsBtn').addEventListener('click',()=>{
+    labelsVisible=!labelsVisible;
+    document.getElementById('labelsBtn').classList.toggle('active',labelsVisible);
+    renderLabels();
+    document.getElementById('stHint').textContent=labelsVisible
+      ?'🏷 التسميات مفعّلة — تظهر للعناصر التي لها اسم أو جار'
+      :'🏷 التسميات مُخفاة';
+  });
+
+  /* ---------- Screenshot / Print ---------- */
+  document.getElementById('screenshotBtn').addEventListener('click',()=>{
+    document.getElementById('stHint').textContent='📸 افتح طباعة — اختر «حفظ كـ PDF» أو «Microsoft Print to PDF»';
+    setTimeout(()=>window.print(), 250);
   });
 
   // ميزة ملائمة حدود الخريطة للعناصر الحالية
