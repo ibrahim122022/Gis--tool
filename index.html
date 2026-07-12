@@ -1156,7 +1156,7 @@
       const corners = f.coords;
       const cLat = (corners[0][0] + corners[2][0]) / 2;
       const cLng = (corners[0][1] + corners[2][1]) / 2;
-      const angle = Math.atan2(centerLatLng.lat - cLat, centerLatLng.lng - cLng);
+      const angle = metricAngleRad({lat:cLat,lng:cLng}, centerLatLng);
       f.rect.rotation = Math.round(toDeg(angle) % 360);
       syncRectCoords(f);
     }
@@ -1259,7 +1259,7 @@
             const rotMarker = L.circleMarker(rotatePt, {radius:9, className:'rect-rotate-marker', color:'#0d2438', weight:1.5, fillColor:'#e8a33d', fillOpacity:1});
             rotMarker.on('mousedown', (se)=>{
               L.DomEvent.stopPropagation(se); map.dragging.disable(); pushStateToUndo();
-              dragCtx = { mode:'rect-rotate', feature:f, center:[centerLat, centerLng], origRotation: f.rect.rotation, startAngle: Math.atan2(se.latlng.lat - centerLat, se.latlng.lng - centerLng) };
+              dragCtx = { mode:'rect-rotate', feature:f, center:[centerLat, centerLng], origRotation: f.rect.rotation, startAngle: metricAngleRad({lat:centerLat,lng:centerLng}, se.latlng) };
             });
             rotMarker.addTo(lg);
 
@@ -1355,7 +1355,7 @@
         dragCtx.feature.coords[dragCtx.idx] = [snapped.lat, snapped.lng];
       } 
       else if(dragCtx.mode==='rect-rotate'){
-        const currentAngle = Math.atan2(e.latlng.lat - dragCtx.center[0], e.latlng.lng - dragCtx.center[1]);
+        const currentAngle = metricAngleRad({lat:dragCtx.center[0], lng:dragCtx.center[1]}, e.latlng);
         const angleDiff = toDeg(currentAngle - dragCtx.startAngle);
         dragCtx.feature.rect.rotation = Math.round((dragCtx.origRotation - angleDiff) % 360);
         syncRectCoords(dragCtx.feature);
@@ -1394,7 +1394,7 @@
         const pts = [[rect3Point.pt1.lat, rect3Point.pt1.lng], [snapped.lat, snapped.lng]];
         tempLine = L.polyline(pts, {color:'#e8a33d', weight:2, dashArray:'4 4'}).addTo(map);
         const width = haversine(rect3Point.pt1.lat, rect3Point.pt1.lng, snapped.lat, snapped.lng);
-        const angle = Math.atan2(snapped.lat - rect3Point.pt1.lat, snapped.lng - rect3Point.pt1.lng);
+        const angle = metricAngleRad(rect3Point.pt1, snapped);
         let deg = Math.round(toDeg(angle) % 360); if(deg < 0) deg += 360;
         
         // ميزة الـ Angle Snapping الذكية للغلق على الاتجاهات الرئيسية
@@ -1414,7 +1414,7 @@
         const proj = projectPointOnLine(snapped, p1, p2);
         const length = proj.distance;
         const width = haversine(p1.lat, p1.lng, p2.lat, p2.lng);
-        const angle = Math.atan2(p2.lat - p1.lat, p2.lng - p1.lng);
+        const angle = metricAngleRad(p1, p2);
         
         const th = angle;
         const uxE = Math.cos(th), uxN = Math.sin(th);
@@ -1511,7 +1511,7 @@
         const width = haversine(p1.lat, p1.lng, p2.lat, p2.lng);
         const length = proj.distance;
         
-        let angle = Math.atan2(p2.lat - p1.lat, p2.lng - p1.lng);
+        let angle = metricAngleRad(p1, p2);
         let deg = Math.round(toDeg(angle) % 360); if(deg < 0) deg += 360;
 
         // قفل مغناطيسي للزاوية في النقطة النهائية أيضاً
@@ -2264,6 +2264,15 @@
     const east = lng * 111320 * Math.cos(toRad(refLat));
     const north = lat * 111320;
     return { x: east, y: north };
+  }
+
+  function metricAngleRad(p1, p2){
+    // الزاوية القياسية (راديان) بين نقطتين، محسوبة من المسافات الحقيقية بالأمتار (شرق/شمال)
+    // بدل فروق درجات lat/lng مباشرة — نفس الاصطلاح المستخدم في rectCorners (cos=شرق, sin=شمال)
+    const refLat = (p1.lat + p2.lat) / 2;
+    const a = metricXY(refLat, p1.lat, p1.lng);
+    const b = metricXY(refLat, p2.lat, p2.lng);
+    return Math.atan2(b.y - a.y, b.x - a.x);
   }
 
   function angleFromPoints(p1, p2){
