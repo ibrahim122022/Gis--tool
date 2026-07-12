@@ -907,6 +907,23 @@
     for(let i=0;i<pts.length;i++){ const [x1,y1]=pts[i], [x2,y2]=pts[(i+1)%pts.length]; a+=x1*y2-x2*y1; }
     return Math.abs(a)/2;
   }
+
+  function areaToFeddan(areaM2){
+    // النظام المصري لمساحة الأرض: 1 فدان = 24 قيراط = 576 سهم = 4200.833 م²
+    const M2_PER_FEDDAN = 4200.833;
+    const M2_PER_QIRAT = M2_PER_FEDDAN / 24;
+    const M2_PER_SAHM = M2_PER_QIRAT / 24;
+    let remaining = areaM2;
+    const feddan = Math.floor(remaining / M2_PER_FEDDAN);
+    remaining -= feddan * M2_PER_FEDDAN;
+    const qirat = Math.floor(remaining / M2_PER_QIRAT);
+    remaining -= qirat * M2_PER_QIRAT;
+    let sahm = Math.round(remaining / M2_PER_SAHM);
+    let f2 = feddan, q2 = qirat;
+    if(sahm >= 24){ sahm -= 24; q2 += 1; }
+    if(q2 >= 24){ q2 -= 24; f2 += 1; }
+    return { feddan: f2, qirat: q2, sahm };
+  }
   
   function rectCorners(rect){
     const th = toRad(rect.rotation);
@@ -945,6 +962,26 @@
   function getFeature(layerId, featureId){ const l=getLayer(layerId); return l? l.features.find(f=>f.id===featureId): null; }
   function activeLayer(){ return getLayer(state.activeLayerId) || state.layers[0]; }
 
+  function featureSnapSegments(f){
+    // ترجع أضلاع (أزواج نقاط) العنصر لأجل الإسناب على أي مكان فى الضلع، مش على الفيرتكس بس
+    const n = f.coords.length;
+    if(n < 2) return [];
+    const isClosed = (f.type === 'polygon' || f.type === 'rectangle');
+    const segs = [];
+    for(let i=0;i<n-1;i++) segs.push([f.coords[i], f.coords[i+1]]);
+    if(isClosed) segs.push([f.coords[n-1], f.coords[0]]);
+    return segs;
+  }
+
+  function closestPointOnSegmentPx(p, a, b){
+    const dx = b.x-a.x, dy = b.y-a.y;
+    const lenSq = dx*dx + dy*dy;
+    if(lenSq === 0) return {x:a.x, y:a.y};
+    let t = ((p.x-a.x)*dx + (p.y-a.y)*dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+    return {x: a.x + t*dx, y: a.y + t*dy};
+  }
+
   function findSnap(latlng, excludeFeatureId){
     if(!snapEnabled) return null;
     const pt = map.latLngToContainerPoint(latlng);
@@ -959,6 +996,19 @@
           const d = Math.hypot(cp.x-pt.x, cp.y-pt.y);
           if(d<bestDist){ bestDist=d; best=c; }
         });
+        if(f.type !== 'point' && f.type !== 'circle'){
+          featureSnapSegments(f).forEach(seg=>{
+            const ap = map.latLngToContainerPoint(L.latLng(seg[0][0], seg[0][1]));
+            const bp = map.latLngToContainerPoint(L.latLng(seg[1][0], seg[1][1]));
+            const cp = closestPointOnSegmentPx(pt, ap, bp);
+            const d = Math.hypot(cp.x-pt.x, cp.y-pt.y);
+            if(d<bestDist){
+              bestDist=d;
+              const ll = map.containerPointToLatLng(L.point(cp.x, cp.y));
+              best = [ll.lat, ll.lng];
+            }
+          });
+        }
       });
     });
     // طبقات الأصدقاء (للعرض فقط لكن الإسناب عليها مسموح أثناء الرسم)
@@ -970,6 +1020,19 @@
           const d = Math.hypot(cp.x-pt.x, cp.y-pt.y);
           if(d<bestDist){ bestDist=d; best=c; }
         });
+        if(f.type !== 'point' && f.type !== 'circle'){
+          featureSnapSegments(f).forEach(seg=>{
+            const ap = map.latLngToContainerPoint(L.latLng(seg[0][0], seg[0][1]));
+            const bp = map.latLngToContainerPoint(L.latLng(seg[1][0], seg[1][1]));
+            const cp = closestPointOnSegmentPx(pt, ap, bp);
+            const d = Math.hypot(cp.x-pt.x, cp.y-pt.y);
+            if(d<bestDist){
+              bestDist=d;
+              const ll = map.containerPointToLatLng(L.point(cp.x, cp.y));
+              best = [ll.lat, ll.lng];
+            }
+          });
+        }
       });
     });
     return best;
@@ -1967,6 +2030,10 @@
       html += `<div class="ftype">مستطيل بالأطوال</div>`;
       html += `<div class="stat-row">المحيط: <b>${pathPerimeter(f.coords).toFixed(1)} م</b></div>`;
       html += `<div class="stat-row">المساحة: <b>${polygonAreaMeters(f.coords).toFixed(1)} م²</b></div>`;
+      {
+        const _fq = areaToFeddan(polygonAreaMeters(f.coords));
+        html += `<div class="stat-row">المساحة (فدان): <b>${_fq.feddan} ف ${_fq.qirat} ط ${_fq.sahm} س</b></div>`;
+      }
       html += `<div class="rect-edit-grid">
         <div><label>العرض (م)</label><input type="number" id="edW" value="${f.rect.width}" step="0.1"></div>
         <div><label>الطول (م)</label><input type="number" id="edL" value="${f.rect.length}" step="0.1"></div>
@@ -1994,6 +2061,10 @@
       html += `<div class="ftype">مضلع حر</div>`;
       html += `<div class="stat-row">المحيط: <b>${pathPerimeter(f.coords).toFixed(1)} م</b></div>`;
       html += `<div class="stat-row">المساحة: <b>${polygonAreaMeters(f.coords).toFixed(1)} م²</b></div>`;
+      {
+        const _fq = areaToFeddan(polygonAreaMeters(f.coords));
+        html += `<div class="stat-row">المساحة (فدان): <b>${_fq.feddan} ف ${_fq.qirat} ط ${_fq.sahm} س</b></div>`;
+      }
       html += `<div class="stat-row">عدد النقاط: <b>${f.coords.length}</b></div>`;
     }
     html += `</div>`;
