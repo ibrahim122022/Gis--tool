@@ -160,6 +160,7 @@
   .stat-row b{color:var(--text);font-weight:500;}
   .field-row{display:flex;gap:6px;margin-top:8px;align-items:center;}
   .field-row input{background:var(--bg-panel);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 7px;font-size:12px;font-family:var(--sans);flex:1;min-width:0;}
+  .field-row select{background:var(--bg-panel);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 7px;font-size:12px;font-family:var(--sans);flex:1;min-width:0;}
   
   .field-row input.key{flex:0 0 34%;color:var(--teal);font-family:var(--mono);font-size:11px;}
   .rect-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;}
@@ -620,8 +621,18 @@
           <input type="text" id="fiName" placeholder="أدخل اسم العنصر...">
         </div>
         <div id="fiDescRow">
-          <label>الوصف</label>
-          <input type="text" id="fiDesc" placeholder="وصف مختصر للعنصر...">
+          <label>النوع</label>
+          <select id="fiSubtype">
+            <option value="">— اختر —</option>
+            <option value="زراعات">زراعات</option>
+            <option value="مبانى">مبانى</option>
+          </select>
+        </div>
+        <div id="fiUsageRow">
+          <label>الاستخدام</label>
+          <select id="fiUsage" disabled>
+            <option value="">— اختر النوع أولاً —</option>
+          </select>
         </div>
         <div id="fiNeighborRow" style="display:none;">
           <label>الجار</label>
@@ -664,6 +675,10 @@
 (function(){
   "use strict";
   const palette = ['#e8a33d','#5ec9c0','#e2665b','#8fbf5e','#c47fd6','#4f9ddb','#d6a15e','#7fd6b0'];
+  const SUBTYPE_USAGE_DOMAINS = {
+    'زراعات': ['منزرع','مهمل','سبق زراعتها ومهملة','بور','شبكة رئيسية'],
+    'مبانى': ['سكن عمال','سكن خاص','حظيرة','حوض تجميع']
+  };
   let state = {
     layers: [{id:'L1', name:'طبقة 1', color: palette[0], visible:true, features:[]}],
     activeLayerId:'L1', nextColorIdx:1,
@@ -1992,11 +2007,33 @@
 
     html += `<div class="section-title" style="margin-top:0;">الحقول الوصفية</div>`;
     Object.keys(f.attrs).forEach(k=>{
-      html += `<div class="field-row">
-        <input type="text" class="key" value="${escapeHtml(k)}" data-orig="${escapeHtml(k)}">
-        <input type="text" class="val" value="${escapeHtml(f.attrs[k])}" data-key="${escapeHtml(k)}">
-        <button class="icon-btn del-attr" data-key="${escapeHtml(k)}" title="حذف الحقل">${trashIcon()}</button>
-      </div>`;
+      if(k === 'النوع'){
+        const opts = Object.keys(SUBTYPE_USAGE_DOMAINS);
+        html += `<div class="field-row">
+          <input type="text" class="key" value="${escapeHtml(k)}" data-orig="${escapeHtml(k)}">
+          <select class="val subtype-select" data-key="${escapeHtml(k)}">
+            <option value="">— اختر —</option>
+            ${opts.map(o=>`<option value="${o}" ${f.attrs[k]===o?'selected':''}>${o}</option>`).join('')}
+          </select>
+          <button class="icon-btn del-attr" data-key="${escapeHtml(k)}" title="حذف الحقل">${trashIcon()}</button>
+        </div>`;
+      } else if(k === 'الاستخدام'){
+        const domainOpts = SUBTYPE_USAGE_DOMAINS[f.attrs['النوع']] || [];
+        html += `<div class="field-row">
+          <input type="text" class="key" value="${escapeHtml(k)}" data-orig="${escapeHtml(k)}">
+          <select class="val" data-key="${escapeHtml(k)}" ${domainOpts.length?'':'disabled'}>
+            <option value="">${domainOpts.length ? '— اختر —' : '— اختر النوع أولاً —'}</option>
+            ${domainOpts.map(o=>`<option value="${o}" ${f.attrs[k]===o?'selected':''}>${o}</option>`).join('')}
+          </select>
+          <button class="icon-btn del-attr" data-key="${escapeHtml(k)}" title="حذف الحقل">${trashIcon()}</button>
+        </div>`;
+      } else {
+        html += `<div class="field-row">
+          <input type="text" class="key" value="${escapeHtml(k)}" data-orig="${escapeHtml(k)}">
+          <input type="text" class="val" value="${escapeHtml(f.attrs[k])}" data-key="${escapeHtml(k)}">
+          <button class="icon-btn del-attr" data-key="${escapeHtml(k)}" title="حذف الحقل">${trashIcon()}</button>
+        </div>`;
+      }
     });
     html += `<button class="add-btn" id="addAttrBtn" style="padding:5px; font-size:11px;">+ إضافة حقل وصفى</button>`;
     html += `<button class="danger-btn" id="delFeatureBtn">حذف العنصر من الخريطة</button>`;
@@ -2022,8 +2059,13 @@
       });
     }
 
-    container.querySelectorAll('.field-row input.val').forEach(inp=>{
-      inp.addEventListener('input', e=>{ f.attrs[e.target.dataset.key] = e.target.value; scheduleSave(); });
+    container.querySelectorAll('.field-row .val').forEach(inp=>{
+      const evtName = inp.tagName === 'SELECT' ? 'change' : 'input';
+      inp.addEventListener(evtName, e=>{
+        f.attrs[e.target.dataset.key] = e.target.value;
+        scheduleSave();
+        if(e.target.classList.contains('subtype-select')){ renderAttrPanel(); }
+      });
     });
     container.querySelectorAll('.field-row input.key').forEach(inp=>{
       inp.addEventListener('change', e=>{
@@ -2080,7 +2122,8 @@
     document.getElementById('fiDescRow').style.display     = isPoint ? 'none' : 'block';
     document.getElementById('fiNeighborRow').style.display = isPoint ? 'block' : 'none';
     document.getElementById('fiName').value     = '';
-    document.getElementById('fiDesc').value     = '';
+    document.getElementById('fiSubtype').value = '';
+    populateUsageOptions('', '');
     document.getElementById('fiNeighbor').value = '';
     const hud = document.getElementById('featureInfoHud');
     hud.style.left = '50%'; hud.style.top = '50%';
@@ -2092,6 +2135,22 @@
     }, 60);
   }
 
+  function populateUsageOptions(subtype, selected){
+    const usageSel = document.getElementById('fiUsage');
+    const opts = SUBTYPE_USAGE_DOMAINS[subtype];
+    if(!opts){
+      usageSel.innerHTML = '<option value="">— اختر النوع أولاً —</option>';
+      usageSel.disabled = true;
+      return;
+    }
+    usageSel.disabled = false;
+    usageSel.innerHTML = '<option value="">— اختر —</option>' + opts.map(o=>'<option value="'+o+'">'+o+'</option>').join('');
+    if(selected && opts.includes(selected)) usageSel.value = selected;
+  }
+  document.getElementById('fiSubtype').addEventListener('change', e=>{
+    populateUsageOptions(e.target.value, '');
+  });
+
   function applyFeatureInfoHud(){
     document.getElementById('featureInfoHud').style.display = 'none';
     const f = featureInfoPendingF; featureInfoPendingF = null;
@@ -2101,9 +2160,11 @@
       if(neighbor) f.attrs['الجار'] = neighbor;
     } else {
       const name = document.getElementById('fiName').value.trim();
-      const desc = document.getElementById('fiDesc').value.trim();
+      const subtype = document.getElementById('fiSubtype').value;
+      const usage = document.getElementById('fiUsage').value;
       if(name) f.attrs['name'] = name;
-      if(desc) f.attrs['الوصف'] = desc;
+      if(subtype) f.attrs['النوع'] = subtype;
+      if(usage) f.attrs['الاستخدام'] = usage;
     }
     renderAttrPanel(); renderLayerList(); scheduleSave();
   }
