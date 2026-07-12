@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght=400;500;700&family=Inter:wght=400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root{
@@ -60,6 +61,7 @@
   #importBtn {--tc:#b08020;}
   #labelsBtn {--tc:#7060a8;}
   #screenshotBtn{--tc:#9a8878;}
+  .tool-btn[data-tool="divide"]{--tc:#2a9d5c;}
 
   .tool-btn:hover:not(:disabled){
     color:var(--tc, var(--teal));
@@ -438,6 +440,18 @@
 
     <div class="toolbar-sep"></div>
 
+    <button class="tool-btn" data-tool="divide" title="تقسيم المضلع إلى أجزاء متساوية">
+      <svg viewBox="0 0 24 24">
+        <polygon points="12,3 21,9 18,20 6,20 3,9" fill="currentColor" opacity=".14" stroke-width="1.8" stroke-linejoin="round"/>
+        <line x1="3.5" y1="14" x2="20.5" y2="10" stroke-width="2" stroke-dasharray="2.5 2"/>
+        <line x1="3.5" y1="9.5" x2="20.5" y2="14.5" stroke-width="2" stroke-dasharray="2.5 2"/>
+        <circle cx="3.5"  cy="14"  r="1.8" fill="currentColor" stroke="none"/>
+        <circle cx="20.5" cy="10"  r="1.8" fill="currentColor" stroke="none"/>
+        <circle cx="3.5"  cy="9.5" r="1.8" fill="currentColor" stroke="none"/>
+        <circle cx="20.5" cy="14.5" r="1.8" fill="currentColor" stroke="none"/>
+      </svg><span>تقسيم</span>
+    </button>
+
     <button class="tool-btn" data-tool="measure" title="قياس المسافة بين نقطتين">
       <svg viewBox="0 0 24 24">
         <line x1="3.5" y1="20.5" x2="20.5" y2="3.5" stroke-width="2.4"/>
@@ -552,6 +566,49 @@
         </div>
       </div>
 
+      <!-- ── Divide Polygon HUD ── -->
+      <div class="rect-hud" id="divideHud" style="width:248px;border-color:#2a9d5c;display:none;">
+        <h4 style="color:#2a9d5c;">✂ تقسيم المضلع</h4>
+        <label>طريقة التقسيم</label>
+        <select id="divMode">
+          <option value="count">عدد الأجزاء</option>
+          <option value="area">مساحة محددة لكل قطعة (م²)</option>
+        </select>
+        <div id="divCountRow">
+          <label>عدد الأجزاء</label>
+          <input type="number" id="divN" value="2" min="2" max="100" step="1">
+        </div>
+        <div id="divAreaRow" style="display:none;">
+          <label>مساحة كل قطعة (م²)</label>
+          <input type="number" id="divAreaValue" value="100" min="0.01" step="0.01">
+        </div>
+        <label>اتجاه التقسيم</label>
+        <select id="divDir">
+          <option value="0">أفقي — خطوط عرضية</option>
+          <option value="90">عمودي — خطوط طولية</option>
+          <option value="45">قطري 45°</option>
+          <option value="custom">مخصص...</option>
+          <option value="drawline">✏ ارسم اتجاه التقسيم على الخريطة</option>
+          <option value="edge">📐 اختر ضلعًا من المضلع ليكون التقسيم موازيًا له</option>
+        </select>
+        <div id="divCustomRow" style="display:none;">
+          <label>الزاوية (°)</label>
+          <input type="number" id="divAngle" value="0" min="0" max="179" step="1">
+        </div>
+        <div id="divPickRow" style="display:none;">
+          <div id="divAngleReadout" style="font-size:12px;color:#9db3c8;margin:4px 0 8px;">لم يتم تحديد الاتجاه بعد</div>
+          <button type="button" class="btn-cancel" id="divPickBtn" style="width:100%;">تحديد على الخريطة</button>
+        </div>
+        <label id="divEqualAreaRow" style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;">
+          <input type="checkbox" id="divEqualArea" style="width:14px;height:14px;accent-color:#2a9d5c;cursor:pointer;">
+          <span>مساحة متساوية (أدق)</span>
+        </label>
+        <div class="row-btns" style="margin-top:10px;">
+          <button class="btn-cancel" id="divideCancel">إلغاء</button>
+          <button class="btn-create" id="divideApply" style="background:#2a9d5c;">تطبيق</button>
+        </div>
+      </div>
+
       <div class="rect-hud" id="featureInfoHud" style="width:250px;border-color:var(--teal);display:none;">
         <h4 id="featureInfoTitle" style="color:var(--teal);">معلومات العنصر</h4>
         <div id="fiNameRow">
@@ -637,6 +694,12 @@
   let measurePt1 = null, measureMarker = null, measureLine = null;
   // --- Labels toggle ---
   let labelsVisible = false;
+  // --- Divide tool state ---
+  let dividePendingLayerId = null, dividePendingFeatureId = null;
+  let divideAngleMode = null; // null | 'drawline' | 'edge' — وضع تحديد اتجاه التقسيم من الخريطة
+  let divideDrawPt1 = null;   // أول نقطة عند رسم خط الاتجاه
+  let divideTempMarker = null, divideTempLine = null; // عناصر مؤقتة أثناء الرسم/الاختيار
+  let divideComputedAngle = null; // الزاوية المحسوبة من الرسم أو من الضلع المختار
 
   const mapEl = document.getElementById('map');
   const rectHud = document.getElementById('rectHud');
@@ -1129,6 +1192,30 @@
         }
         
         shape.on('click', (e) => {
+          if(tool==='divide' && divideAngleMode){
+            L.DomEvent.stopPropagation(e);
+            handleDivideMapClick(e.latlng);
+            return;
+          }
+          if(tool==='divide'){
+            L.DomEvent.stopPropagation(e);
+            if(f.type!=='polygon' && f.type!=='rectangle'){
+              document.getElementById('stHint').textContent='⚠️ أداة التقسيم تعمل على المضلعات فقط';
+              return;
+            }
+            dividePendingLayerId = layer.id;
+            dividePendingFeatureId = f.id;
+            selection = {layerId:layer.id, featureId:f.id};
+            renderFeatures();
+            const divHud = document.getElementById('divideHud');
+            const pt = map.latLngToContainerPoint(e.latlng);
+            const wr = mapEl.getBoundingClientRect();
+            divHud.style.left = Math.min(Math.max(pt.x+18,8), wr.width-260)+'px';
+            divHud.style.top  = Math.min(Math.max(pt.y-80,8), wr.height-290)+'px';
+            divHud.style.display='block';
+            document.getElementById('stHint').textContent='✂ حدد إعدادات التقسيم ثم اضغط تطبيق';
+            return;
+          }
           if(tool!=='select') return;
           L.DomEvent.stopPropagation(e);
           selection = {layerId:layer.id, featureId:f.id};
@@ -1373,6 +1460,10 @@
 
   /* ---------- Map click ---------- */
   map.on('click', e=>{
+    if(tool==='divide' && divideAngleMode){
+      handleDivideMapClick(e.latlng);
+      return;
+    }
     if(tool==='select'){
       if(window.innerWidth > 760) { selection=null; renderAttrPanel(); renderFeatures(); }
       return;
@@ -1527,7 +1618,8 @@
     if(e.key==='Enter' && !typing) finishDrawing();
     if(e.key==='Escape'){
       drawingCoords=null; rect3Point.step = 0; circlePending=null;
-      rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none';
+      rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none'; document.getElementById('divideHud').style.display='none'; dividePendingLayerId=null; dividePendingFeatureId=null;
+      cancelDivideAngleMode(); divideComputedAngle = null;
       mobileFinishBtn.style.display = 'none';
       closeMobileEditPad();
       if(tempLine){map.removeLayer(tempLine); tempLine=null;}
@@ -1571,7 +1663,8 @@
     btn.classList.add('active');
     tool = btn.dataset.tool;
     drawingCoords=null; rect3Point.step = 0; circlePending=null;
-    rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none';
+    rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none'; document.getElementById('divideHud').style.display='none'; dividePendingLayerId=null; dividePendingFeatureId=null;
+    cancelDivideAngleMode(); divideComputedAngle = null;
     mobileFinishBtn.style.display = 'none';
     closeMobileEditPad();
     if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
@@ -1579,10 +1672,14 @@
     if(measurePt1){ measurePt1=null; }
     if(measureMarker){ map.removeLayer(measureMarker); measureMarker=null; }
     if(measureLine){ map.removeLayer(measureLine); measureLine=null; }
+    document.getElementById('divideHud').style.display='none';
+    dividePendingLayerId=null; dividePendingFeatureId=null;
     document.getElementById('stTemp').textContent='';
     
     if (tool === 'rectangle') {
       document.getElementById('stHint').textContent = 'مستطيل بـ 3 نقاط: انقر 1 للبدء، 2 للاتجاه (يقفل مغناطيسياً للزوايا الرئيسية)، 3 لتحديد الطول...';
+    } else if (tool === 'divide') {
+      document.getElementById('stHint').textContent = '✂ انقر على أي مضلع لتقسيمه إلى أجزاء متساوية';
     } else {
       document.getElementById('stHint').textContent = tool==='select' ? 'اضغط على عنصر لتحديده. كليك يمين على النقطة لحذفها، أو اسحب النقطة الشفافة لإضافة جديدة.' : 'اضغط على الخريطة للرسم';
     }
@@ -2074,6 +2171,169 @@
   };
 
   document.getElementById('circleCancel').addEventListener('click', ()=>{ circleHud.style.display='none'; circlePending=null; });
+
+  /* ── Divide HUD ── */
+  document.getElementById('divDir').addEventListener('change', function(){
+    document.getElementById('divCustomRow').style.display = this.value==='custom' ? 'block' : 'none';
+    const needsPick = this.value==='drawline' || this.value==='edge';
+    document.getElementById('divPickRow').style.display = needsPick ? 'block' : 'none';
+    if(!needsPick){ divideComputedAngle = null; divideAngleMode = null; }
+    else { updateDivAngleReadout(); }
+  });
+  document.getElementById('divMode').addEventListener('change', function(){
+    const isArea = this.value==='area';
+    document.getElementById('divCountRow').style.display = isArea ? 'none' : 'block';
+    document.getElementById('divAreaRow').style.display = isArea ? 'block' : 'none';
+    document.getElementById('divEqualAreaRow').style.display = isArea ? 'none' : 'flex';
+  });
+  document.getElementById('divideCancel').addEventListener('click', ()=>{
+    document.getElementById('divideHud').style.display='none';
+    dividePendingLayerId=null; dividePendingFeatureId=null;
+    cancelDivideAngleMode();
+    divideComputedAngle = null;
+    selection=null; renderFeatures(); renderAttrPanel();
+    document.getElementById('stHint').textContent='✂ انقر على أي مضلع لتقسيمه إلى أجزاء متساوية';
+  });
+  document.getElementById('divideApply').addEventListener('click', ()=>{
+    if(!dividePendingLayerId || !dividePendingFeatureId) return;
+    const divMode = document.getElementById('divMode').value;
+    const dirVal = document.getElementById('divDir').value;
+    if((dirVal==='drawline' || dirVal==='edge') && divideComputedAngle===null){
+      alert('حدد اتجاه التقسيم على الخريطة أولاً (اضغط زر "تحديد على الخريطة")');
+      return;
+    }
+    const angleDeg = dirVal==='custom'
+      ? (parseFloat(document.getElementById('divAngle').value)||0)
+      : (dirVal==='drawline' || dirVal==='edge')
+        ? divideComputedAngle
+        : parseFloat(dirVal);
+    document.getElementById('divideHud').style.display='none';
+    document.getElementById('stHint').textContent='⏳ جاري التقسيم...';
+    if(divMode==='area'){
+      const areaPerPart = parseFloat(document.getElementById('divAreaValue').value)||0;
+      // نستخدم setTimeout لإتاحة الفرصة للـ UI أن يُحدَّث
+      setTimeout(()=>{
+        dividePolygonFeatureByArea(dividePendingLayerId, dividePendingFeatureId, areaPerPart, angleDeg);
+        dividePendingLayerId=null; dividePendingFeatureId=null;
+      }, 30);
+      return;
+    }
+    const nParts = Math.max(2, parseInt(document.getElementById('divN').value)||2);
+    const equalArea = document.getElementById('divEqualArea').checked;
+    // نستخدم setTimeout لإتاحة الفرصة للـ UI أن يُحدَّث
+    setTimeout(()=>{
+      dividePolygonFeature(dividePendingLayerId, dividePendingFeatureId, nParts, angleDeg, equalArea);
+      dividePendingLayerId=null; dividePendingFeatureId=null;
+    }, 30);
+  });
+
+  document.getElementById('divPickBtn').addEventListener('click', ()=>{
+    if(!dividePendingLayerId || !dividePendingFeatureId) return;
+    const dirVal = document.getElementById('divDir').value;
+    if(dirVal!=='drawline' && dirVal!=='edge') return;
+    divideAngleMode = dirVal;
+    divideDrawPt1 = null;
+    document.getElementById('divideHud').style.display='none';
+    document.getElementById('stHint').textContent = dirVal==='drawline'
+      ? '✏ انقر نقطتين على الخريطة لتحديد اتجاه التقسيم...'
+      : '📐 انقر بالقرب من الضلع المطلوب في المضلع...';
+  });
+
+  function updateDivAngleReadout(){
+    const el = document.getElementById('divAngleReadout');
+    if(!el) return;
+    el.textContent = divideComputedAngle===null
+      ? 'لم يتم تحديد الاتجاه بعد'
+      : `الاتجاه المحدد: ${divideComputedAngle.toFixed(1)}°`;
+  }
+
+  function cancelDivideAngleMode(){
+    divideAngleMode = null;
+    divideDrawPt1 = null;
+    if(divideTempMarker){ map.removeLayer(divideTempMarker); divideTempMarker=null; }
+    if(divideTempLine){ map.removeLayer(divideTempLine); divideTempLine=null; }
+  }
+
+  function metricXY(refLat, lat, lng){
+    // إسقاط تقريبي محلي بالأمتار (شرق/شمال) حول خط عرض مرجعي — نفس أسلوب polygonAreaMeters/destPoint
+    const east = lng * 111320 * Math.cos(toRad(refLat));
+    const north = lat * 111320;
+    return { x: east, y: north };
+  }
+
+  function angleFromPoints(p1, p2){
+    // زاوية اتجاه القطع (بنفس اصطلاح angleDeg المستخدم في turf.transformRotate)
+    // بتتحسب من الاتجاه الحقيقي على الأرض بالأمتار، مش من فروق درجات lat/lng مباشرة،
+    // لأن درجة خط الطول الواحدة بتمثّل مسافة أقصر كل ما ابتعدنا عن خط الاستواء (بمقدار cos(خط العرض))
+    const refLat = (p1.lat + p2.lat) / 2;
+    const a = metricXY(refLat, p1.lat, p1.lng);
+    const b = metricXY(refLat, p2.lat, p2.lng);
+    const theta = toDeg(Math.atan2(b.y - a.y, b.x - a.x)); // زاوية رياضية قياسية من الشرق (عكس عقارب الساعة)
+    let deg = ((-theta % 180) + 180) % 180;
+    return deg;
+  }
+
+  function nearestEdgeAngle(coords, latlng){
+    // يبحث عن أقرب ضلع من ضلوع المضلع إلى النقطة (بالمسافة الحقيقية بالأمتار)، ويرجّع زاويته
+    let bestDist = Infinity, bestAngle = 0;
+    const refLat = latlng.lat;
+    const p = metricXY(refLat, latlng.lat, latlng.lng);
+    for(let i = 0; i < coords.length; i++){
+      const aLL = { lat: coords[i][0], lng: coords[i][1] };
+      const bLL = { lat: coords[(i+1) % coords.length][0], lng: coords[(i+1) % coords.length][1] };
+      const a = metricXY(refLat, aLL.lat, aLL.lng);
+      const b = metricXY(refLat, bLL.lat, bLL.lng);
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const lenSq = dx*dx + dy*dy;
+      let t = lenSq === 0 ? 0 : ((p.x - a.x)*dx + (p.y - a.y)*dy) / lenSq;
+      t = Math.max(0, Math.min(1, t));
+      const projX = a.x + t*dx, projY = a.y + t*dy;
+      const dist = Math.hypot(p.x - projX, p.y - projY);
+      if(dist < bestDist){ bestDist = dist; bestAngle = angleFromPoints(aLL, bLL); }
+    }
+    return bestAngle;
+  }
+
+  function finishDivideAngleMode(newAngle){
+    divideComputedAngle = newAngle;
+    divideAngleMode = null;
+    divideDrawPt1 = null;
+    if(divideTempMarker){ map.removeLayer(divideTempMarker); divideTempMarker=null; }
+    if(divideTempLine){ map.removeLayer(divideTempLine); divideTempLine=null; }
+    updateDivAngleReadout();
+    document.getElementById('divideHud').style.display='block';
+    document.getElementById('stHint').textContent = `✓ تم تحديد اتجاه التقسيم (${newAngle.toFixed(1)}°) — اضغط تطبيق`;
+  }
+
+  function handleDivideMapClick(latlng){
+    if(divideAngleMode==='drawline'){
+      if(!divideDrawPt1){
+        divideDrawPt1 = latlng;
+        if(divideTempMarker) map.removeLayer(divideTempMarker);
+        divideTempMarker = L.circleMarker([latlng.lat, latlng.lng],
+          {radius:6, color:'#2a9d5c', weight:2, fillColor:'#2a9d5c', fillOpacity:.85}).addTo(map);
+        document.getElementById('stHint').textContent = '✏ انقر النقطة الثانية لإتمام تحديد الاتجاه...';
+      } else {
+        if(divideTempLine) map.removeLayer(divideTempLine);
+        const angle = angleFromPoints(divideDrawPt1, latlng);
+        finishDivideAngleMode(angle);
+      }
+      return true;
+    }
+    if(divideAngleMode==='edge'){
+      const f = getFeature(dividePendingLayerId, dividePendingFeatureId);
+      if(!f || !f.coords || f.coords.length < 2){
+        alert('تعذر العثور على المضلع لاختيار الضلع منه');
+        cancelDivideAngleMode();
+        document.getElementById('divideHud').style.display='block';
+        return true;
+      }
+      const angle = nearestEdgeAngle(f.coords, latlng);
+      finishDivideAngleMode(angle);
+      return true;
+    }
+    return false;
+  }
   document.getElementById('circleCreate').addEventListener('click', ()=>{
     if(!circlePending)return;
     pushStateToUndo();
@@ -2222,6 +2482,262 @@
       startLocationTracking();
     }
   });
+
+  /* ---------- Divide Polygon ---------- */
+  function dividePolygonFeature(layerId, featureId, nParts, angleDeg, equalArea){
+    if(!window.turf){ alert('مكتبة Turf.js لم تُحمَّل — تحقق من الاتصال بالإنترنت'); return; }
+    const layer = getLayer(layerId);
+    if(!layer) return;
+    const f = getFeature(layerId, featureId);
+    if(!f) return;
+    if(nParts < 2){ alert('عدد الأجزاء يجب أن يكون 2 على الأقل'); return; }
+
+    // تحويل الإحداثيات من [lat,lng] إلى turf [lng,lat]
+    let ring = f.coords.map(c=>[c[1],c[0]]);
+    ring.push(ring[0]); // إغلاق الحلقة
+    let turfPoly;
+    try{ turfPoly = turf.polygon([ring]); } catch(e){ alert('المضلع غير صالح للتقسيم'); return; }
+
+    // مركز الثقل لتدوير حوله
+    const centroid = turf.centroid(turfPoly).geometry.coordinates; // [lng,lat]
+
+    // تدوير المضلع بـ -angleDeg حتى تصبح خطوط القطع أفقية
+    let rotated;
+    try{ rotated = turf.transformRotate(turfPoly, -angleDeg, {pivot: centroid}); }
+    catch(e){ rotated = turfPoly; }
+
+    const bbox = turf.bbox(rotated);
+    const [minX, minY, maxX, maxY] = bbox;
+    const stripW = (maxX - minX) * 1.6;
+    const cX = (minX + maxX) / 2;
+    const totalH = maxY - minY;
+    const eps = totalH * 0.00005;
+
+    // دالة مساعدة: مساحة التقاطع من minY حتى cutY
+    function areaUpTo(cutY){
+      const strip = turf.polygon([[
+        [cX - stripW/2, minY - eps],
+        [cX + stripW/2, minY - eps],
+        [cX + stripW/2, cutY + eps],
+        [cX - stripW/2, cutY + eps],
+        [cX - stripW/2, minY - eps]
+      ]]);
+      try{
+        const inter = turf.intersect(rotated, strip);
+        return inter ? turf.area(inter) : 0;
+      } catch(e){ return 0; }
+    }
+
+    // حساب مواضع القطع
+    let cutYs = [minY - eps];
+    if(equalArea){
+      const totalArea = turf.area(rotated);
+      const targetPerSlice = totalArea / nParts;
+      let prevY = minY - eps;
+      for(let i = 1; i < nParts; i++){
+        const targetCum = targetPerSlice * i;
+        let lo = prevY, hi = maxY + eps;
+        for(let iter = 0; iter < 64; iter++){
+          const mid = (lo + hi) / 2;
+          const a = areaUpTo(mid);
+          if(Math.abs(a - targetCum) / (targetArea || 1) < 0.0005) break;
+          if(a < targetCum) lo = mid; else hi = mid;
+        }
+        prevY = (lo + hi) / 2;
+        cutYs.push(prevY);
+      }
+    } else {
+      for(let i = 1; i < nParts; i++) cutYs.push(minY + (i / nParts) * totalH);
+    }
+    cutYs.push(maxY + eps);
+
+    // إنشاء شرائح وتقاطعها مع المضلع الأصلي
+    const newFeatures = [];
+    for(let i = 0; i < nParts; i++){
+      const y1 = cutYs[i];
+      const y2 = cutYs[i + 1];
+      const strip = turf.polygon([[
+        [cX - stripW/2, y1],
+        [cX + stripW/2, y1],
+        [cX + stripW/2, y2],
+        [cX - stripW/2, y2],
+        [cX - stripW/2, y1]
+      ]]);
+      // إعادة تدوير الشريط بـ +angleDeg
+      let rotStrip;
+      try{ rotStrip = turf.transformRotate(strip, angleDeg, {pivot: centroid}); }
+      catch(e){ rotStrip = strip; }
+
+      let inter;
+      try{ inter = turf.intersect(turfPoly, rotStrip); } catch(e){ continue; }
+      if(!inter) continue;
+
+      const geom = inter.geometry;
+      const ringsList = geom.type === 'MultiPolygon'
+        ? geom.coordinates.map(mp => mp[0])
+        : [geom.coordinates[0]];
+
+      ringsList.forEach(r => {
+        let pts = r.map(c => [c[1], c[0]]); // عودة إلى [lat,lng]
+        if(pts.length > 1){
+          const a = pts[0], b = pts[pts.length-1];
+          if(Math.abs(a[0]-b[0]) < 1e-10 && Math.abs(a[1]-b[1]) < 1e-10) pts.pop();
+        }
+        if(pts.length < 3) return;
+        newFeatures.push({
+          id: uid(), type:'polygon',
+          coords: pts,
+          attrs: Object.assign({}, f.attrs),
+          color: f.color
+        });
+      });
+    }
+
+    if(newFeatures.length === 0){
+      alert('لم ينجح التقسيم — جرب عدد أجزاء أقل أو اتجاه مختلف');
+      return;
+    }
+
+    pushStateToUndo();
+    const fIdx = layer.features.findIndex(x => x.id === featureId);
+    if(fIdx >= 0) layer.features.splice(fIdx, 1, ...newFeatures);
+    else layer.features.push(...newFeatures);
+
+    selection = null;
+    renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
+    document.getElementById('stHint').textContent = `✓ تم تقسيم المضلع إلى ${newFeatures.length} جزء`;
+  }
+
+  function dividePolygonFeatureByArea(layerId, featureId, areaPerPart, angleDeg){
+    if(!window.turf){ alert('مكتبة Turf.js لم تُحمَّل — تحقق من الاتصال بالإنترنت'); return; }
+    const layer = getLayer(layerId);
+    if(!layer) return;
+    const f = getFeature(layerId, featureId);
+    if(!f) return;
+    if(!areaPerPart || areaPerPart <= 0){ alert('يجب إدخال مساحة صحيحة أكبر من صفر'); return; }
+
+    // تحويل الإحداثيات من [lat,lng] إلى turf [lng,lat]
+    let ring = f.coords.map(c=>[c[1],c[0]]);
+    ring.push(ring[0]); // إغلاق الحلقة
+    let turfPoly;
+    try{ turfPoly = turf.polygon([ring]); } catch(e){ alert('المضلع غير صالح للتقسيم'); return; }
+
+    // مركز الثقل لتدوير حوله
+    const centroid = turf.centroid(turfPoly).geometry.coordinates; // [lng,lat]
+
+    // تدوير المضلع بـ -angleDeg حتى تصبح خطوط القطع أفقية
+    let rotated;
+    try{ rotated = turf.transformRotate(turfPoly, -angleDeg, {pivot: centroid}); }
+    catch(e){ rotated = turfPoly; }
+
+    const bbox = turf.bbox(rotated);
+    const [minX, minY, maxX, maxY] = bbox;
+    const stripW = (maxX - minX) * 1.6;
+    const cX = (minX + maxX) / 2;
+    const totalH = maxY - minY;
+    const eps = totalH * 0.00005;
+
+    // دالة مساعدة: مساحة التقاطع من minY حتى cutY
+    function areaUpTo(cutY){
+      const strip = turf.polygon([[
+        [cX - stripW/2, minY - eps],
+        [cX + stripW/2, minY - eps],
+        [cX + stripW/2, cutY + eps],
+        [cX - stripW/2, cutY + eps],
+        [cX - stripW/2, minY - eps]
+      ]]);
+      try{
+        const inter = turf.intersect(rotated, strip);
+        return inter ? turf.area(inter) : 0;
+      } catch(e){ return 0; }
+    }
+
+    // مساحة المضلع الكلية وعدد القطع الكاملة بالمساحة المحددة + قطعة أخيرة بالباقي
+    const totalArea = turf.area(rotated);
+    if(areaPerPart >= totalArea){
+      alert('المساحة المحددة أكبر من (أو تساوي) مساحة المضلع الكلية — لا يمكن التقسيم بهذه القيمة');
+      return;
+    }
+
+    let nParts = Math.floor(totalArea / areaPerPart);
+    const remainder = totalArea - (nParts * areaPerPart);
+    // لو الباقي كبير بما يكفي (أكثر من 2% من مساحة القطعة) نضيف قطعة أخيرة إضافية بمساحة الباقي
+    if(remainder > areaPerPart * 0.02) nParts += 1;
+    if(nParts < 1) nParts = 1;
+
+    // حساب مواضع القطع تراكمياً بحيث كل قطعة (عدا الأخيرة) تساوي areaPerPart بالضبط
+    let cutYs = [minY - eps];
+    let prevY = minY - eps;
+    for(let i = 1; i < nParts; i++){
+      const targetCum = areaPerPart * i;
+      let lo = prevY, hi = maxY + eps;
+      for(let iter = 0; iter < 64; iter++){
+        const mid = (lo + hi) / 2;
+        const a = areaUpTo(mid);
+        if(Math.abs(a - targetCum) / (totalArea || 1) < 0.0005) break;
+        if(a < targetCum) lo = mid; else hi = mid;
+      }
+      prevY = (lo + hi) / 2;
+      cutYs.push(prevY);
+    }
+    cutYs.push(maxY + eps);
+
+    // إنشاء شرائح وتقاطعها مع المضلع الأصلي
+    const newFeatures = [];
+    for(let i = 0; i < nParts; i++){
+      const y1 = cutYs[i];
+      const y2 = cutYs[i + 1];
+      const strip = turf.polygon([[
+        [cX - stripW/2, y1],
+        [cX + stripW/2, y1],
+        [cX + stripW/2, y2],
+        [cX - stripW/2, y2],
+        [cX - stripW/2, y1]
+      ]]);
+      // إعادة تدوير الشريط بـ +angleDeg
+      let rotStrip;
+      try{ rotStrip = turf.transformRotate(strip, angleDeg, {pivot: centroid}); }
+      catch(e){ rotStrip = strip; }
+
+      let inter;
+      try{ inter = turf.intersect(turfPoly, rotStrip); } catch(e){ continue; }
+      if(!inter) continue;
+
+      const geom = inter.geometry;
+      const ringsList = geom.type === 'MultiPolygon'
+        ? geom.coordinates.map(mp => mp[0])
+        : [geom.coordinates[0]];
+
+      ringsList.forEach(r => {
+        let pts = r.map(c => [c[1], c[0]]); // عودة إلى [lat,lng]
+        if(pts.length > 1){
+          const a = pts[0], b = pts[pts.length-1];
+          if(Math.abs(a[0]-b[0]) < 1e-10 && Math.abs(a[1]-b[1]) < 1e-10) pts.pop();
+        }
+        if(pts.length < 3) return;
+        newFeatures.push({
+          id: uid(), type:'polygon',
+          coords: pts,
+          attrs: Object.assign({}, f.attrs),
+          color: f.color
+        });
+      });
+    }
+
+    if(newFeatures.length === 0){
+      alert('لم ينجح التقسيم — جرب مساحة مختلفة أو اتجاه مختلف');
+      return;
+    }
+
+    pushStateToUndo();
+    const fIdx = layer.features.findIndex(x => x.id === featureId);
+    if(fIdx >= 0) layer.features.splice(fIdx, 1, ...newFeatures);
+    else layer.features.push(...newFeatures);
+
+    selection = null;
+    renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
+    document.getElementById('stHint').textContent = `✓ تم تقسيم المضلع إلى ${newFeatures.length} جزء بمساحة ${areaPerPart} م² لكل قطعة (والقطعة الأخيرة قد تحمل الباقي)`;
+  }
 
   /* ---------- Import GeoJSON from file ---------- */
   function importGeoJSON(geojson){
