@@ -897,15 +897,25 @@
   function pathPerimeter(coords){ return pathLength(coords) + haversine(coords[coords.length-1][0],coords[coords.length-1][1],coords[0][0],coords[0][1]); }
   
   function polygonAreaMeters(coords){
-    const refLat = coords[0][0], refLng = coords[0][1];
-    const pts = coords.map(c=>{
-      const north = (c[0]-refLat)*111320;
-      const east = (c[1]-refLng)*111320*Math.cos(toRad(refLat));
-      return [east, north];
-    });
-    let a=0;
-    for(let i=0;i<pts.length;i++){ const [x1,y1]=pts[i], [x2,y2]=pts[(i+1)%pts.length]; a+=x1*y2-x2*y1; }
-    return Math.abs(a)/2;
+    // حساب المساحة الكروية الحقيقية عبر Turf.js (بدل الإسقاط المسطّح التقريبي القديم)
+    // ده بيقرّب النتيجة من حسابات الأنظمة الجيوديسية زي ArcGIS Pro أكتر من التقريب المسطح
+    if(!coords || coords.length < 3) return 0;
+    try{
+      const ring = coords.map(c=>[c[1], c[0]]);
+      ring.push(ring[0]);
+      return turf.area(turf.polygon([ring]));
+    } catch(e){
+      // حساب احتياطي (الطريقة المسطحة القديمة) لو المضلع غير صالح لتورف لأي سبب
+      const refLat = coords[0][0], refLng = coords[0][1];
+      const pts = coords.map(c=>{
+        const north = (c[0]-refLat)*111320;
+        const east = (c[1]-refLng)*111320*Math.cos(toRad(refLat));
+        return [east, north];
+      });
+      let a=0;
+      for(let i=0;i<pts.length;i++){ const [x1,y1]=pts[i], [x2,y2]=pts[(i+1)%pts.length]; a+=x1*y2-x2*y1; }
+      return Math.abs(a)/2;
+    }
   }
 
   function areaToFeddan(areaM2){
