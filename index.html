@@ -114,6 +114,33 @@
   ::-webkit-scrollbar{width:8px;}
   ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
 
+  /* ---- Live Location Dot (Google Maps style) ---- */
+  .loc-dot-wrap{position:relative;width:22px;height:22px;}
+  .loc-dot{
+    width:18px;height:18px;border-radius:50%;
+    background:#4285F4;border:3px solid #fff;
+    box-shadow:0 2px 10px rgba(66,133,244,.8);
+    position:absolute;top:2px;left:2px;
+  }
+  .loc-pulse{
+    width:48px;height:48px;border-radius:50%;
+    background:rgba(66,133,244,.22);
+    position:absolute;top:-13px;left:-13px;
+    animation:loc-pulse 2s ease-out infinite;
+  }
+  @keyframes loc-pulse{
+    0%  {transform:scale(.35);opacity:1;}
+    100%{transform:scale(1.6);opacity:0;}
+  }
+  .loc-heading{
+    width:0;height:0;
+    border-left:7px solid transparent;border-right:7px solid transparent;
+    border-bottom:16px solid rgba(66,133,244,.75);
+    position:absolute;top:-18px;left:4px;
+    transform-origin:7px 18px;
+    transition:transform .4s ease;
+  }
+
   .leaflet-popup-content{font-family:var(--sans);direction:rtl;}
   .vertex-marker{background:var(--bg);border:2px solid var(--teal);border-radius:50%;cursor:move;}
   .vertex-ghost-marker{background:transparent;border:2px dashed rgba(94,201,192,0.6);border-radius:50%;cursor:pointer;}
@@ -1814,33 +1841,131 @@
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png'
   });
 
-  /* ---------- Map Utilities & Current Location ---------- */
-  let currentLocationMarker = null; // متغير لحفظ نقطة الموقع الحالي ومنع تكرارها
+  /* ---------- Live Location Tracking (Google Maps style) ---------- */
+  let currentLocationMarker = null;
+  let currentLocationCircle = null;
+  let locationWatchId      = null;
+  let locationFirstFix     = true;
+  let lastHeading          = null;
+  const locateBtn = document.getElementById('locateBtn');
 
-  document.getElementById('locateBtn').addEventListener('click', ()=>{
-    document.getElementById('stHint').textContent = '⏳ جاري تحديد موقعك الحالي...';
-    map.locate({setView:true, maxZoom:18}); 
-  });
+  /* أيقونة النقطة الزرقاء النابضة */
+  function makeLocIcon(heading){
+    const arrowHtml = (heading !== null)
+      ? `<div class="loc-heading" style="transform:rotate(${heading}deg);"></div>`
+      : '';
+    return L.divIcon({
+      className: '',
+      html: `<div class="loc-dot-wrap">${arrowHtml}<div class="loc-pulse"></div><div class="loc-dot"></div></div>`,
+      iconSize:   [22, 22],
+      iconAnchor: [11, 11]
+    });
+  }
 
-  map.on('locationerror', ()=>(document.getElementById('stHint').textContent = '❌ تعذر تحديد موقعك الحالي'));
-  
-  map.on('locationfound', (e)=>{
-    document.getElementById('stHint').textContent = '📍 تم تحديد موقعك الحالي بنجاح';
-    
-    // إذا كانت هناك نقطة موقع قديمة يتم إزالتها أولاً لمنع تكرار النقط
-    if(currentLocationMarker) {
-      map.removeLayer(currentLocationMarker);
+  function stopLocationTracking(){
+    if(locationWatchId !== null){
+      navigator.geolocation.clearWatch(locationWatchId);
+      locationWatchId = null;
     }
-    
-    // إنشاء النقطة وإضافتها للخريطة رسمياً عند إيجاد الموقع
-    currentLocationMarker = L.marker(e.latlng).addTo(map)
-      .bindPopup(`<div style="text-align:center; font-family:var(--sans);">
-                    <b>موقعك الحالي الذكي</b><br>
-                    Lat: ${e.latlng.lat.toFixed(6)}<br>
-                    Lng: ${e.latlng.lng.toFixed(6)}<br>
-                    <span style="font-size:10px; color:var(--text-muted);">دقة التحديد: ±${e.accuracy.toFixed(1)} متر</span>
-                  </div>`)
-      .openPopup();
+    if(currentLocationMarker){ map.removeLayer(currentLocationMarker); currentLocationMarker = null; }
+    if(currentLocationCircle){ map.removeLayer(currentLocationCircle); currentLocationCircle = null; }
+    locateBtn.classList.remove('active');
+    document.getElementById('stHint').textContent = '⏹ تم إيقاف تتبع الموقع';
+    locationFirstFix = true;
+    lastHeading = null;
+  }
+
+  function startLocationTracking(){
+    if(!navigator.geolocation){
+      document.getElementById('stHint').textContent = '❌ المتصفح لا يدعم تحديد الموقع';
+      return;
+    }
+    document.getElementById('stHint').textContent = '⏳ جاري تحديد موقعك...';
+    locateBtn.classList.add('active');
+    locationFirstFix = true;
+
+    locationWatchId = navigator.geolocation.watchPosition(
+      (pos)=>{
+        const latlng  = L.latLng(pos.coords.latitude, pos.coords.longitude);
+        const acc     = pos.coords.accuracy;
+        const heading = (pos.coords.heading !== null && !isNaN(pos.coords.heading))
+                        ? pos.coords.heading : lastHeading;
+        lastHeading = heading;
+
+        /* أول إصلاح — انتقال سلس للموقع */
+        if(locationFirstFix){
+          map.setView(latlng, 18, {animate:true});
+          locationFirstFix = false;
+        }
+
+        /* تحديث أو إنشاء الماركر */
+        if(currentLocationMarker){
+          currentLocationMarker.setLatLng(latlng);
+          currentLocationMarker.setIcon(makeLocIcon(heading));
+        } else {
+          currentLocationMarker = L.marker(latlng, {
+            icon: makeLocIcon(heading),
+            zIndexOffset: 1000,
+            interactive: true
+          }).addTo(map);
+
+          currentLocationMarker.bindPopup('');
+          currentLocationMarker.on('click', ()=>{
+            const ll = currentLocationMarker.getLatLng();
+            currentLocationMarker.setPopupContent(
+              `<div style="text-align:center;font-family:var(--sans);direction:rtl;">
+                <b>📍 موقعك الحالي</b><br>
+                <span style="font-family:var(--mono);font-size:11px;">
+                  Lat: ${ll.lat.toFixed(6)}<br>
+                  Lng: ${ll.lng.toFixed(6)}
+                </span><br>
+                <span style="font-size:10px;color:#84a0b6;">دقة: ±${acc.toFixed(0)} م</span><br>
+                <button onclick="window._stopLoc()"
+                  style="margin-top:7px;background:#e2665b;color:#fff;border:none;
+                         padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11.5px;">
+                  ⏹ إيقاف التتبع
+                </button>
+              </div>`
+            ).openPopup();
+          });
+        }
+
+        /* تحديث أو إنشاء دائرة الدقة */
+        if(currentLocationCircle){
+          currentLocationCircle.setLatLng(latlng).setRadius(acc);
+        } else {
+          currentLocationCircle = L.circle(latlng, {
+            radius: acc, color:'#4285F4', weight:1.2,
+            fillColor:'#4285F4', fillOpacity:0.1, interactive:false
+          }).addTo(map);
+        }
+
+        document.getElementById('stHint').textContent =
+          `📍 موقعك الحالي — دقة ±${acc.toFixed(0)} م`;
+      },
+      (err)=>{
+        const msgs = {
+          1: 'رُفض إذن الوصول للموقع — فعّل الأذونات من المتصفح',
+          2: 'تعذّر الحصول على الموقع — تحقق من الاتصال',
+          3: 'انتهت مهلة التحديد — حاول مرة أخرى'
+        };
+        document.getElementById('stHint').textContent = '❌ ' + (msgs[err.code] || 'خطأ في الموقع');
+        locateBtn.classList.remove('active');
+        locationWatchId = null;
+      },
+      { enableHighAccuracy:true, maximumAge:3000, timeout:15000 }
+    );
+  }
+
+  /* دالة عامة لإيقاف التتبع من داخل الـ Popup */
+  window._stopLoc = stopLocationTracking;
+
+  locateBtn.addEventListener('click', ()=>{
+    if(locationWatchId !== null){
+      stopLocationTracking();
+    } else {
+      startLocationTracking();
+    }
   });
 
   // ميزة ملائمة حدود الخريطة للعناصر الحالية
