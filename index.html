@@ -581,6 +581,10 @@
         <div id="divAreaRow" style="display:none;">
           <label>مساحة كل قطعة (م²)</label>
           <input type="number" id="divAreaValue" value="100" min="0.01" step="0.01">
+          <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;font-weight:400;">
+            <input type="checkbox" id="divAreaReverse" style="width:14px;height:14px;accent-color:#2a9d5c;cursor:pointer;">
+            <span>ابدأ من الجهة المقابلة (تجعل القطعة المتبقية في البداية بدل النهاية)</span>
+          </label>
         </div>
         <label>اتجاه التقسيم</label>
         <select id="divDir">
@@ -2211,9 +2215,10 @@
     document.getElementById('stHint').textContent='⏳ جاري التقسيم...';
     if(divMode==='area'){
       const areaPerPart = parseFloat(document.getElementById('divAreaValue').value)||0;
+      const reverseStart = document.getElementById('divAreaReverse').checked;
       // نستخدم setTimeout لإتاحة الفرصة للـ UI أن يُحدَّث
       setTimeout(()=>{
-        dividePolygonFeatureByArea(dividePendingLayerId, dividePendingFeatureId, areaPerPart, angleDeg);
+        dividePolygonFeatureByArea(dividePendingLayerId, dividePendingFeatureId, areaPerPart, angleDeg, reverseStart);
         dividePendingLayerId=null; dividePendingFeatureId=null;
       }, 30);
       return;
@@ -2608,7 +2613,7 @@
     document.getElementById('stHint').textContent = `✓ تم تقسيم المضلع إلى ${newFeatures.length} جزء`;
   }
 
-  function dividePolygonFeatureByArea(layerId, featureId, areaPerPart, angleDeg){
+  function dividePolygonFeatureByArea(layerId, featureId, areaPerPart, angleDeg, reverseStart){
     if(!window.turf){ alert('مكتبة Turf.js لم تُحمَّل — تحقق من الاتصال بالإنترنت'); return; }
     const layer = getLayer(layerId);
     if(!layer) return;
@@ -2681,6 +2686,16 @@
       cutYs.push(prevY);
     }
     cutYs.push(maxY + eps);
+
+    // لو مطلوب البدء من الجهة المقابلة، نعكس (reflect) مواضع القطع حول منتصف الارتفاع
+    // بحيث تنتقل القطعة "المتبقية" (الحجم المختلف) من نهاية الشريط إلى بدايته
+    if(reverseStart){
+      const n = cutYs.length - 1;
+      const mSum = minY + maxY;
+      const reflected = new Array(cutYs.length);
+      for(let i = 0; i <= n; i++) reflected[i] = mSum - cutYs[n - i];
+      cutYs = reflected;
+    }
 
     // إنشاء شرائح وتقاطعها مع المضلع الأصلي
     const newFeatures = [];
