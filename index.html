@@ -60,6 +60,7 @@
   #exportBtn {--tc:#3a8e82;}
   #importBtn {--tc:#b08020;}
   #labelsBtn {--tc:#7060a8;}
+  #dimensionsBtn {--tc:#3a8e82;}
   #screenshotBtn{--tc:#9a8878;}
   .tool-btn[data-tool="divide"]{--tc:#2a9d5c;}
 
@@ -118,7 +119,14 @@
   .btn-create{background:var(--accent);color:#fff;}
   .btn-cancel{background:var(--bg-panel-2);color:var(--text-muted);border:1px solid var(--border) !important;}
 
-  .go-to-hud { width: 220px; border-color: var(--teal); }
+  .go-to-hud { width: 280px; border-color: var(--teal); }
+  .dms-row{display:flex;gap:3px;align-items:center;margin-bottom:4px;}
+  .dms-row input{background:var(--bg-panel-2);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 5px;font-family:var(--mono);font-size:12px;}
+  .dms-row .dms-deg{width:44px;}
+  .dms-row .dms-min{width:40px;}
+  .dms-row .dms-sec{width:54px;}
+  .dms-row .dms-dir{width:44px;background:var(--bg-panel-2);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 3px;font-family:var(--mono);font-size:11px;}
+  .dms-row .dms-sym{font-size:11px;color:var(--text-muted);flex-shrink:0;}
 
   .sidebar{width:280px;background:linear-gradient(180deg,#faf4ed 0%,#f0e6d6 100%);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
   .tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;background:#f0e6d6;}
@@ -278,6 +286,15 @@
     box-shadow:0 2px 10px rgba(30,58,56,.3);white-space:nowrap;pointer-events:none;
   }
   .feature-label-tip.leaflet-tooltip-top::before{display:none;}
+
+  /* ---- Dimension labels (side lengths) ---- */
+  .dim-label-tip{
+    background:rgba(58,142,130,.88);color:#fff;border:1px solid rgba(58,142,130,.4);
+    border-radius:5px;font-size:9px;font-family:var(--mono);padding:1px 6px;
+    box-shadow:0 1px 6px rgba(30,58,56,.2);white-space:nowrap;pointer-events:none;
+  }
+  .dim-label-tip.leaflet-tooltip-top::before{display:none;}
+  .dim-label-tip.leaflet-tooltip-center::before{display:none;}
 
   /* ---- Per-feature color swatch in attr panel ---- */
   .fcolor-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;
@@ -469,6 +486,14 @@
       </svg><span>تسميات</span>
     </button>
 
+    <button class="tool-btn" id="dimensionsBtn" title="إظهار / إخفاء أبعاد الأضلاع على الخريطة">
+      <svg viewBox="0 0 24 24">
+        <rect x="2" y="9.5" width="20" height="5" rx="1" fill="currentColor" opacity=".14" stroke-width="1.7"/>
+        <path d="M2 12h20" stroke-width="2"/>
+        <path d="M2 9.5v5M6 9.5v3M10 9.5v3M14 9.5v3M18 9.5v3M22 9.5v5" stroke-width="1.5"/>
+      </svg><span>أبعاد</span>
+    </button>
+
     <button class="tool-btn" id="screenshotBtn" title="طباعة / تصدير الخريطة كصورة">
       <svg viewBox="0 0 24 24">
         <rect x="2" y="7" width="20" height="14" rx="2" fill="currentColor" opacity=".14" stroke-width="1.8"/>
@@ -547,11 +572,27 @@
 
       <div class="rect-hud go-to-hud" id="goToCoordsHud">
         <h4 style="color:var(--teal);">الانتقال لنقطة إحداثية</h4>
-        <label>خط العرض (Latitude)</label>
-        <input type="number" id="goLat" value="29.9792" step="0.000001">
-        <label>خط الطول (Longitude)</label>
-        <input type="number" id="goLng" value="31.1342" step="0.000001">
-        <div class="row-btns">
+        <label style="font-size:10px;">خط العرض (Latitude)</label>
+        <div class="dms-row">
+          <input class="dms-deg" type="number" id="goLatDeg" value="29" min="0" max="90" step="1" placeholder="°">
+          <span class="dms-sym">°</span>
+          <input class="dms-min" type="number" id="goLatMin" value="58" min="0" max="59" step="1" placeholder="′">
+          <span class="dms-sym">′</span>
+          <input class="dms-sec" type="number" id="goLatSec" value="45.12" min="0" max="59.9999" step="0.01" placeholder="″">
+          <span class="dms-sym">″</span>
+          <select class="dms-dir" id="goLatDir"><option value="N">N شمال</option><option value="S">S جنوب</option></select>
+        </div>
+        <label style="font-size:10px;margin-top:6px;display:block;">خط الطول (Longitude)</label>
+        <div class="dms-row">
+          <input class="dms-deg" type="number" id="goLngDeg" value="31" min="0" max="180" step="1" placeholder="°">
+          <span class="dms-sym">°</span>
+          <input class="dms-min" type="number" id="goLngMin" value="8" min="0" max="59" step="1" placeholder="′">
+          <span class="dms-sym">′</span>
+          <input class="dms-sec" type="number" id="goLngSec" value="3.12" min="0" max="59.9999" step="0.01" placeholder="″">
+          <span class="dms-sym">″</span>
+          <select class="dms-dir" id="goLngDir"><option value="E">E شرق</option><option value="W">W غرب</option></select>
+        </div>
+        <div class="row-btns" style="margin-top:10px;">
           <button class="btn-cancel" id="goToCancel">إلغاء</button>
           <button class="btn-create" id="goToExecute" style="background:var(--teal);">انتقال</button>
         </div>
@@ -713,6 +754,8 @@
   let measurePt1 = null, measureMarker = null, measureLine = null;
   // --- Labels toggle ---
   let labelsVisible = false;
+  // --- Dimensions labels toggle ---
+  let dimensionsVisible = false;
   // --- Divide tool state ---
   let dividePendingLayerId = null, dividePendingFeatureId = null;
   let divideAngleMode = null; // null | 'drawline' | 'edge' — وضع تحديد اتجاه التقسيم من الخريطة
@@ -750,6 +793,7 @@
   });
   satLayer.addTo(map);
   const labelsLayerGroup = L.layerGroup().addTo(map);
+  const dimLabelsLayerGroup = L.layerGroup().addTo(map);
 
   document.getElementById('btnSat').addEventListener('click', ()=>{
     map.removeLayer(streetsLayer); map.addLayer(satLayer);
@@ -1401,6 +1445,7 @@
       });
     });
     renderLabels();
+    renderDimensionLabels();
   }
 
   /* ---------- Rendering friend (read-only) layers ---------- */
@@ -1656,7 +1701,9 @@
         document.getElementById('stHint').textContent = '📏 انقر على النقطة الثانية لإتمام القياس...';
       } else {
         const dist = haversine(measurePt1.lat,measurePt1.lng,snapped.lat,snapped.lng);
-        const bearing = ((Math.atan2(snapped.lng-measurePt1.lng,snapped.lat-measurePt1.lat)*180/Math.PI)+360)%360;
+        // حساب الاتجاه الجيوديسي الصحيح (True Bearing) بمعادلة المثلثات الكروية
+        const φ1=toRad(measurePt1.lat), φ2=toRad(snapped.lat), Δλ=toRad(snapped.lng-measurePt1.lng);
+        const bearing=(toDeg(Math.atan2(Math.sin(Δλ)*Math.cos(φ2), Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ)))+360)%360;
         const distStr = dist>=1000?(dist/1000).toFixed(3)+' كم':dist.toFixed(2)+' م';
         if(measureLine){ map.removeLayer(measureLine); measureLine=null; }
         measureLine = L.polyline(
@@ -1742,8 +1789,25 @@
 
     if(btn.id === 'goToCoordsBtn') {
       const center = map.getCenter();
-      document.getElementById('goLat').value = center.lat.toFixed(6);
-      document.getElementById('goLng').value = center.lng.toFixed(6);
+      // تحويل الإحداثيات العشرية إلى درجات ودقائق وثوانٍ
+      function decToDMS(decimal){
+        const abs = Math.abs(decimal);
+        const d = Math.floor(abs);
+        const mFull = (abs - d) * 60;
+        const m = Math.floor(mFull);
+        const s = (mFull - m) * 60;
+        return { d, m, s };
+      }
+      const latDMS = decToDMS(center.lat);
+      const lngDMS = decToDMS(center.lng);
+      document.getElementById('goLatDeg').value = latDMS.d;
+      document.getElementById('goLatMin').value = latDMS.m;
+      document.getElementById('goLatSec').value = latDMS.s.toFixed(2);
+      document.getElementById('goLatDir').value = center.lat >= 0 ? 'N' : 'S';
+      document.getElementById('goLngDeg').value = lngDMS.d;
+      document.getElementById('goLngMin').value = lngDMS.m;
+      document.getElementById('goLngSec').value = lngDMS.s.toFixed(2);
+      document.getElementById('goLngDir').value = center.lng >= 0 ? 'E' : 'W';
       goToCoordsHud.style.left = '90px';
       goToCoordsHud.style.top = '140px';
       goToCoordsHud.style.display = (goToCoordsHud.style.display === 'block') ? 'none' : 'block';
@@ -2298,16 +2362,33 @@
 
   document.getElementById('goToCancel').addEventListener('click', () => { goToCoordsHud.style.display='none'; });
   document.getElementById('goToExecute').addEventListener('click', () => {
-    const lat = parseFloat(document.getElementById('goLat').value);
-    const lng = parseFloat(document.getElementById('goLng').value);
-    if(isNaN(lat) || isNaN(lng)) { alert('الرجاء إدخال أرقام صحيحة للإحداثيات'); return; }
-    
+    function dmsToDecimal(deg, min, sec, dir){
+      const decimal = (Math.abs(+deg||0)) + (Math.abs(+min||0))/60 + (Math.abs(+sec||0))/3600;
+      return (dir==='S'||dir==='W') ? -decimal : decimal;
+    }
+    const lat = dmsToDecimal(
+      document.getElementById('goLatDeg').value,
+      document.getElementById('goLatMin').value,
+      document.getElementById('goLatSec').value,
+      document.getElementById('goLatDir').value
+    );
+    const lng = dmsToDecimal(
+      document.getElementById('goLngDeg').value,
+      document.getElementById('goLngMin').value,
+      document.getElementById('goLngSec').value,
+      document.getElementById('goLngDir').value
+    );
+    if(isNaN(lat)||isNaN(lng)||lat<-90||lat>90||lng<-180||lng>180){
+      alert('الرجاء إدخال قيم DMS صحيحة للإحداثيات'); return;
+    }
+    function fmtDMS(d,m,s,dir){ return `${d}° ${m}′ ${(+s).toFixed(2)}″ ${dir}`; }
+    const latStr = fmtDMS(+document.getElementById('goLatDeg').value||0,+document.getElementById('goLatMin').value||0,+document.getElementById('goLatSec').value||0,document.getElementById('goLatDir').value);
+    const lngStr = fmtDMS(+document.getElementById('goLngDeg').value||0,+document.getElementById('goLngMin').value||0,+document.getElementById('goLngSec').value||0,document.getElementById('goLngDir').value);
     const targetLatLng = L.latLng(lat, lng);
     map.setView(targetLatLng, 18, { animate: true });
-    
     if(targetLocationMarker) { map.removeLayer(targetLocationMarker); }
     targetLocationMarker = L.marker(targetLatLng).addTo(map)
-      .bindPopup(`<div style="text-align:center;"><b>الموقع المستهدف</b><br>Lat: ${lat}<br>Lng: ${lng}<br><button onclick="window.removeTargetMarker()" style="margin-top:6px; background:var(--danger); color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">حذف العلامة</button></div>`)
+      .bindPopup(`<div style="text-align:center;direction:ltr;font-family:monospace;"><b>الموقع المستهدف</b><br>${latStr}<br>${lngStr}<br><small style="color:#888;">(${lat.toFixed(6)}, ${lng.toFixed(6)})</small><br><button onclick="window.removeTargetMarker()" style="margin-top:6px; background:var(--danger); color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">حذف العلامة</button></div>`)
       .openPopup();
     goToCoordsHud.style.display = 'none';
   });
@@ -2359,8 +2440,8 @@
       const areaPerPart = parseFloat(document.getElementById('divAreaValue').value)||0;
       const reverseStart = document.getElementById('divAreaReverse').checked;
       // نستخدم setTimeout لإتاحة الفرصة للـ UI أن يُحدَّث
-      setTimeout(()=>{
-        dividePolygonFeatureByArea(dividePendingLayerId, dividePendingFeatureId, areaPerPart, angleDeg, reverseStart);
+      setTimeout(async ()=>{
+        await dividePolygonFeatureByArea(dividePendingLayerId, dividePendingFeatureId, areaPerPart, angleDeg, reverseStart);
         dividePendingLayerId=null; dividePendingFeatureId=null;
       }, 30);
       return;
@@ -2368,8 +2449,8 @@
     const nParts = Math.max(2, parseInt(document.getElementById('divN').value)||2);
     const equalArea = document.getElementById('divEqualArea').checked;
     // نستخدم setTimeout لإتاحة الفرصة للـ UI أن يُحدَّث
-    setTimeout(()=>{
-      dividePolygonFeature(dividePendingLayerId, dividePendingFeatureId, nParts, angleDeg, equalArea);
+    setTimeout(async ()=>{
+      await dividePolygonFeature(dividePendingLayerId, dividePendingFeatureId, nParts, angleDeg, equalArea);
       dividePendingLayerId=null; dividePendingFeatureId=null;
     }, 30);
   });
@@ -2640,7 +2721,7 @@
   });
 
   /* ---------- Divide Polygon ---------- */
-  function dividePolygonFeature(layerId, featureId, nParts, angleDeg, equalArea){
+  async function dividePolygonFeature(layerId, featureId, nParts, angleDeg, equalArea){
     if(!window.turf){ alert('مكتبة Turf.js لم تُحمَّل — تحقق من الاتصال بالإنترنت'); return; }
     const layer = getLayer(layerId);
     if(!layer) return;
@@ -2669,7 +2750,7 @@
     const totalH = maxY - minY;
     const eps = totalH * 0.00005;
 
-    // دالة مساعدة: مساحة التقاطع من minY حتى cutY
+    // دالة مساعدة: مساحة التقاطع التراكمية من minY حتى cutY
     function areaUpTo(cutY){
       const strip = turf.polygon([[
         [cX - stripW/2, minY - eps],
@@ -2687,7 +2768,7 @@
     // حساب مواضع القطع
     let cutYs = [minY - eps];
     if(equalArea){
-      const totalArea = turf.area(rotated);
+      const totalArea = turf.area(rotated);      // ← إصلاح: كان targetArea غير معرَّف
       const targetPerSlice = totalArea / nParts;
       let prevY = minY - eps;
       for(let i = 1; i < nParts; i++){
@@ -2696,13 +2777,17 @@
         for(let iter = 0; iter < 64; iter++){
           const mid = (lo + hi) / 2;
           const a = areaUpTo(mid);
-          if(Math.abs(a - targetCum) / (targetArea || 1) < 0.0005) break;
+          if(Math.abs(a - targetCum) / totalArea < 0.0005) break; // ← إصلاح: نسبي لـ totalArea
           if(a < targetCum) lo = mid; else hi = mid;
         }
         prevY = (lo + hi) / 2;
         cutYs.push(prevY);
+        document.getElementById('stHint').textContent =
+          `⏳ جاري التقسيم... ${i}/${nParts-1}`;
+        await new Promise(r => setTimeout(r, 0)); // ← تنفّس للمتصفح بين كل قطعة
       }
     } else {
+      // تقسيم متساوي الارتفاع (سريع، مناسب للمضلعات المنتظمة)
       for(let i = 1; i < nParts; i++) cutYs.push(minY + (i / nParts) * totalH);
     }
     cutYs.push(maxY + eps);
@@ -2719,7 +2804,7 @@
         [cX - stripW/2, y2],
         [cX - stripW/2, y1]
       ]]);
-      // إعادة تدوير الشريط بـ +angleDeg
+      // إعادة تدوير الشريط بـ +angleDeg ليتوافق مع المضلع الأصلي
       let rotStrip;
       try{ rotStrip = turf.transformRotate(strip, angleDeg, {pivot: centroid}); }
       catch(e){ rotStrip = strip; }
@@ -2764,7 +2849,7 @@
     document.getElementById('stHint').textContent = `✓ تم تقسيم المضلع إلى ${newFeatures.length} جزء`;
   }
 
-  function dividePolygonFeatureByArea(layerId, featureId, areaPerPart, angleDeg, reverseStart){
+  async function dividePolygonFeatureByArea(layerId, featureId, areaPerPart, angleDeg, reverseStart){
     if(!window.turf){ alert('مكتبة Turf.js لم تُحمَّل — تحقق من الاتصال بالإنترنت'); return; }
     const layer = getLayer(layerId);
     if(!layer) return;
@@ -2793,7 +2878,7 @@
     const totalH = maxY - minY;
     const eps = totalH * 0.00005;
 
-    // دالة مساعدة: مساحة التقاطع من minY حتى cutY
+    // دالة مساعدة: مساحة التقاطع التراكمية من minY حتى cutY
     function areaUpTo(cutY){
       const strip = turf.polygon([[
         [cX - stripW/2, minY - eps],
@@ -2808,20 +2893,20 @@
       } catch(e){ return 0; }
     }
 
-    // مساحة المضلع الكلية وعدد القطع الكاملة بالمساحة المحددة + قطعة أخيرة بالباقي
+    // المساحة الكلية للمضلع (بالمتر المربع)
     const totalArea = turf.area(rotated);
     if(areaPerPart >= totalArea){
       alert('المساحة المحددة أكبر من (أو تساوي) مساحة المضلع الكلية — لا يمكن التقسيم بهذه القيمة');
       return;
     }
 
+    // عدد القطع: كل قطعة بالمساحة المحددة + قطعة أخيرة للباقي
     let nParts = Math.floor(totalArea / areaPerPart);
     const remainder = totalArea - (nParts * areaPerPart);
-    // لو الباقي كبير بما يكفي (أكثر من 2% من مساحة القطعة) نضيف قطعة أخيرة إضافية بمساحة الباقي
     if(remainder > areaPerPart * 0.02) nParts += 1;
     if(nParts < 1) nParts = 1;
 
-    // حساب مواضع القطع تراكمياً بحيث كل قطعة (عدا الأخيرة) تساوي areaPerPart بالضبط
+    // حساب مواضع القطع تراكمياً — كل قطعة (عدا الأخيرة) = areaPerPart بالضبط
     let cutYs = [minY - eps];
     let prevY = minY - eps;
     for(let i = 1; i < nParts; i++){
@@ -2830,16 +2915,18 @@
       for(let iter = 0; iter < 64; iter++){
         const mid = (lo + hi) / 2;
         const a = areaUpTo(mid);
-        if(Math.abs(a - targetCum) / (totalArea || 1) < 0.0005) break;
+        if(Math.abs(a - targetCum) / totalArea < 0.0005) break;
         if(a < targetCum) lo = mid; else hi = mid;
       }
       prevY = (lo + hi) / 2;
       cutYs.push(prevY);
+      document.getElementById('stHint').textContent =
+        `⏳ جاري التقسيم... ${i}/${nParts-1}`;
+      await new Promise(r => setTimeout(r, 0)); // تنفّس للمتصفح بين كل قطعة
     }
     cutYs.push(maxY + eps);
 
-    // لو مطلوب البدء من الجهة المقابلة، نعكس (reflect) مواضع القطع حول منتصف الارتفاع
-    // بحيث تنتقل القطعة "المتبقية" (الحجم المختلف) من نهاية الشريط إلى بدايته
+    // عكس الترتيب لو مطلوب البدء من الجهة الأخرى
     if(reverseStart){
       const n = cutYs.length - 1;
       const mSum = minY + maxY;
@@ -2860,7 +2947,7 @@
         [cX - stripW/2, y2],
         [cX - stripW/2, y1]
       ]]);
-      // إعادة تدوير الشريط بـ +angleDeg
+      // إعادة تدوير الشريط ليتوافق مع المضلع الأصلي
       let rotStrip;
       try{ rotStrip = turf.transformRotate(strip, angleDeg, {pivot: centroid}); }
       catch(e){ rotStrip = strip; }
@@ -2999,6 +3086,41 @@
       :'🏷 التسميات مُخفاة';
   });
 
+  /* ---------- Dimension Labels (side lengths on map) ---------- */
+  function renderDimensionLabels(){
+    dimLabelsLayerGroup.clearLayers();
+    if(!dimensionsVisible) return;
+    state.layers.forEach(layer=>{
+      if(!layer.visible) return;
+      layer.features.forEach(f=>{
+        if(f.type==='point') return;
+        const isClosed = (f.type==='polygon'||f.type==='rectangle');
+        const n = f.coords.length;
+        const limit = isClosed ? n : n-1;
+        for(let i=0;i<limit;i++){
+          const pA = f.coords[i];
+          const pB = f.coords[(i+1)%n];
+          const dist = haversine(pA[0],pA[1],pB[0],pB[1]);
+          if(dist < 0.01) continue; // تجاهل الأضلاع المتراكبة
+          const distStr = dist>=1000?(dist/1000).toFixed(3)+' كم':dist.toFixed(1)+' م';
+          const midLat = (pA[0]+pB[0])/2;
+          const midLng = (pA[1]+pB[1])/2;
+          L.tooltip({permanent:true,direction:'center',className:'dim-label-tip',offset:[0,0]})
+            .setLatLng([midLat,midLng]).setContent(distStr).addTo(dimLabelsLayerGroup);
+        }
+      });
+    });
+  }
+
+  document.getElementById('dimensionsBtn').addEventListener('click',()=>{
+    dimensionsVisible=!dimensionsVisible;
+    document.getElementById('dimensionsBtn').classList.toggle('active',dimensionsVisible);
+    renderDimensionLabels();
+    document.getElementById('stHint').textContent=dimensionsVisible
+      ?'📐 أبعاد الأضلاع مفعّلة — تظهر أطوال الأضلاع على الخريطة'
+      :'📐 أبعاد الأضلاع مُخفاة';
+  });
+
   /* ---------- Screenshot / Print ---------- */
   document.getElementById('screenshotBtn').addEventListener('click',()=>{
     document.getElementById('stHint').textContent='📸 افتح طباعة — اختر «حفظ كـ PDF» أو «Microsoft Print to PDF»';
@@ -3012,30 +3134,7 @@
     if(all.length) map.fitBounds(L.latLngBounds(all), {padding:[30,30]});
   });
 
-  // آلية الانتقال إلى إحداثيات محددة المدخلة من الـ HUD مع الحفاظ التام عليها
-  document.getElementById('goToExecute').addEventListener('click', ()=>{
-    const lat = parseFloat(document.getElementById('goLat').value);
-    const lng = parseFloat(document.getElementById('goLng').value);
-    if(isNaN(lat) || isNaN(lng)) return;
-
-    const targetLatLng = L.latLng(lat, lng);
-    map.setView(targetLatLng, 18, { animate: true });
-
-    if(targetLocationMarker) {
-      map.removeLayer(targetLocationMarker);
-    }
-
-    targetLocationMarker = L.marker(targetLatLng).addTo(map)
-      .bindPopup(`<div style="text-align:center;">
-                    <b>الموقع المستهدف</b><br>
-                    Lat: ${lat}<br>
-                    Lng: ${lng}<br>
-                    <button onclick="window.removeTargetMarker()" style="margin-top:6px; background:var(--danger); color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">حذف العلامة</button>
-                  </div>`)
-      .openPopup();
-
-    goToCoordsHud.style.display = 'none';
-  });
+  // (مكرر من الفقرة العلوية — تم تعطيله بتعليق لتفادي تسجيل نفس المستمع مرتين)
 
   window.removeTargetMarker = function() {
     if(targetLocationMarker) {
