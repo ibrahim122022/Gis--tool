@@ -1017,6 +1017,78 @@
   function getFeature(layerId, featureId){ const l=getLayer(layerId); return l? l.features.find(f=>f.id===featureId): null; }
   function activeLayer(){ return getLayer(state.activeLayerId) || state.layers[0]; }
 
+  // ─── hit-test: كل العناصر التي تحتوي على نقطة النقر (بالترتيب: طبقة → عنصر) ───
+  function featuresAtPoint(latlng){
+    const pt = map.latLngToContainerPoint(latlng);
+    const results = [];
+    state.layers.forEach(layer=>{
+      if(!layer.visible) return;
+      layer.features.forEach(f=>{
+        let hit = false;
+        if(f.type==='point'){
+          const cp = map.latLngToContainerPoint(L.latLng(f.coords[0][0],f.coords[0][1]));
+          hit = Math.hypot(cp.x-pt.x, cp.y-pt.y) <= 10;
+        } else if(f.type==='line'){
+          featureSnapSegments(f).forEach(seg=>{
+            if(hit) return;
+            const ap = map.latLngToContainerPoint(L.latLng(seg[0][0],seg[0][1]));
+            const bp = map.latLngToContainerPoint(L.latLng(seg[1][0],seg[1][1]));
+            const cp = closestPointOnSegmentPx(pt, ap, bp);
+            hit = Math.hypot(cp.x-pt.x, cp.y-pt.y) <= 7;
+          });
+        } else {
+          // polygon / rectangle / circle
+          try{
+            const tPt  = turf.point([latlng.lng, latlng.lat]);
+            const ring = f.coords.map(c=>[c[1],c[0]]);
+            if(ring[0][0]!==ring[ring.length-1][0] || ring[0][1]!==ring[ring.length-1][1])
+              ring.push(ring[0]);
+            hit = turf.booleanPointInPolygon(tPt, turf.polygon([ring]));
+          } catch(e){ hit=false; }
+        }
+        if(hit) results.push({layerId:layer.id, featureId:f.id});
+      });
+    });
+    return results;
+  }
+
+  // guard: منع تنفيذ الـ cycling أكثر من مرة في نفس حدث النقر
+  let _lastClickTs = -1;
+
+  function cycleSelectAtPoint(latlng){
+    const ts = performance.now();
+    // لو نفس الحدث اتشغّل قبل كده (من شكل متداخل) → تجاهل
+    if(ts - _lastClickTs < 50) return;
+    _lastClickTs = ts;
+
+    const candidates = featuresAtPoint(latlng);
+    if(!candidates.length){ selection=null; renderAttrPanel(); renderFeatures(); return; }
+
+    // إيجاد index العنصر الحالي، ثم الانتقال للتالي
+    const curIdx = selection
+      ? candidates.findIndex(c=>c.layerId===selection.layerId && c.featureId===selection.featureId)
+      : -1;
+    const nextIdx = (curIdx + 1) % candidates.length;
+    selection = candidates[nextIdx];
+
+    // تلميح في شريط الحالة إذا في تداخل
+    if(candidates.length > 1){
+      const f = getFeature(selection.layerId, selection.featureId);
+      const name = f?.props?.name || f?.type || '';
+      document.getElementById('stHint').textContent =
+        `🔄 ${nextIdx+1} / ${candidates.length}  — انقر للتبديل${name?' ('+name+')':''}`;
+    } else {
+      document.getElementById('stHint').textContent = '';
+    }
+
+    renderAttrPanel();
+    renderFeatures();
+    if(window.innerWidth <= 760){
+      const f = getFeature(selection.layerId, selection.featureId);
+      if(f) openMobileEditPad(f);
+    }
+  }
+
   function featureSnapSegments(f){
     // ترجع أضلاع (أزواج نقاط) العنصر لأجل الإسناب على أي مكان فى الضلع، مش على الفيرتكس بس
     const n = f.coords.length;
@@ -1370,10 +1442,7 @@
           }
           if(tool!=='select') return;
           L.DomEvent.stopPropagation(e);
-          selection = {layerId:layer.id, featureId:f.id};
-          renderAttrPanel(); 
-          renderFeatures();
-          if(window.innerWidth <= 760) openMobileEditPad(f);
+          cycleSelectAtPoint(e.latlng);
         });
 
         shape.on('mousedown', (e) => {
