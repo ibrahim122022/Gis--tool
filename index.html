@@ -12,11 +12,11 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root{
-    --bg:#ede4d4;
-    --bg-panel:#faf4ed; --bg-panel-2:#f2e9d8;
-    --accent:#e8604a; --accent-soft:rgba(232,96,74,.16);
-    --teal:#3a8e82; --teal-soft:rgba(58,142,130,.15);
-    --text:#1e3a38; --text-muted:#8a7060; --danger:#c84040; --border:#dcc9b2;
+    --bg:#D6EEF2;
+    --bg-panel:#FFFFFF; --bg-panel-2:#EAF7F5;
+    --accent:#E8457A; --accent-soft:rgba(232,69,122,.16);
+    --teal:#00B4A6; --teal-soft:rgba(0,180,166,.15);
+    --text:#1B3968; --text-muted:#6E92A8; --danger:#E2665B; --border:#A8D8DC;
     --mono:'JetBrains Mono', ui-monospace, Consolas, monospace;
     --sans:'Inter', system-ui, -apple-system, sans-serif;
   }
@@ -26,16 +26,17 @@
 
   .toolbar{
     width:80px;
-    background:linear-gradient(180deg,#f5ead8 0%,#e6d5be 100%);
+    background:linear-gradient(180deg,#E0F6F8 0%,#C4E8EE 100%);
     border-left:1px solid var(--border);
-    box-shadow:-2px 0 18px rgba(160,120,70,.18);
+    box-shadow:-2px 0 18px rgba(0,120,140,.18);
     display:flex;flex-direction:column;align-items:center;
     padding:10px 0;gap:4px;flex-shrink:0;z-index:500;
   }
   .tool-btn{
     width:58px;height:58px;border-radius:14px;border:1px solid transparent;
     background:transparent;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;gap:3px;cursor:pointer;color:var(--text-muted);
+    justify-content:center;gap:3px;cursor:pointer;
+    color:color-mix(in srgb,var(--tc,var(--text-muted)) 72%,transparent);
     transition:all .2s cubic-bezier(.25,.8,.25,1);
   }
   .tool-btn svg{
@@ -44,24 +45,24 @@
   }
   .tool-btn span{font-size:8px;font-family:var(--sans);font-weight:500;letter-spacing:.01em;}
 
-  /* ── Per-tool accent colors — desert & coral palette ── */
-  .tool-btn[data-tool="select"]  {--tc:#3a8e82;}
-  .tool-btn[data-tool="point"]   {--tc:#e8604a;}
-  .tool-btn[data-tool="line"]    {--tc:#4a9e8a;}
-  .tool-btn[data-tool="polygon"] {--tc:#b06a28;}
-  .tool-btn[data-tool="rectangle"]{--tc:#c87840;}
-  .tool-btn[data-tool="circle"]  {--tc:#7060a8;}
-  .tool-btn[data-tool="measure"] {--tc:#b08020;}
-  #goToCoordsBtn {--tc:#4a9e8a;}
-  #undoBtn,#redoBtn{--tc:#9a8878;}
-  #snapBtn   {--tc:#b09020;}
-  #locateBtn {--tc:#e8604a;}
-  #fitBtn    {--tc:#4a9e8a;}
-  #exportBtn {--tc:#3a8e82;}
-  #importBtn {--tc:#b08020;}
-  #labelsBtn {--tc:#7060a8;}
-  #dimensionsBtn {--tc:#3a8e82;}
-  #screenshotBtn{--tc:#9a8878;}
+  /* ── Per-tool accent colors — Mediterranean palette ── */
+  .tool-btn[data-tool="select"]  {--tc:#00B4A6;}
+  .tool-btn[data-tool="point"]   {--tc:#E8457A;}
+  .tool-btn[data-tool="line"]    {--tc:#0090A8;}
+  .tool-btn[data-tool="polygon"] {--tc:#E8A432;}
+  .tool-btn[data-tool="rectangle"]{--tc:#D4852A;}
+  .tool-btn[data-tool="circle"]  {--tc:#5070C8;}
+  .tool-btn[data-tool="measure"] {--tc:#D4A020;}
+  #goToCoordsBtn {--tc:#00B4A6;}
+  #undoBtn,#redoBtn{--tc:#7A9AAA;}
+  #snapBtn   {--tc:#D4A020;}
+  #locateBtn {--tc:#E8457A;}
+  #fitBtn    {--tc:#00B4A6;}
+  #exportBtn {--tc:#00B4A6;}
+  #importBtn {--tc:#D4A020;}
+  #labelsBtn {--tc:#5070C8;}
+  #dimensionsBtn {--tc:#00B4A6;}
+  #screenshotBtn{--tc:#7A9AAA;}
   .tool-btn[data-tool="divide"]{--tc:#2a9d5c;}
 
   .tool-btn:hover:not(:disabled){
@@ -82,16 +83,16 @@
 
   .main{flex:1;position:relative;display:flex;flex-direction:column;min-width:0;}
   .canvas-wrap{flex:1;position:relative;overflow:hidden;}
-  #map{width:100%;height:100%;background:#c8d8d0;}
+  #map{width:100%;height:100%;background:#A8D4DC;}
   #map.tool-select{cursor:default;}
   #map.tool-draw{cursor:crosshair;}
 
-  .basemap-toggle{position:absolute;top:10px;left:10px;z-index:450;background:rgba(250,244,237,.93);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:10px;display:flex;padding:3px;gap:3px;box-shadow:0 4px 18px rgba(140,100,60,.2);}
+  .basemap-toggle{position:absolute;top:10px;left:10px;z-index:450;background:rgba(255,255,255,.95);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:10px;display:flex;padding:3px;gap:3px;box-shadow:0 4px 18px rgba(0,120,140,.18);}
   .basemap-toggle button{border:none;background:transparent;color:var(--text-muted);font-size:11px;padding:6px 11px;border-radius:7px;cursor:pointer;font-family:var(--sans);transition:all .15s;}
   .basemap-toggle button.active{background:var(--teal-soft);color:var(--teal);font-weight:700;}
   .basemap-toggle button:hover:not(.active){color:var(--text);background:rgba(0,0,0,.05);}
 
-  .drive-control{position:absolute;top:10px;right:10px;z-index:450;background:rgba(250,244,237,.93);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:9px;padding:8px 12px;box-shadow:0 4px 16px rgba(140,100,60,.18);display:flex;align-items:center;gap:8px;font-size:11.5px;}
+  .drive-control{position:absolute;top:10px;right:10px;z-index:450;background:rgba(255,255,255,.95);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:9px;padding:8px 12px;box-shadow:0 4px 16px rgba(0,120,140,.15);display:flex;align-items:center;gap:8px;font-size:11.5px;}
   .drive-control svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;flex-shrink:0;}
   .drive-control.connected{color:var(--teal);}
   .drive-control.disconnected{color:var(--text-muted);}
@@ -100,7 +101,7 @@
 
   .statusbar{
     height:32px;
-    background:linear-gradient(90deg,#e8dcc8 0%,#ede4d4 100%);
+    background:linear-gradient(90deg,#C4E8EE 0%,#D6EEF2 100%);
     border-top:1px solid var(--border);
     display:flex;align-items:center;padding:0 16px;gap:16px;
     font-family:var(--mono);font-size:11px;color:var(--text-muted);flex-shrink:0;
@@ -128,8 +129,8 @@
   .dms-row .dms-dir{width:44px;background:var(--bg-panel-2);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 3px;font-family:var(--mono);font-size:11px;}
   .dms-row .dms-sym{font-size:11px;color:var(--text-muted);flex-shrink:0;}
 
-  .sidebar{width:280px;background:linear-gradient(180deg,#faf4ed 0%,#f0e6d6 100%);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
-  .tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;background:#f0e6d6;}
+  .sidebar{width:280px;background:linear-gradient(180deg,#FFFFFF 0%,#EAF7F5 100%);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
+  .tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;background:#EAF7F5;}
   .tab{flex:1;text-align:center;padding:12px 0;font-size:12px;color:var(--text-muted);cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;}
   .tab.active{color:var(--teal);border-bottom-color:var(--teal);}
   .tab:hover:not(.active){color:var(--text);border-bottom-color:rgba(0,0,0,.12);}
@@ -137,9 +138,9 @@
   .panel.active{display:block;}
 
   .section-title{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin:4px 0 8px;font-weight:600;}
-  .layer-row{display:flex;align-items:center;gap:8px;padding:8px;border-radius:10px;background:rgba(255,250,242,.85);margin-bottom:6px;border:1px solid var(--border);cursor:pointer;transition:all .15s;box-shadow:0 1px 4px rgba(150,110,60,.08);}
-  .layer-row:hover{border-color:rgba(58,142,130,.35);background:rgba(58,142,130,.05);}
-  .layer-row.active{border-color:var(--teal);background:rgba(58,142,130,.1);box-shadow:0 0 10px rgba(58,142,130,.15);}
+  .layer-row{display:flex;align-items:center;gap:8px;padding:8px;border-radius:10px;background:rgba(255,255,255,.9);margin-bottom:6px;border:1px solid var(--border);cursor:pointer;transition:all .15s;box-shadow:0 1px 4px rgba(0,120,140,.08);}
+  .layer-row:hover{border-color:rgba(0,180,166,.35);background:rgba(0,180,166,.05);}
+  .layer-row.active{border-color:var(--teal);background:rgba(0,180,166,.1);box-shadow:0 0 10px rgba(0,180,166,.15);}
   .swatch{width:16px;height:16px;border-radius:5px;flex-shrink:0;border:1px solid rgba(0,0,0,.15);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15);}
   .layer-row .lname{flex:1;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .layer-row .lcount{font-size:10.5px;color:var(--text-muted);font-family:var(--mono);}
@@ -162,7 +163,7 @@
   .feature-item .fi-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--mono);}
   .feature-item .fi-zoom{opacity:0;font-size:10px;color:var(--teal);}
   .feature-item:hover .fi-zoom{opacity:1;}
-  .attr-block{background:rgba(255,250,243,.8);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px;}
+  .attr-block{background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px;}
   .attr-block .ftype{color:var(--accent);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
   .stat-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11.5px;color:var(--text-muted);margin-top:6px;}
   .stat-row b{color:var(--text);font-weight:500;}
@@ -178,8 +179,8 @@
   .danger-btn:hover{background:rgba(200,64,64,.12);}
   ::-webkit-scrollbar{width:6px;}
   ::-webkit-scrollbar-track{background:transparent;}
-  ::-webkit-scrollbar-thumb{background:#cbb99e;border-radius:3px;}
-  ::-webkit-scrollbar-thumb:hover{background:#b8a080;}
+  ::-webkit-scrollbar-thumb{background:#80C8CC;border-radius:3px;}
+  ::-webkit-scrollbar-thumb:hover{background:#55AAAE;}
 
   /* ---- Live Location Dot (Google Maps style) ---- */
   .loc-dot-wrap{position:relative;width:22px;height:22px;}
@@ -210,11 +211,11 @@
 
   .leaflet-popup-content{font-family:var(--sans);direction:rtl;}
   .vertex-marker{background:var(--bg-panel);border:2px solid var(--teal);border-radius:50%;cursor:move;box-shadow:0 1px 4px rgba(0,0,0,.2);}
-  .vertex-ghost-marker{background:transparent;border:2px dashed rgba(58,142,130,.6);border-radius:50%;cursor:pointer;}
+  .vertex-ghost-marker{background:transparent;border:2px dashed rgba(0,180,166,.6);border-radius:50%;cursor:pointer;}
   .rect-rotate-marker{background:var(--accent);border:2px solid var(--bg-panel);border-radius:50%;cursor:alias;}
   .rect-scale-marker{background:var(--teal);border:2px solid var(--bg-panel);border-radius:50%;cursor:se-resize;}
 
-  .mobile-sidebar-toggle{display:none;position:fixed;bottom:calc(76px + env(safe-area-inset-bottom, 0px) + 16px);left:12px;z-index:900;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;border:none;box-shadow:0 6px 16px rgba(160,80,50,.35);align-items:center;justify-content:center;}
+  .mobile-sidebar-toggle{display:none;position:fixed;bottom:calc(76px + env(safe-area-inset-bottom, 0px) + 16px);left:12px;z-index:900;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;border:none;box-shadow:0 6px 16px rgba(232,69,122,.35);align-items:center;justify-content:center;}
   .mobile-sidebar-toggle svg{width:22px;height:22px;}
 
   .mobile-finish-btn {
@@ -258,7 +259,7 @@
       flex-direction:row;border-left:none;border-top:1px solid var(--border);
       order:3;overflow-x:auto;padding-right:6px;padding-left:6px;padding-top:6px;
       -webkit-overflow-scrolling:touch;justify-content:flex-start;box-sizing:border-box;
-      background:linear-gradient(90deg,#f5ead8 0%,#e6d5be 100%);
+      background:linear-gradient(90deg,#E0F6F8 0%,#C4E8EE 100%);
     }
     .toolbar-sep{width:1px;height:36px;margin:0 4px;flex-shrink:0;}
     .tool-btn{width:48px;height:48px;flex-shrink:0;}
@@ -281,17 +282,17 @@
 
   /* ---- Feature label tooltips ---- */
   .feature-label-tip{
-    background:rgba(30,58,56,.92);color:#faf4ed;border:1px solid rgba(58,142,130,.5);
+    background:rgba(27,57,104,.92);color:#FFFFFF;border:1px solid rgba(0,180,166,.5);
     border-radius:6px;font-size:10.5px;font-family:var(--mono);padding:2px 9px;
-    box-shadow:0 2px 10px rgba(30,58,56,.3);white-space:nowrap;pointer-events:none;
+    box-shadow:0 2px 10px rgba(27,57,104,.3);white-space:nowrap;pointer-events:none;
   }
   .feature-label-tip.leaflet-tooltip-top::before{display:none;}
 
   /* ---- Dimension labels (side lengths) ---- */
   .dim-label-tip{
-    background:rgba(58,142,130,.88);color:#fff;border:1px solid rgba(58,142,130,.4);
+    background:rgba(0,180,166,.88);color:#fff;border:1px solid rgba(0,180,166,.4);
     border-radius:5px;font-size:9px;font-family:var(--mono);padding:1px 6px;
-    box-shadow:0 1px 6px rgba(30,58,56,.2);white-space:nowrap;pointer-events:none;
+    box-shadow:0 1px 6px rgba(0,120,140,.2);white-space:nowrap;pointer-events:none;
   }
   .dim-label-tip.leaflet-tooltip-top::before{display:none;}
   .dim-label-tip.leaflet-tooltip-center::before{display:none;}
@@ -715,7 +716,7 @@
 <script>
 (function(){
   "use strict";
-  const palette = ['#e8a33d','#5ec9c0','#e2665b','#8fbf5e','#c47fd6','#4f9ddb','#d6a15e','#7fd6b0'];
+  const palette = ['#E8A432','#00B4A6','#E8457A','#8fbf5e','#5070C8','#0090A8','#D4A020','#7fd6b0'];
   const SUBTYPE_USAGE_DOMAINS = {
     'زراعات': ['منزرع','مهمل','سبق زراعتها ومهملة','بور','شبكة رئيسية'],
     'مبانى': ['سكن عمال','سكن خاص','حظيرة','حوض تجميع']
@@ -853,7 +854,7 @@
         document.getElementById('stTemp').textContent = '';
       } else {
         if (tempLine) { map.removeLayer(tempLine); }
-        tempLine = L.polyline(drawingCoords, {color:'#e8a33d', weight:2, dashArray:'6 5'}).addTo(map);
+        tempLine = L.polyline(drawingCoords, {color:'#00B4A6', weight:2, dashArray:'6 5'}).addTo(map);
       }
       updateHistoryButtons();
       return;
@@ -1036,68 +1037,83 @@
     return {x: a.x + t*dx, y: a.y + t*dy};
   }
 
+  // findSnap يرجع { coord, type } حيث type = 'vertex' | 'edge' | null
   function findSnap(latlng, excludeFeatureId){
     if(!snapEnabled) return null;
     const pt = map.latLngToContainerPoint(latlng);
-    let best=null, bestDist=12;
-    // طبقاتي
+
+    const VERTEX_R = 20; // بكسل — نطاق الإسناب على الفيرتكس
+    const EDGE_R   = 12; // بكسل — نطاق الإسناب على الخط (يُفعَّل فقط إذا لم يوجد فيرتكس)
+
+    // ── مرحلة 1: الفيرتكس فقط (أولوية قصوى) ────────────────────────
+    let bestVertex = null, bestVertexDist = VERTEX_R;
+
+    const checkVertex = (f) => {
+      f.coords.forEach(c=>{
+        const cp = map.latLngToContainerPoint(L.latLng(c[0],c[1]));
+        const d = Math.hypot(cp.x-pt.x, cp.y-pt.y);
+        if(d < bestVertexDist){ bestVertexDist=d; bestVertex=c; }
+      });
+    };
+
     state.layers.forEach(layer=>{
       if(!layer.visible) return;
-      layer.features.forEach(f=>{
-        if(f.id===excludeFeatureId) return;
-        f.coords.forEach(c=>{
-          const cp = map.latLngToContainerPoint(L.latLng(c[0],c[1]));
-          const d = Math.hypot(cp.x-pt.x, cp.y-pt.y);
-          if(d<bestDist){ bestDist=d; best=c; }
-        });
-        if(f.type !== 'point' && f.type !== 'circle'){
-          featureSnapSegments(f).forEach(seg=>{
-            const ap = map.latLngToContainerPoint(L.latLng(seg[0][0], seg[0][1]));
-            const bp = map.latLngToContainerPoint(L.latLng(seg[1][0], seg[1][1]));
-            const cp = closestPointOnSegmentPx(pt, ap, bp);
-            const d = Math.hypot(cp.x-pt.x, cp.y-pt.y);
-            if(d<bestDist){
-              bestDist=d;
-              const ll = map.containerPointToLatLng(L.point(cp.x, cp.y));
-              best = [ll.lat, ll.lng];
-            }
-          });
-        }
-      });
+      layer.features.forEach(f=>{ if(f.id!==excludeFeatureId) checkVertex(f); });
     });
-    // طبقات الأصدقاء (للعرض فقط لكن الإسناب عليها مسموح أثناء الرسم)
     friendLayers.forEach(layer=>{
       if(layer.visible === false) return;
-      layer.features.forEach(f=>{
-        f.coords.forEach(c=>{
-          const cp = map.latLngToContainerPoint(L.latLng(c[0],c[1]));
-          const d = Math.hypot(cp.x-pt.x, cp.y-pt.y);
-          if(d<bestDist){ bestDist=d; best=c; }
-        });
-        if(f.type !== 'point' && f.type !== 'circle'){
-          featureSnapSegments(f).forEach(seg=>{
-            const ap = map.latLngToContainerPoint(L.latLng(seg[0][0], seg[0][1]));
-            const bp = map.latLngToContainerPoint(L.latLng(seg[1][0], seg[1][1]));
-            const cp = closestPointOnSegmentPx(pt, ap, bp);
-            const d = Math.hypot(cp.x-pt.x, cp.y-pt.y);
-            if(d<bestDist){
-              bestDist=d;
-              const ll = map.containerPointToLatLng(L.point(cp.x, cp.y));
-              best = [ll.lat, ll.lng];
-            }
-          });
+      layer.features.forEach(f=> checkVertex(f));
+    });
+
+    // لو لقينا فيرتكس → أرجعه فوراً، ولا داعي لفحص الخطوط
+    if(bestVertex) return { coord: bestVertex, type: 'vertex' };
+
+    // ── مرحلة 2: أقرب نقطة على الضلع (فقط لو ما فيش فيرتكس قريب) ────
+    let bestEdge = null, bestEdgeDist = EDGE_R;
+
+    const checkEdge = (f) => {
+      if(f.type === 'point' || f.type === 'circle') return;
+      featureSnapSegments(f).forEach(seg=>{
+        const ap = map.latLngToContainerPoint(L.latLng(seg[0][0], seg[0][1]));
+        const bp = map.latLngToContainerPoint(L.latLng(seg[1][0], seg[1][1]));
+        const cp = closestPointOnSegmentPx(pt, ap, bp);
+        const d = Math.hypot(cp.x-pt.x, cp.y-pt.y);
+        if(d < bestEdgeDist){
+          bestEdgeDist = d;
+          const ll = map.containerPointToLatLng(L.point(cp.x, cp.y));
+          bestEdge = [ll.lat, ll.lng];
         }
       });
+    };
+
+    state.layers.forEach(layer=>{
+      if(!layer.visible) return;
+      layer.features.forEach(f=>{ if(f.id!==excludeFeatureId) checkEdge(f); });
     });
-    return best;
+    friendLayers.forEach(layer=>{
+      if(layer.visible === false) return;
+      layer.features.forEach(f=> checkEdge(f));
+    });
+
+    if(bestEdge) return { coord: bestEdge, type: 'edge' };
+    return null;
   }
   
   function effectiveLatLng(e, excludeFeatureId){
     const snap = findSnap(e.latlng, excludeFeatureId);
     if(snap){
-      if(!snapMarker) snapMarker = L.circleMarker(snap, {radius:9, color:'#e8a33d', weight:2, fillOpacity:0}).addTo(map);
-      else snapMarker.setLatLng(snap);
-      return L.latLng(snap[0], snap[1]);
+      const { coord, type } = snap;
+      // vertex → دائرة صفراء مملوءة جزئياً | edge → دائرة برتقالية فارغة
+      const markerOpts = type === 'vertex'
+        ? { radius:8, color:'#f5d000', weight:2.5, fillColor:'#f5d000', fillOpacity:0.35 }
+        : { radius:7, color:'#00B4A6', weight:2,   fillColor:'#E8A432', fillOpacity:0 };
+      if(!snapMarker){
+        snapMarker = L.circleMarker(coord, markerOpts).addTo(map);
+      } else {
+        snapMarker.setLatLng(coord);
+        snapMarker.setStyle(markerOpts);
+      }
+      return L.latLng(coord[0], coord[1]);
     } else if(snapMarker){
       map.removeLayer(snapMarker); snapMarker=null;
     }
@@ -1320,11 +1336,11 @@
         const color = f.color || layer.color;
         let shape;
         if(f.type==='point'){
-          shape = L.circleMarker(f.coords[0], {radius:7, color: isSel?'#5ec9c0':'#0d2438', weight:isSel?2.5:1.4, fillColor:color, fillOpacity:0.95});
+          shape = L.circleMarker(f.coords[0], {radius:7, color: isSel?'#00B4A6':'#1B3968', weight:isSel?2.5:1.4, fillColor:color, fillOpacity:0.95});
         } else if(f.type==='line'){
-          shape = L.polyline(f.coords, {color: isSel?'#5ec9c0':color, weight: isSel?3.2:2.4});
+          shape = L.polyline(f.coords, {color: isSel?'#00B4A6':color, weight: isSel?3.2:2.4});
         } else {
-          shape = L.polygon(f.coords, {color: isSel?'#5ec9c0':color, weight: isSel?3:2, fillColor:color, fillOpacity: isSel?0.3:0.18});
+          shape = L.polygon(f.coords, {color: isSel?'#00B4A6':color, weight: isSel?3:2, fillColor:color, fillOpacity: isSel?0.3:0.18});
         }
         
         shape.on('click', (e) => {
@@ -1388,14 +1404,14 @@
             const uxN = Math.sin(th), uxE = Math.cos(th);
             const rotatePt = destPoint(centerLat, centerLng, uxE * 0, uxN * 0 + (f.rect.length / 2) + 5);
             
-            const rotMarker = L.circleMarker(rotatePt, {radius:9, className:'rect-rotate-marker', color:'#0d2438', weight:1.5, fillColor:'#e8a33d', fillOpacity:1});
+            const rotMarker = L.circleMarker(rotatePt, {radius:9, className:'rect-rotate-marker', color:'#1B3968', weight:1.5, fillColor:'#E8A432', fillOpacity:1});
             rotMarker.on('mousedown', (se)=>{
               L.DomEvent.stopPropagation(se); map.dragging.disable(); pushStateToUndo();
               dragCtx = { mode:'rect-rotate', feature:f, center:[centerLat, centerLng], origRotation: f.rect.rotation, startAngle: metricAngleRad({lat:centerLat,lng:centerLng}, se.latlng) };
             });
             rotMarker.addTo(lg);
 
-            const scaleMarker = L.circleMarker(corners[2], {radius:9, className:'rect-scale-marker', color:'#0d2438', weight:1.5, fillColor:'#5ec9c0', fillOpacity:1});
+            const scaleMarker = L.circleMarker(corners[2], {radius:9, className:'rect-scale-marker', color:'#1B3968', weight:1.5, fillColor:'#00B4A6', fillOpacity:1});
             scaleMarker.on('mousedown', (se)=>{
               L.DomEvent.stopPropagation(se); map.dragging.disable(); pushStateToUndo();
               dragCtx = { mode:'rect-scale', feature:f, anchor: corners[0], origWidth: f.rect.width, origLength: f.rect.length, startLatLng: se.latlng };
@@ -1405,7 +1421,7 @@
 
           if(f.type!=='rectangle' && f.type!=='circle'){
             f.coords.forEach((c,idx)=>{
-              const h = L.circleMarker(c, {radius:7, className:'vertex-marker', color:'#5ec9c0', weight:2, fillColor:'#0d2438', fillOpacity:1});
+              const h = L.circleMarker(c, {radius:7, className:'vertex-marker', color:'#00B4A6', weight:2, fillColor:'#1B3968', fillOpacity:1});
               
               h.on('mousedown', (se)=>{
                 L.DomEvent.stopPropagation(se); map.dragging.disable(); pushStateToUndo();
@@ -1429,7 +1445,7 @@
               const midLng = (pA[1] + pB[1]) / 2;
               const midPoint = L.latLng(midLat, midLng);
 
-              const ghost = L.circleMarker(midPoint, {radius:5, className:'vertex-ghost-marker', color:'#5ec9c0', weight:1.5, fillColor:'rgba(18,49,82,0.8)', fillOpacity:1});
+              const ghost = L.circleMarker(midPoint, {radius:5, className:'vertex-ghost-marker', color:'#00B4A6', weight:1.5, fillColor:'rgba(27,57,104,0.85)', fillOpacity:1});
               
               ghost.on('mousedown', (se) => {
                 L.DomEvent.stopPropagation(se); map.dragging.disable(); pushStateToUndo();
@@ -1525,7 +1541,7 @@
       
       if(rect3Point.step === 1) {
         const pts = [[rect3Point.pt1.lat, rect3Point.pt1.lng], [snapped.lat, snapped.lng]];
-        tempLine = L.polyline(pts, {color:'#e8a33d', weight:2, dashArray:'4 4'}).addTo(map);
+        tempLine = L.polyline(pts, {color:'#00B4A6', weight:2, dashArray:'4 4'}).addTo(map);
         const width = haversine(rect3Point.pt1.lat, rect3Point.pt1.lng, snapped.lat, snapped.lng);
         const angle = metricAngleRad(rect3Point.pt1, snapped);
         let deg = Math.round(toDeg(angle) % 360); if(deg < 0) deg += 360;
@@ -1562,7 +1578,7 @@
         const c3 = destPoint(p2.lat, p2.lng, uyE * signedLength, uyN * signedLength);
         const c4 = destPoint(p1.lat, p1.lng, uyE * signedLength, uyN * signedLength);
         
-        tempLine = L.polygon([c1, c2, c3, c4], {color:'#5ec9c0', weight:1.5, fillOpacity:0.12, dashArray:'3 3'}).addTo(map);
+        tempLine = L.polygon([c1, c2, c3, c4], {color:'#00B4A6', weight:1.5, fillOpacity:0.12, dashArray:'3 3'}).addTo(map);
         document.getElementById('stTemp').textContent = `العرض: ${width.toFixed(1)} م | الطول: ${length.toFixed(1)} م`;
       }
     }
@@ -1570,7 +1586,7 @@
       const snapped = effectiveLatLng(e);
       if(tempLine){ map.removeLayer(tempLine); }
       const pts = drawingCoords.concat([[snapped.lat, snapped.lng]]);
-      tempLine = L.polyline(pts, {color:'#e8a33d', weight:2, dashArray:'6 5'}).addTo(map);
+      tempLine = L.polyline(pts, {color:'#00B4A6', weight:2, dashArray:'6 5'}).addTo(map);
       
       const last = drawingCoords[drawingCoords.length-1];
       const segLen = haversine(last[0],last[1], snapped.lat, snapped.lng);
@@ -1581,7 +1597,7 @@
       if(measureLine){ map.removeLayer(measureLine); measureLine=null; }
       measureLine = L.polyline(
         [[measurePt1.lat,measurePt1.lng],[snM.lat,snM.lng]],
-        {color:'#e8a33d',weight:2,dashArray:'5 5'}
+        {color:'#00B4A6',weight:2,dashArray:'5 5'}
       ).addTo(map);
       const d = haversine(measurePt1.lat,measurePt1.lng,snM.lat,snM.lng);
       document.getElementById('stTemp').textContent =
@@ -1697,7 +1713,7 @@
         measurePt1 = snapped;
         if(measureMarker) map.removeLayer(measureMarker);
         measureMarker = L.circleMarker([snapped.lat,snapped.lng],
-          {radius:7,color:'#e8a33d',weight:2,fillColor:'#e8a33d',fillOpacity:.85}).addTo(map);
+          {radius:7,color:'#00B4A6',weight:2,fillColor:'#E8A432',fillOpacity:.85}).addTo(map);
         document.getElementById('stHint').textContent = '📏 انقر على النقطة الثانية لإتمام القياس...';
       } else {
         const dist = haversine(measurePt1.lat,measurePt1.lng,snapped.lat,snapped.lng);
@@ -1708,7 +1724,7 @@
         if(measureLine){ map.removeLayer(measureLine); measureLine=null; }
         measureLine = L.polyline(
           [[measurePt1.lat,measurePt1.lng],[snapped.lat,snapped.lng]],
-          {color:'#e8a33d',weight:2.5}
+          {color:'#00B4A6',weight:2.5}
         ).addTo(map);
         document.getElementById('stTemp').textContent = `📏 ${distStr} | اتجاه: ${bearing.toFixed(1)}°`;
         document.getElementById('stHint').textContent = 'انقر نقطة جديدة لقياس مسافة أخرى';
@@ -2146,7 +2162,7 @@
     const _fLayer = getLayer(selection.layerId);
     html += `<div class="fcolor-row">
       <span>لون العنصر:</span>
-      <input type="color" id="fcPicker" value="${f.color || (_fLayer ? _fLayer.color : '#e8a33d')}">
+      <input type="color" id="fcPicker" value="${f.color || (_fLayer ? _fLayer.color : '#E8A432')}">
       ${f.color ? '<button id="fcReset">↩ لون الطبقة</button>' : ''}
     </div>`;
 
