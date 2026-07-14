@@ -1005,6 +1005,48 @@
     return [lat+dLat, lng+dLng];
   }
 
+  // تحويل إحداثي عشري (Decimal Degrees) إلى نص درجات/دقائق/ثواني (DMS)
+  function decToDMSStr(decimal, isLat){
+    const dir = isLat ? (decimal>=0?'N':'S') : (decimal>=0?'E':'W');
+    const abs = Math.abs(decimal);
+    const deg = Math.floor(abs);
+    const minFull = (abs-deg)*60;
+    const min = Math.floor(minFull);
+    const sec = (minFull-min)*60;
+    return `${deg}° ${min}′ ${sec.toFixed(2)}″ ${dir}`;
+  }
+
+  // تحويل إحداثي WGS84 (خط عرض/طول) إلى UTM (شرقي/شمالي بالمتر + رقم المنطقة)
+  function latLngToUTM(lat, lng){
+    const a = 6378137.0; // نصف المحور الأكبر WGS84
+    const eccSq = 0.00669438;
+    const k0 = 0.9996;
+    const latRad = toRad(lat);
+    const lngRad = toRad(lng);
+    const zoneNumber = Math.floor((lng+180)/6)+1;
+    const lngOrigin = (zoneNumber-1)*6-180+3;
+    const lngOriginRad = toRad(lngOrigin);
+    const eccPrimeSq = eccSq/(1-eccSq);
+    const N = a/Math.sqrt(1-eccSq*Math.sin(latRad)*Math.sin(latRad));
+    const T = Math.tan(latRad)*Math.tan(latRad);
+    const C = eccPrimeSq*Math.cos(latRad)*Math.cos(latRad);
+    const A = Math.cos(latRad)*(lngRad-lngOriginRad);
+    const M = a*((1 - eccSq/4 - 3*eccSq*eccSq/64 - 5*eccSq*eccSq*eccSq/256)*latRad
+      - (3*eccSq/8 + 3*eccSq*eccSq/32 + 45*eccSq*eccSq*eccSq/1024)*Math.sin(2*latRad)
+      + (15*eccSq*eccSq/256 + 45*eccSq*eccSq*eccSq/1024)*Math.sin(4*latRad)
+      - (35*eccSq*eccSq*eccSq/3072)*Math.sin(6*latRad));
+
+    let easting = k0*N*(A+(1-T+C)*A*A*A/6
+      + (5-18*T+T*T+72*C-58*eccPrimeSq)*A*A*A*A*A/120) + 500000.0;
+
+    let northing = k0*(M+N*Math.tan(latRad)*(A*A/2+(5-T+9*C+4*C*C)*A*A*A*A/24
+      + (61-58*T+T*T+600*C-330*eccPrimeSq)*A*A*A*A*A*A/720));
+
+    if(lat < 0) northing += 10000000.0; // نصف الكرة الجنوبي
+
+    return { zone: zoneNumber, easting, northing, hemisphere: lat>=0?'N':'S' };
+  }
+
   function projectPointOnLine(pt, lineStart, lineEnd) {
     const x = pt.lng, y = pt.lat;
     const x1 = lineStart.lng, y1 = lineStart.lat;
@@ -2292,9 +2334,23 @@
       html += `<div class="field-row"><label style="font-size:11px;">نصف القطر (م)</label><input type="number" id="edRad" value="${f.circle.radius}" step="0.1"></div>`;
     } 
     else if(f.type==='point') {
+      const _pLat = f.coords[0][0], _pLng = f.coords[0][1];
+      const _pUTM = latLngToUTM(_pLat, _pLng);
       html += `<div class="ftype">نقطة</div>`;
-      html += `<div class="stat-row">Lat: <b>${f.coords[0][0].toFixed(6)}</b></div>`;
-      html += `<div class="stat-row">Lng: <b>${f.coords[0][1].toFixed(6)}</b></div>`;
+      html += `<div class="section-title" style="margin-top:0;">درجات عشرية (DD)</div>`;
+      html += `<div class="stat-row">Lat: <b>${_pLat.toFixed(6)}</b></div>`;
+      html += `<div class="stat-row">Lng: <b>${_pLng.toFixed(6)}</b></div>`;
+      html += `<button class="copy-coord-btn" data-copy="${_pLat.toFixed(6)}, ${_pLng.toFixed(6)}" style="padding:4px 8px; font-size:11px; margin-bottom:8px;">📋 نسخ DD</button>`;
+
+      html += `<div class="section-title">درجات/دقائق/ثواني (DMS)</div>`;
+      html += `<div class="stat-row">Lat: <b>${decToDMSStr(_pLat, true)}</b></div>`;
+      html += `<div class="stat-row">Lng: <b>${decToDMSStr(_pLng, false)}</b></div>`;
+      html += `<button class="copy-coord-btn" data-copy="${decToDMSStr(_pLat, true)}, ${decToDMSStr(_pLng, false)}" style="padding:4px 8px; font-size:11px; margin-bottom:8px;">📋 نسخ DMS</button>`;
+
+      html += `<div class="section-title">UTM (بالمتر) — Zone ${_pUTM.zone}${_pUTM.hemisphere}</div>`;
+      html += `<div class="stat-row">Easting (E): <b>${_pUTM.easting.toFixed(2)} م</b></div>`;
+      html += `<div class="stat-row">Northing (N): <b>${_pUTM.northing.toFixed(2)} م</b></div>`;
+      html += `<button class="copy-coord-btn" data-copy="Zone ${_pUTM.zone}${_pUTM.hemisphere}, E:${_pUTM.easting.toFixed(2)}, N:${_pUTM.northing.toFixed(2)}" style="padding:4px 8px; font-size:11px; margin-bottom:8px;">📋 نسخ UTM</button>`;
     } 
     else if(f.type==='line') {
       html += `<div class="ftype">خط</div>`;
@@ -2408,6 +2464,17 @@
       const l = getLayer(selection.layerId);
       l.features = l.features.filter(x=>x.id!==selection.featureId);
       selection = null; closeMobileEditPad(); renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
+    });
+    container.querySelectorAll('.copy-coord-btn').forEach(b=>{
+      b.addEventListener('click', e=>{
+        const txt = e.target.dataset.copy;
+        if(navigator.clipboard && navigator.clipboard.writeText){
+          navigator.clipboard.writeText(txt);
+        }
+        const orig = e.target.textContent;
+        e.target.textContent = '✅ تم النسخ';
+        setTimeout(()=>{ e.target.textContent = orig; }, 1200);
+      });
     });
     const fcPicker = document.getElementById('fcPicker');
     if(fcPicker) fcPicker.addEventListener('input', e=>{
