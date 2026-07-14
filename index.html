@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -25,25 +26,30 @@
   .app{display:flex;flex-direction:row;height:100vh;height:100dvh;width:100vw;}
 
   .toolbar{
-    width:80px;
+    width:72px;
     background:linear-gradient(180deg,#E0F6F8 0%,#C4E8EE 100%);
     border-left:1px solid var(--border);
     box-shadow:-2px 0 18px rgba(0,120,140,.18);
     display:flex;flex-direction:column;align-items:center;
-    padding:10px 0;gap:4px;flex-shrink:0;z-index:500;
+    padding:8px 0;gap:2px;flex-shrink:0;z-index:500;
+    overflow-y:auto;overflow-x:hidden;
+    scrollbar-width:thin;scrollbar-color:rgba(0,180,166,.3) transparent;
   }
+  .toolbar::-webkit-scrollbar{width:3px;}
+  .toolbar::-webkit-scrollbar-track{background:transparent;}
+  .toolbar::-webkit-scrollbar-thumb{background:rgba(0,180,166,.35);border-radius:3px;}
   .tool-btn{
-    width:58px;height:58px;border-radius:14px;border:1px solid transparent;
+    width:54px;height:52px;border-radius:12px;border:1px solid transparent;
     background:transparent;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;gap:3px;cursor:pointer;
+    justify-content:center;gap:2px;cursor:pointer;flex-shrink:0;
     color:color-mix(in srgb,var(--tc,var(--text-muted)) 72%,transparent);
     transition:all .2s cubic-bezier(.25,.8,.25,1);
   }
   .tool-btn svg{
-    width:23px;height:23px;stroke:currentColor;fill:none;
+    width:20px;height:20px;stroke:currentColor;fill:none;
     stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:inherit;
   }
-  .tool-btn span{font-size:8px;font-family:var(--sans);font-weight:500;letter-spacing:.01em;}
+  .tool-btn span{font-size:7.5px;font-family:var(--sans);font-weight:500;letter-spacing:.01em;}
 
   /* ── Per-tool accent colors — Mediterranean palette ── */
   .tool-btn[data-tool="select"]  {--tc:#00B4A6;}
@@ -63,6 +69,19 @@
   #labelsBtn {--tc:#5070C8;}
   #dimensionsBtn {--tc:#00B4A6;}
   #screenshotBtn{--tc:#7A9AAA;}
+  #searchPlaceBtn{--tc:#E8A432;}
+  #polygonDmsBtn {--tc:#7B68EE;}
+  .search-hud{width:310px;border-color:var(--gold);}
+  .search-input-row{display:flex;gap:6px;margin-top:4px;}
+  .search-input-row input{flex:1;background:var(--bg-panel-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-family:var(--mono);font-size:12px;}
+  .search-input-row button{border:none;background:var(--gold);color:#fff;font-size:12px;font-weight:600;padding:6px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;}
+  .search-results{max-height:190px;overflow-y:auto;margin-top:8px;display:flex;flex-direction:column;gap:4px;}
+  .search-result-item{padding:7px 9px;border-radius:7px;cursor:pointer;font-size:11.5px;border:1px solid var(--border);background:var(--bg-panel-2);line-height:1.4;transition:all .12s;}
+  .search-result-item:hover{background:var(--teal-soft);border-color:var(--teal);color:var(--teal);}
+  .search-result-item .sr-name{font-weight:600;}
+  .search-result-item .sr-type{font-size:10px;color:var(--text-muted);margin-top:1px;}
+  .search-empty{text-align:center;color:var(--text-muted);font-size:11.5px;padding:14px 0;}
+  .search-loading{text-align:center;color:var(--teal);font-size:11.5px;padding:14px 0;}
   .tool-btn[data-tool="divide"]{--tc:#2a9d5c;}
 
   .tool-btn:hover:not(:disabled){
@@ -79,7 +98,7 @@
                0 2px 8px rgba(0,0,0,.1);
   }
   .tool-btn:disabled{opacity:0.28;cursor:not-allowed;}
-  .toolbar-sep{width:42px;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:1px 0;}
+  .toolbar-sep{width:38px;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:2px 0;flex-shrink:0;}
 
   .main{flex:1;position:relative;display:flex;flex-direction:column;min-width:0;}
   .canvas-wrap{flex:1;position:relative;overflow:hidden;}
@@ -363,6 +382,18 @@
       </svg><span>مضلع</span>
     </button>
 
+    <button class="tool-btn" id="polygonDmsBtn" title="رسم مضلع بالإحداثيات (درجة/دقيقة/ثانية)">
+      <svg viewBox="0 0 24 24">
+        <polygon points="12,3 21,9 18,20 6,20 3,9" fill="currentColor" opacity=".18" stroke-width="2" stroke-linejoin="round"/>
+        <circle cx="12" cy="3"  r="2" fill="currentColor" stroke="none"/>
+        <circle cx="21" cy="9"  r="2" fill="currentColor" stroke="none"/>
+        <circle cx="18" cy="20" r="2" fill="currentColor" stroke="none"/>
+        <circle cx="6"  cy="20" r="2" fill="currentColor" stroke="none"/>
+        <circle cx="3"  cy="9"  r="2" fill="currentColor" stroke="none"/>
+        <text x="12" y="13.5" text-anchor="middle" font-size="5.5" fill="currentColor" stroke="none" font-family="monospace" font-weight="bold">DMS</text>
+      </svg><span>مضلع DMS</span>
+    </button>
+
     <button class="tool-btn" data-tool="rectangle" title="مستطيل بـ 3 نقاط">
       <svg viewBox="0 0 24 24">
         <rect x="3" y="7" width="18" height="12" rx="1.5" fill="currentColor" opacity=".16" stroke-width="2"/>
@@ -386,6 +417,13 @@
     <div class="toolbar-sep"></div>
 
     <!-- أدوات -->
+    <button class="tool-btn" id="searchPlaceBtn" title="بحث باسم المكان">
+      <svg viewBox="0 0 24 24">
+        <circle cx="10.5" cy="10.5" r="6.5" stroke-width="2"/>
+        <path d="M15.5 15.5L21 21" stroke-width="2.3" stroke-linecap="round"/>
+      </svg><span>بحث</span>
+    </button>
+
     <button class="tool-btn" id="goToCoordsBtn" title="انتقال إلى إحداثيات">
       <svg viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="9" fill="currentColor" opacity=".1" stroke-width="1.8"/>
@@ -571,6 +609,19 @@
         </div>
       </div>
 
+      <!-- ── Search Place HUD ── -->
+      <div class="rect-hud search-hud" id="searchPlaceHud" style="display:none;top:60px;right:10px;">
+        <h4 style="color:var(--gold);margin:0 0 6px;">🔍 بحث باسم المكان</h4>
+        <div class="search-input-row">
+          <input type="text" id="searchPlaceInput" placeholder="اكتب اسم المكان بالعربي أو الإنجليزي..." autocomplete="off">
+          <button id="searchPlaceGo">بحث</button>
+        </div>
+        <div class="search-results" id="searchPlaceResults"></div>
+        <div style="margin-top:8px;text-align:left;">
+          <button class="btn-cancel" id="searchPlaceClose" style="font-size:11px;padding:4px 10px;">إغلاق</button>
+        </div>
+      </div>
+
       <div class="rect-hud go-to-hud" id="goToCoordsHud">
         <h4 style="color:var(--teal);">الانتقال لنقطة إحداثية</h4>
         <label style="font-size:10px;">خط العرض (Latitude)</label>
@@ -653,6 +704,38 @@
         <div class="row-btns" style="margin-top:10px;">
           <button class="btn-cancel" id="divideCancel">إلغاء</button>
           <button class="btn-create" id="divideApply" style="background:#2a9d5c;">تطبيق</button>
+        </div>
+      </div>
+
+      <!-- ── Polygon DMS HUD ── -->
+      <div class="rect-hud" id="polygonDmsHud" style="width:320px;border-color:#7B68EE;display:none;">
+        <h4 style="color:#7B68EE;margin:0 0 8px;">🔺 رسم مضلع بالإحداثيات (DMS)</h4>
+        <label style="font-size:10px;">خط العرض (Latitude)</label>
+        <div class="dms-row">
+          <input class="dms-deg" type="number" id="pdLatDeg" value="29" min="0" max="90" step="1" placeholder="°">
+          <span class="dms-sym">°</span>
+          <input class="dms-min" type="number" id="pdLatMin" value="58" min="0" max="59" step="1" placeholder="′">
+          <span class="dms-sym">′</span>
+          <input class="dms-sec" type="number" id="pdLatSec" value="0" min="0" max="59.9999" step="0.01" placeholder="″">
+          <span class="dms-sym">″</span>
+          <select class="dms-dir" id="pdLatDir"><option value="N">N شمال</option><option value="S">S جنوب</option></select>
+        </div>
+        <label style="font-size:10px;margin-top:6px;display:block;">خط الطول (Longitude)</label>
+        <div class="dms-row">
+          <input class="dms-deg" type="number" id="pdLngDeg" value="31" min="0" max="180" step="1" placeholder="°">
+          <span class="dms-sym">°</span>
+          <input class="dms-min" type="number" id="pdLngMin" value="8" min="0" max="59" step="1" placeholder="′">
+          <span class="dms-sym">′</span>
+          <input class="dms-sec" type="number" id="pdLngSec" value="0" min="0" max="59.9999" step="0.01" placeholder="″">
+          <span class="dms-sym">″</span>
+          <select class="dms-dir" id="pdLngDir"><option value="E">E شرق</option><option value="W">W غرب</option></select>
+        </div>
+        <button id="pdAddPointBtn" style="width:100%;margin-top:8px;padding:7px;border-radius:7px;border:1px solid #7B68EE;background:rgba(123,104,238,.12);color:#7B68EE;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--sans);">＋ إضافة النقطة</button>
+        <div id="pdPointsList" style="margin-top:8px;max-height:130px;overflow-y:auto;font-family:var(--mono);font-size:10.5px;display:flex;flex-direction:column;gap:3px;"></div>
+        <div id="pdPointsCount" style="font-size:10.5px;color:var(--text-muted);margin-top:4px;text-align:center;">لم تُضف أي نقاط بعد</div>
+        <div class="row-btns" style="margin-top:10px;">
+          <button class="btn-cancel" id="pdCancelBtn">إلغاء</button>
+          <button id="pdFinishBtn" style="flex:1;border-radius:6px;border:none;padding:7px 0;font-size:11.5px;cursor:pointer;font-family:var(--sans);font-weight:600;background:#7B68EE;color:#fff;" disabled>إنهاء الرسم</button>
         </div>
       </div>
 
@@ -3229,7 +3312,7 @@
   };
 
   /* ---------- Google Drive Integration ---------- */
-  const DRIVE_CLIENT_ID = '677149493471-4gjbg1thbdqt8l8hjplk3bfnr4ni56nh.apps.googleusercontent.com';
+  const DRIVE_CLIENT_ID = '480417681542-64tntclp4476r4bu8v3srbtepa0bhoas.apps.googleusercontent.com';
   const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
   let tokenClient=null, driveToken=null, driveTokenExpiry=0, driveConnected=false, lastPushTime=0;
   const driveMsgEl = document.getElementById('driveMsg');
@@ -3594,6 +3677,260 @@
 
   loadState();
   tryAutoReconnect(); // بعد loadState عشان state.driveFileId يكون محمّل من localStorage
+
+  // ── Search Place (Nominatim) ──────────────────────────────────────────
+  const searchPlaceHud    = document.getElementById('searchPlaceHud');
+  const searchPlaceInput  = document.getElementById('searchPlaceInput');
+  const searchPlaceGo     = document.getElementById('searchPlaceGo');
+  const searchPlaceClose  = document.getElementById('searchPlaceClose');
+  const searchPlaceResults= document.getElementById('searchPlaceResults');
+  let searchAbort = null;
+
+  document.getElementById('searchPlaceBtn').addEventListener('click', () => {
+    const isVisible = searchPlaceHud.style.display !== 'none';
+    // أغلق كل الـ HUDs الأخرى
+    document.querySelectorAll('.rect-hud').forEach(h => h.style.display = 'none');
+    if (!isVisible) {
+      searchPlaceHud.style.display = 'block';
+      searchPlaceInput.focus();
+    }
+  });
+
+  searchPlaceClose.addEventListener('click', () => {
+    searchPlaceHud.style.display = 'none';
+    searchPlaceResults.innerHTML = '';
+  });
+
+  async function doSearch() {
+    const q = searchPlaceInput.value.trim();
+    if (!q) return;
+    searchPlaceResults.innerHTML = '<div class="search-loading">⏳ جارٍ البحث...</div>';
+    if (searchAbort) searchAbort.abort();
+    searchAbort = new AbortController();
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=8&accept-language=ar,en`;
+      const res = await fetch(url, {
+        signal: searchAbort.signal,
+        headers: { 'Accept-Language': 'ar,en' }
+      });
+      const data = await res.json();
+      if (!data.length) {
+        searchPlaceResults.innerHTML = '<div class="search-empty">لم يُعثر على نتائج</div>';
+        return;
+      }
+      searchPlaceResults.innerHTML = '';
+      data.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'search-result-item';
+        const name = item.display_name.split(',').slice(0, 3).join('،');
+        const type = item.type || item.class || '';
+        div.innerHTML = `<div class="sr-name">${name}</div><div class="sr-type">${type}</div>`;
+        div.addEventListener('click', () => {
+          const lat = parseFloat(item.lat);
+          const lng = parseFloat(item.lon);
+          const bbox = item.boundingbox; // [minLat, maxLat, minLng, maxLng]
+          if (bbox) {
+            map.fitBounds([
+              [parseFloat(bbox[0]), parseFloat(bbox[2])],
+              [parseFloat(bbox[1]), parseFloat(bbox[3])]
+            ], { maxZoom: 17 });
+          } else {
+            map.setView([lat, lng], 15);
+          }
+          // نقطة تمييز مؤقتة
+          const marker = L.circleMarker([lat, lng], {
+            radius: 10, color: '#E8A432', fillColor: '#E8A432',
+            fillOpacity: 0.5, weight: 2
+          }).addTo(map).bindPopup(name).openPopup();
+          setTimeout(() => map.removeLayer(marker), 8000);
+          searchPlaceHud.style.display = 'none';
+          searchPlaceResults.innerHTML = '';
+        });
+        searchPlaceResults.appendChild(div);
+      });
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        searchPlaceResults.innerHTML = '<div class="search-empty">حدث خطأ، حاول مرة أخرى</div>';
+      }
+    }
+  }
+
+  searchPlaceGo.addEventListener('click', doSearch);
+  searchPlaceInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+  /* ── Polygon DMS Tool ─────────────────────────────────────────────── */
+  (function(){
+    const hud          = document.getElementById('polygonDmsHud');
+    const addPointBtn  = document.getElementById('pdAddPointBtn');
+    const finishBtn    = document.getElementById('pdFinishBtn');
+    const cancelBtn    = document.getElementById('pdCancelBtn');
+    const pointsList   = document.getElementById('pdPointsList');
+    const pointsCount  = document.getElementById('pdPointsCount');
+
+    let dmsPoints = [];          // [{lat, lng, label}]
+    let dmsPreviewLine = null;   // خط معاينة مؤقت
+    let dmsPreviewMarkers = [];  // نقاط معاينة على الخريطة
+
+    function dmsToDecimal(deg, min, sec, dir){
+      const d = Math.abs(+deg||0) + (Math.abs(+min||0))/60 + (Math.abs(+sec||0))/3600;
+      return (dir==='S'||dir==='W') ? -d : d;
+    }
+
+    function formatDMS(deg,min,sec,dir){
+      return `${deg}° ${min}′ ${(+sec).toFixed(2)}″ ${dir}`;
+    }
+
+    function refreshPreview(){
+      // إزالة العناصر القديمة
+      if(dmsPreviewLine){ map.removeLayer(dmsPreviewLine); dmsPreviewLine=null; }
+      dmsPreviewMarkers.forEach(m=>map.removeLayer(m));
+      dmsPreviewMarkers=[];
+
+      if(dmsPoints.length===0) return;
+
+      const coords = dmsPoints.map(p=>[p.lat,p.lng]);
+
+      // رسم الخط/المضلع المعاين
+      if(coords.length>=2){
+        const pts = coords.slice();
+        if(coords.length>=3) pts.push(coords[0]); // إغلاق المضلع
+        dmsPreviewLine = L.polyline(pts, {color:'#7B68EE',weight:2,dashArray:'5 4'}).addTo(map);
+      }
+
+      // رسم نقاط الإحداثيات
+      coords.forEach((c,i)=>{
+        const m = L.circleMarker(c, {radius:6,color:'#7B68EE',weight:2,fillColor:'#fff',fillOpacity:0.9}).addTo(map);
+        m.bindTooltip(String(i+1), {permanent:true,direction:'top',className:'feature-label-tip',offset:[0,-4]});
+        dmsPreviewMarkers.push(m);
+      });
+    }
+
+    function refreshList(){
+      pointsList.innerHTML='';
+      dmsPoints.forEach((p,i)=>{
+        const row=document.createElement('div');
+        row.style.cssText='display:flex;align-items:center;gap:6px;background:rgba(123,104,238,.07);border:1px solid rgba(123,104,238,.22);border-radius:5px;padding:3px 7px;';
+        const num=document.createElement('span');
+        num.style.cssText='font-size:10px;color:#7B68EE;font-weight:700;flex-shrink:0;';
+        num.textContent=String(i+1);
+        const lbl=document.createElement('span');
+        lbl.style.cssText='flex:1;font-size:9.5px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        lbl.textContent=p.label;
+        const del=document.createElement('button');
+        del.textContent='✕';
+        del.style.cssText='background:none;border:none;color:var(--danger);cursor:pointer;font-size:11px;padding:0 2px;flex-shrink:0;';
+        del.title='حذف هذه النقطة';
+        del.addEventListener('click',()=>{
+          dmsPoints.splice(i,1);
+          refreshList(); refreshPreview(); updateCount();
+        });
+        row.appendChild(num); row.appendChild(lbl); row.appendChild(del);
+        pointsList.appendChild(row);
+      });
+    }
+
+    function updateCount(){
+      const n=dmsPoints.length;
+      if(n===0) pointsCount.textContent='لم تُضف أي نقاط بعد';
+      else if(n===1) pointsCount.textContent='نقطة واحدة — أضف نقطتين على الأقل';
+      else if(n===2) pointsCount.textContent='نقطتان — أضف نقطة ثالثة لإتمام المضلع';
+      else pointsCount.textContent=`${n} نقاط — جاهز للإنهاء`;
+      finishBtn.disabled = (n<3);
+      finishBtn.style.opacity = n<3 ? '0.4' : '1';
+    }
+
+    function openHud(){
+      // أغلق الـ HUDs الأخرى
+      document.querySelectorAll('.rect-hud').forEach(h=>h.style.display='none');
+      // ضع الـ HUD في مكان مناسب
+      hud.style.left='90px'; hud.style.top='70px';
+      hud.style.display='block';
+      // اقرأ مركز الخريطة لملء الحقول كافتراضي
+      const c=map.getCenter();
+      function decToDMS(d){ const abs=Math.abs(d),deg=Math.floor(abs),mFull=(abs-deg)*60,min=Math.floor(mFull),sec=(mFull-min)*60; return {deg,min,sec}; }
+      const latD=decToDMS(c.lat), lngD=decToDMS(c.lng);
+      document.getElementById('pdLatDeg').value=latD.deg;
+      document.getElementById('pdLatMin').value=latD.min;
+      document.getElementById('pdLatSec').value=latD.sec.toFixed(2);
+      document.getElementById('pdLatDir').value=c.lat>=0?'N':'S';
+      document.getElementById('pdLngDeg').value=lngD.deg;
+      document.getElementById('pdLngMin').value=lngD.min;
+      document.getElementById('pdLngSec').value=lngD.sec.toFixed(2);
+      document.getElementById('pdLngDir').value=c.lng>=0?'E':'W';
+    }
+
+    function clearDmsTool(){
+      dmsPoints=[];
+      if(dmsPreviewLine){ map.removeLayer(dmsPreviewLine); dmsPreviewLine=null; }
+      dmsPreviewMarkers.forEach(m=>map.removeLayer(m)); dmsPreviewMarkers=[];
+      refreshList(); updateCount();
+    }
+
+    document.getElementById('polygonDmsBtn').addEventListener('click', ()=>{
+      if(hud.style.display==='block'){ hud.style.display='none'; clearDmsTool(); return; }
+      openHud();
+    });
+
+    addPointBtn.addEventListener('click', ()=>{
+      const lat=dmsToDecimal(
+        document.getElementById('pdLatDeg').value,
+        document.getElementById('pdLatMin').value,
+        document.getElementById('pdLatSec').value,
+        document.getElementById('pdLatDir').value
+      );
+      const lng=dmsToDecimal(
+        document.getElementById('pdLngDeg').value,
+        document.getElementById('pdLngMin').value,
+        document.getElementById('pdLngSec').value,
+        document.getElementById('pdLngDir').value
+      );
+      if(isNaN(lat)||isNaN(lng)||lat<-90||lat>90||lng<-180||lng>180){
+        alert('الرجاء إدخال قيم DMS صحيحة'); return;
+      }
+      const label=formatDMS(
+        document.getElementById('pdLatDeg').value,
+        document.getElementById('pdLatMin').value,
+        document.getElementById('pdLatSec').value,
+        document.getElementById('pdLatDir').value
+      ) + ' / ' + formatDMS(
+        document.getElementById('pdLngDeg').value,
+        document.getElementById('pdLngMin').value,
+        document.getElementById('pdLngSec').value,
+        document.getElementById('pdLngDir').value
+      );
+      dmsPoints.push({lat,lng,label});
+      // انتقال للنقطة المضافة
+      map.setView([lat,lng], Math.max(map.getZoom(),15), {animate:true});
+      refreshList(); refreshPreview(); updateCount();
+    });
+
+    finishBtn.addEventListener('click', ()=>{
+      if(dmsPoints.length<3){ alert('يجب إضافة 3 نقاط على الأقل لرسم المضلع'); return; }
+      pushStateToUndo();
+      const coords=dmsPoints.map(p=>[p.lat,p.lng]);
+      const f=addFeature('polygon',coords);
+      selection={layerId:activeLayer().id, featureId:f.id};
+      renderFeatures(); renderAttrPanel(); renderLayerList(); scheduleSave();
+      showFeatureInfoHud(f,'polygon');
+      hud.style.display='none';
+      clearDmsTool();
+      updateHistoryButtons();
+    });
+
+    cancelBtn.addEventListener('click', ()=>{
+      hud.style.display='none';
+      clearDmsTool();
+    });
+
+    // مفتاح Escape يغلق الأداة
+    document.addEventListener('keydown', e=>{
+      if(e.key==='Escape' && hud.style.display==='block'){
+        hud.style.display='none'; clearDmsTool();
+      }
+    });
+  })();
+  /* ── نهاية Polygon DMS Tool ───────────────────────────────────────── */
+
 })();
 </script>
 </body>
