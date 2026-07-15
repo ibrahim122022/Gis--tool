@@ -73,6 +73,7 @@
   #screenshotBtn{--tc:#7A9AAA;}
   #searchPlaceBtn{--tc:#E8A432;}
   #polygonDmsBtn {--tc:#7B68EE;}
+  #pointUtmBtn {--tc:#2a9d5c;}
   .search-hud{width:310px;border-color:var(--gold);}
   .search-input-row{display:flex;gap:6px;margin-top:4px;}
   .search-input-row input{flex:1;background:var(--bg-panel-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-family:var(--mono);font-size:12px;}
@@ -378,6 +379,15 @@
         <circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"/>
         <path d="M12 4.5v2M12 17.5v2M4.5 12h2M17.5 12h2" stroke-width="1.5"/>
       </svg><span>نقطة</span>
+    </button>
+
+    <button class="tool-btn" id="pointUtmBtn" title="إضافة نقطة بإحداثي UTM (شرقي/شمالي بالمتر)">
+      <svg viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="4.5" fill="currentColor" opacity=".2"/>
+        <circle cx="12" cy="12" r="4.5" stroke-width="2"/>
+        <circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"/>
+        <text x="12" y="6" text-anchor="middle" font-size="6" fill="currentColor" stroke="none" font-family="monospace" font-weight="bold">UTM</text>
+      </svg><span>نقطة UTM</span>
     </button>
 
     <button class="tool-btn" data-tool="line" title="خط">
@@ -805,6 +815,28 @@
         </div>
       </div>
 
+      <!-- ── Point UTM HUD ── -->
+      <div class="rect-hud" id="pointUtmHud" style="width:270px;border-color:#2a9d5c;display:none;">
+        <h4 style="color:#2a9d5c;margin:0 0 8px;">📍 إضافة نقطة بإحداثي UTM</h4>
+        <label style="font-size:10px;">رقم المنطقة (Zone)</label>
+        <div class="dms-row">
+          <input type="number" id="puZone" value="36" min="1" max="60" step="1" placeholder="Zone" style="width:60%;">
+          <select id="puHemi" style="width:38%;">
+            <option value="N">N شمال</option>
+            <option value="S">S جنوب</option>
+          </select>
+        </div>
+        <label style="font-size:10px;margin-top:6px;display:block;">الإحداثي الشرقي — Easting (م)</label>
+        <input type="number" id="puEasting" step="0.01" placeholder="مثال: 350000.00">
+        <label style="font-size:10px;margin-top:6px;display:block;">الإحداثي الشمالي — Northing (م)</label>
+        <input type="number" id="puNorthing" step="0.01" placeholder="مثال: 3315000.00">
+        <div id="puPreview" style="font-size:10px;color:var(--text-muted);margin-top:6px;min-height:14px;"></div>
+        <div class="row-btns" style="margin-top:10px;">
+          <button class="btn-cancel" id="puCancelBtn">إلغاء</button>
+          <button class="btn-create" id="puAddBtn" style="background:#2a9d5c;">＋ إضافة النقطة</button>
+        </div>
+      </div>
+
       <div class="rect-hud" id="featureInfoHud" style="width:250px;border-color:var(--teal);display:none;">
         <h4 id="featureInfoTitle" style="color:var(--teal);">معلومات العنصر</h4>
         <div id="fiNameRow">
@@ -1141,6 +1173,46 @@
     if(lat < 0) northing += 10000000.0; // نصف الكرة الجنوبي
 
     return { zone: zoneNumber, easting, northing, hemisphere: lat>=0?'N':'S' };
+  }
+
+  // تحويل إحداثي UTM (شرقي/شمالي بالمتر + رقم المنطقة + نصف الكرة) إلى WGS84 (خط عرض/طول)
+  function utmToLatLng(zone, hemisphere, easting, northing){
+    const a = 6378137.0; // نصف المحور الأكبر WGS84
+    const eccSq = 0.00669438;
+    const k0 = 0.9996;
+    const e1 = (1-Math.sqrt(1-eccSq))/(1+Math.sqrt(1-eccSq));
+
+    let y = northing;
+    if(hemisphere === 'S') y -= 10000000.0; // نصف الكرة الجنوبي
+
+    const x = easting - 500000.0;
+    const M = y / k0;
+    const mu = M/(a*(1 - eccSq/4 - 3*eccSq*eccSq/64 - 5*eccSq*eccSq*eccSq/256));
+
+    const phi1 = mu
+      + (3*e1/2 - 27*e1*e1*e1/32)*Math.sin(2*mu)
+      + (21*e1*e1/16 - 55*e1*e1*e1*e1/32)*Math.sin(4*mu)
+      + (151*e1*e1*e1/96)*Math.sin(6*mu)
+      + (1097*e1*e1*e1*e1/512)*Math.sin(8*mu);
+
+    const eccPrimeSq = eccSq/(1-eccSq);
+    const N1 = a/Math.sqrt(1-eccSq*Math.sin(phi1)*Math.sin(phi1));
+    const T1 = Math.tan(phi1)*Math.tan(phi1);
+    const C1 = eccPrimeSq*Math.cos(phi1)*Math.cos(phi1);
+    const R1 = a*(1-eccSq)/Math.pow(1-eccSq*Math.sin(phi1)*Math.sin(phi1), 1.5);
+    const D = x/(N1*k0);
+
+    const lat = phi1 - (N1*Math.tan(phi1)/R1)*(D*D/2
+      - (5+3*T1+10*C1-4*C1*C1-9*eccPrimeSq)*D*D*D*D/24
+      + (61+90*T1+298*C1+45*T1*T1-252*eccPrimeSq-3*C1*C1)*D*D*D*D*D*D/720);
+
+    let lng = (D - (1+2*T1+C1)*D*D*D/6
+      + (5-2*C1+28*T1-3*C1*C1+8*eccPrimeSq+24*T1*T1)*D*D*D*D*D/120) / Math.cos(phi1);
+
+    const lngOrigin = (zone-1)*6-180+3;
+    lng = lngOrigin + toDeg(lng);
+
+    return { lat: toDeg(lat), lng };
   }
 
   function projectPointOnLine(pt, lineStart, lineEnd) {
@@ -2356,7 +2428,7 @@
     if(e.key==='Escape'){
       drawingCoords=null; rect3Point.step = 0; circlePending=null;
       arcState = { step: 0, start: null, end: null };
-      rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none'; document.getElementById('divideHud').style.display='none'; dividePendingLayerId=null; dividePendingFeatureId=null;
+      rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none'; document.getElementById('pointUtmHud').style.display='none'; document.getElementById('divideHud').style.display='none'; dividePendingLayerId=null; dividePendingFeatureId=null;
       document.getElementById('areaCalcHud').style.display='none';
       cancelDivideAngleMode(); divideComputedAngle = null;
       mobileFinishBtn.style.display = 'none';
@@ -2430,7 +2502,7 @@
     drawingCoords=null; rect3Point.step = 0; circlePending=null;
     arcState = { step: 0, start: null, end: null };
     clearDrawAnchors();
-    rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none'; document.getElementById('divideHud').style.display='none'; dividePendingLayerId=null; dividePendingFeatureId=null;
+    rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none'; document.getElementById('pointUtmHud').style.display='none'; document.getElementById('divideHud').style.display='none'; dividePendingLayerId=null; dividePendingFeatureId=null;
     document.getElementById('areaCalcHud').style.display='none';
     cancelDivideAngleMode(); divideComputedAngle = null;
     mobileFinishBtn.style.display = 'none';
@@ -3883,18 +3955,13 @@
   }
 
   let drivePushInFlight=false;
-  let pushCounter = 0;
-  let lastPushId = null; // بنسجله فوراً قبل الإرسال عشان نعرف نميّز صدى رفعتنا احنا بالظبط (بدل الاعتماد على توقيت غير مضمون)
   function pushToDrive(){
     if(!driveConnected || !db || drivePushInFlight) return;
     drivePushInFlight = true;
-    const pushId = (state.driveFileId||'p') + '_' + Date.now() + '_' + (pushCounter++);
-    lastPushId = pushId;
     const payload = {
       name: state.userName || null,
       geojson: buildGeoJSON(),
-      updatedAt: firebase.database.ServerValue.TIMESTAMP,
-      pushId: pushId
+      updatedAt: firebase.database.ServerValue.TIMESTAMP
     };
     db.ref('gis-users/' + state.driveFileId).set(payload)
       .then(()=>{
@@ -3992,9 +4059,8 @@
     db.ref('gis-users/' + state.driveFileId).on('value', snap=>{
       const val = snap.val();
       if(!val || !val.geojson) return;
-      if(val.pushId && val.pushId === lastPushId) return; // ده صدى رفعتنا احنا بالظبط — تجاهله (مش تحديث من جهاز تاني)
       const remoteTime = val.updatedAt || 0;
-      if(!val.pushId && remoteTime <= lastPushTime + 3000) return; // احتياطي لبيانات قديمة من غير pushId
+      if(remoteTime <= lastPushTime + 3000) return; // صدى رفعتنا احنا — تجاهله
       if(remoteTime <= (state.lastPulledTime||0)) return;
       pendingRemote = {geojson: val.geojson, remoteTime};
       driveUpdateBanner.style.display='flex';
@@ -4325,6 +4391,89 @@
     });
   })();
   /* ── نهاية Polygon DMS Tool ───────────────────────────────────────── */
+
+  /* ── Point UTM Tool ───────────────────────────────────────────────── */
+  (function(){
+    const hud       = document.getElementById('pointUtmHud');
+    const zoneInp   = document.getElementById('puZone');
+    const hemiSel   = document.getElementById('puHemi');
+    const eastInp   = document.getElementById('puEasting');
+    const northInp  = document.getElementById('puNorthing');
+    const preview   = document.getElementById('puPreview');
+    const addBtn    = document.getElementById('puAddBtn');
+    const cancelBtn = document.getElementById('puCancelBtn');
+
+    function openHud(){
+      document.querySelectorAll('.rect-hud').forEach(h=>h.style.display='none');
+      hud.style.left='90px'; hud.style.top='70px';
+      hud.style.display='block';
+      // اقترح رقم المنطقة ونصف الكرة تلقائياً بناءً على مركز الخريطة الحالي
+      const c = map.getCenter();
+      const guess = latLngToUTM(c.lat, c.lng);
+      zoneInp.value = guess.zone;
+      hemiSel.value = guess.hemisphere;
+      eastInp.value = '';
+      northInp.value = '';
+      preview.textContent = '';
+    }
+
+    function closeHud(){
+      hud.style.display = 'none';
+    }
+
+    function updatePreview(){
+      const zone = +zoneInp.value;
+      const hemi = hemiSel.value;
+      const easting = +eastInp.value;
+      const northing = +northInp.value;
+      if(!zone || zone<1 || zone>60 || !eastInp.value || !northInp.value || isNaN(easting) || isNaN(northing)){
+        preview.textContent = '';
+        return null;
+      }
+      const ll = utmToLatLng(zone, hemi, easting, northing);
+      if(isNaN(ll.lat) || isNaN(ll.lng) || ll.lat<-90 || ll.lat>90 || ll.lng<-180 || ll.lng>180){
+        preview.textContent = 'إحداثي غير صالح';
+        preview.style.color = 'var(--danger)';
+        return null;
+      }
+      preview.style.color = 'var(--text-muted)';
+      preview.textContent = `≈ ${ll.lat.toFixed(6)}, ${ll.lng.toFixed(6)}`;
+      return ll;
+    }
+
+    [zoneInp, hemiSel, eastInp, northInp].forEach(el=>{
+      el.addEventListener('input', updatePreview);
+      el.addEventListener('change', updatePreview);
+    });
+
+    document.getElementById('pointUtmBtn').addEventListener('click', ()=>{
+      if(hud.style.display==='block'){ closeHud(); return; }
+      openHud();
+    });
+
+    addBtn.addEventListener('click', ()=>{
+      const ll = updatePreview();
+      if(!ll){
+        alert('الرجاء إدخال رقم منطقة (Zone) وإحداثي شرقي وشمالي صحيحين');
+        return;
+      }
+      pushStateToUndo();
+      const f = addFeature('point', [[ll.lat, ll.lng]]);
+      selection = {layerId: activeLayer().id, featureId: f.id};
+      renderFeatures(); renderAttrPanel(); renderLayerList(); scheduleSave();
+      map.setView([ll.lat, ll.lng], Math.max(map.getZoom(), 15), {animate:true});
+      showFeatureInfoHud(f, 'point');
+      updateHistoryButtons();
+      closeHud();
+    });
+
+    cancelBtn.addEventListener('click', closeHud);
+
+    document.addEventListener('keydown', e=>{
+      if(e.key==='Escape' && hud.style.display==='block') closeHud();
+    });
+  })();
+  /* ── نهاية Point UTM Tool ─────────────────────────────────────────── */
 
 })();
 </script>
