@@ -449,6 +449,19 @@
       </svg><span>إحداثي</span>
     </button>
 
+    <button class="tool-btn" id="areaCalcBtn" title="حاسبة المساحة (فدان ↔ متر مربع)">
+      <svg viewBox="0 0 24 24">
+        <rect x="4" y="2.5" width="16" height="19" rx="2" fill="currentColor" opacity=".12" stroke-width="1.8"/>
+        <line x1="7" y1="7" x2="17" y2="7" stroke-width="1.8"/>
+        <circle cx="7.5" cy="12" r="1.15" fill="currentColor" stroke="none"/>
+        <circle cx="12" cy="12" r="1.15" fill="currentColor" stroke="none"/>
+        <circle cx="16.5" cy="12" r="1.15" fill="currentColor" stroke="none"/>
+        <circle cx="7.5" cy="16.5" r="1.15" fill="currentColor" stroke="none"/>
+        <circle cx="12" cy="16.5" r="1.15" fill="currentColor" stroke="none"/>
+        <circle cx="16.5" cy="16.5" r="1.15" fill="currentColor" stroke="none"/>
+      </svg><span>حاسبة</span>
+    </button>
+
     <div class="toolbar-sep"></div>
 
     <button class="tool-btn" id="undoBtn" title="تراجع (Ctrl+Z)" disabled>
@@ -687,6 +700,29 @@
         <div class="row-btns">
           <button class="btn-cancel" id="circleCancel">إلغاء</button>
           <button class="btn-create" id="circleCreate">إنشاء</button>
+        </div>
+      </div>
+
+      <!-- ── حاسبة المساحة: فدان/قيراط/سهم ↔ متر مربع ── -->
+      <div class="rect-hud" id="areaCalcHud" style="width:270px;display:none;">
+        <h4>حاسبة المساحة (فدان ↔ م²)</h4>
+
+        <label style="font-size:10.5px;">فدان + قيراط + سهم ← متر مربع</label>
+        <div class="dms-row">
+          <input type="number" id="acFeddan" value="0" min="0" step="1" placeholder="فدان" style="width:33%;">
+          <input type="number" id="acQirat" value="0" min="0" max="23" step="1" placeholder="قيراط" style="width:33%;">
+          <input type="number" id="acSahm" value="0" min="0" max="23.999" step="0.01" placeholder="سهم" style="width:33%;">
+        </div>
+        <div class="stat-row"><span>= المساحة (م²)</span><b id="acM2Result">0</b></div>
+
+        <div class="toolbar-sep" style="margin:12px auto;"></div>
+
+        <label style="font-size:10.5px;">متر مربع ← فدان + قيراط + سهم</label>
+        <input type="number" id="acM2Input" value="0" min="0" step="0.01" placeholder="المساحة بالمتر المربع">
+        <div class="stat-row"><span>= ف/ط/س</span><b id="acFqsResult">0 ف 0 ط 0 س</b></div>
+
+        <div class="row-btns" style="margin-top:10px;">
+          <button class="btn-cancel" id="areaCalcClose">إغلاق</button>
         </div>
       </div>
 
@@ -1371,6 +1407,14 @@
     if(sahm >= 24){ sahm -= 24; q2 += 1; }
     if(q2 >= 24){ q2 -= 24; f2 += 1; }
     return { feddan: f2, qirat: q2, sahm };
+  }
+
+  // العكس: فدان + قيراط + سهم → متر مربع
+  function feddanToArea(feddan, qirat, sahm){
+    const M2_PER_FEDDAN = 4200.833;
+    const M2_PER_QIRAT = M2_PER_FEDDAN / 24;
+    const M2_PER_SAHM = M2_PER_QIRAT / 24;
+    return (feddan||0) * M2_PER_FEDDAN + (qirat||0) * M2_PER_QIRAT + (sahm||0) * M2_PER_SAHM;
   }
   
   function rectCorners(rect){
@@ -2313,6 +2357,7 @@
       drawingCoords=null; rect3Point.step = 0; circlePending=null;
       arcState = { step: 0, start: null, end: null };
       rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none'; document.getElementById('divideHud').style.display='none'; dividePendingLayerId=null; dividePendingFeatureId=null;
+      document.getElementById('areaCalcHud').style.display='none';
       cancelDivideAngleMode(); divideComputedAngle = null;
       mobileFinishBtn.style.display = 'none';
       closeMobileEditPad();
@@ -2370,6 +2415,14 @@
       return;
     }
 
+    if(btn.id === 'areaCalcBtn') {
+      const hud = document.getElementById('areaCalcHud');
+      hud.style.left = '90px';
+      hud.style.top = '140px';
+      hud.style.display = (hud.style.display === 'block') ? 'none' : 'block';
+      return;
+    }
+
     if(!btn.dataset.tool) return;
     document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
@@ -2378,6 +2431,7 @@
     arcState = { step: 0, start: null, end: null };
     clearDrawAnchors();
     rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none'; document.getElementById('divideHud').style.display='none'; dividePendingLayerId=null; dividePendingFeatureId=null;
+    document.getElementById('areaCalcHud').style.display='none';
     cancelDivideAngleMode(); divideComputedAngle = null;
     mobileFinishBtn.style.display = 'none';
     closeMobileEditPad();
@@ -2946,6 +3000,35 @@
   });
 
   document.getElementById('goToCancel').addEventListener('click', () => { goToCoordsHud.style.display='none'; });
+
+  /* ---------- حاسبة المساحة: فدان/قيراط/سهم ↔ متر مربع ---------- */
+  (function(){
+    const feddanEl = document.getElementById('acFeddan');
+    const qiratEl = document.getElementById('acQirat');
+    const sahmEl = document.getElementById('acSahm');
+    const m2ResultEl = document.getElementById('acM2Result');
+    const m2InputEl = document.getElementById('acM2Input');
+    const fqsResultEl = document.getElementById('acFqsResult');
+
+    function updateFromFqs(){
+      const f = parseFloat(feddanEl.value) || 0;
+      const q = parseFloat(qiratEl.value) || 0;
+      const s = parseFloat(sahmEl.value) || 0;
+      const m2 = feddanToArea(f, q, s);
+      m2ResultEl.textContent = m2.toLocaleString('ar-EG', {maximumFractionDigits: 2});
+    }
+    function updateFromM2(){
+      const m2 = parseFloat(m2InputEl.value) || 0;
+      const r = areaToFeddan(m2);
+      fqsResultEl.textContent = `${r.feddan} ف ${r.qirat} ط ${r.sahm} س`;
+    }
+    [feddanEl, qiratEl, sahmEl].forEach(el => el.addEventListener('input', updateFromFqs));
+    m2InputEl.addEventListener('input', updateFromM2);
+    document.getElementById('areaCalcClose').addEventListener('click', () => {
+      document.getElementById('areaCalcHud').style.display = 'none';
+    });
+    updateFromFqs(); updateFromM2();
+  })();
   document.getElementById('goToExecute').addEventListener('click', () => {
     function dmsToDecimal(deg, min, sec, dir){
       const decimal = (Math.abs(+deg||0)) + (Math.abs(+min||0))/60 + (Math.abs(+sec||0))/3600;
@@ -3800,13 +3883,18 @@
   }
 
   let drivePushInFlight=false;
+  let pushCounter = 0;
+  let lastPushId = null; // بنسجله فوراً قبل الإرسال عشان نعرف نميّز صدى رفعتنا احنا بالظبط (بدل الاعتماد على توقيت غير مضمون)
   function pushToDrive(){
     if(!driveConnected || !db || drivePushInFlight) return;
     drivePushInFlight = true;
+    const pushId = (state.driveFileId||'p') + '_' + Date.now() + '_' + (pushCounter++);
+    lastPushId = pushId;
     const payload = {
       name: state.userName || null,
       geojson: buildGeoJSON(),
-      updatedAt: firebase.database.ServerValue.TIMESTAMP
+      updatedAt: firebase.database.ServerValue.TIMESTAMP,
+      pushId: pushId
     };
     db.ref('gis-users/' + state.driveFileId).set(payload)
       .then(()=>{
@@ -3904,8 +3992,9 @@
     db.ref('gis-users/' + state.driveFileId).on('value', snap=>{
       const val = snap.val();
       if(!val || !val.geojson) return;
+      if(val.pushId && val.pushId === lastPushId) return; // ده صدى رفعتنا احنا بالظبط — تجاهله (مش تحديث من جهاز تاني)
       const remoteTime = val.updatedAt || 0;
-      if(remoteTime <= lastPushTime + 3000) return; // صدى رفعتنا احنا — تجاهله
+      if(!val.pushId && remoteTime <= lastPushTime + 3000) return; // احتياطي لبيانات قديمة من غير pushId
       if(remoteTime <= (state.lastPulledTime||0)) return;
       pendingRemote = {geojson: val.geojson, remoteTime};
       driveUpdateBanner.style.display='flex';
