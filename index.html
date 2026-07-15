@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -246,6 +245,21 @@
     padding: 12px 20px; font-weight: bold; font-size: 13px; font-family: var(--sans);
     box-shadow: 0 4px 15px rgba(0,0,0,0.4); align-items: center; gap: 6px;
   }
+
+  .draw-style-panel {
+    display:none; position:absolute; bottom:20px; left:50%; transform:translateX(-50%);
+    z-index:998; background:var(--bg-panel); border:1px solid var(--border); border-radius:14px;
+    padding:6px; gap:4px; box-shadow:0 4px 15px rgba(0,0,0,.35);
+  }
+  .draw-style-panel.show{ display:flex; }
+  .draw-style-btn{
+    width:42px; height:42px; border-radius:10px; border:1.5px solid transparent; background:transparent;
+    color:var(--text-muted); display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .draw-style-btn svg{ width:22px; height:22px; fill:none; stroke:currentColor; }
+  .draw-style-btn:hover{ background:var(--bg-panel-2); color:var(--text); }
+  .draw-style-btn.active{ background:rgba(0,180,166,.16); border-color:var(--teal); color:var(--teal); }
+  .draw-style-sep{ width:1px; align-self:stretch; background:var(--border); margin:2px 1px; }
 
   .mobile-crosshair {
     display: none; position: absolute; top: 50%; left: 50%; width: 24px; height: 24px;
@@ -578,6 +592,20 @@
         إنهـاء الرسم
       </button>
 
+      <div class="draw-style-panel" id="drawStylePanel">
+        <button class="draw-style-btn active" id="drawStyleStraightBtn" data-style="straight" title="رسم حر (خطوط مستقيمة عادية)">
+          <svg viewBox="0 0 24 24"><line x1="5" y1="19" x2="19" y2="5" stroke-width="2.3" stroke-linecap="round"/></svg>
+        </button>
+        <div class="draw-style-sep"></div>
+        <button class="draw-style-btn" id="drawStyleOrthoBtn" data-style="ortho" title="رسم بزوايا قائمة (Ortho) — كل ضلع يقفل أفقي أو رأسي">
+          <svg viewBox="0 0 24 24"><polyline points="4,19 4,10 19,10" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="6" width="4" height="4" fill="currentColor" stroke="none" opacity=".5"/></svg>
+        </button>
+        <div class="draw-style-sep"></div>
+        <button class="draw-style-btn" id="drawStyleCurveBtn" data-style="curve" title="قوس بنقطة بداية ونهاية ونصف قطر (End Point Arc Segment) — اضغط R لإدخال نصف قطر بالمتر">
+          <svg viewBox="0 0 24 24"><path d="M4 18 C 4 8, 20 16, 20 5" stroke-width="2.3" fill="none" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+
       <div class="basemap-toggle">
         <button id="btnSat" class="active">قمر صناعي</button>
         <button id="btnStreets">خريطة عادية</button>
@@ -817,6 +845,9 @@
   let layerExpandState = {};  // tracks which layer IDs are expanded in the list
   let featureInfoPendingF = null; // feature waiting for name/description input
   let tool = 'select';
+  let drawStyle = 'straight'; // 'straight' | 'ortho' | 'curve' — نمط رسم الخط/المضلع
+  let arcState = { step: 0, start: null, end: null }; // حالة رسم القوس في وضع المنحنى (زي End Point Arc Segment)
+  let lastCursorLatLng = null;
   let selection = null;
   let drawingCoords = null;
   
@@ -854,6 +885,7 @@
   const goToCoordsHud = document.getElementById('goToCoordsHud');
   const circleHud = document.getElementById('circleHud');
   const mobileFinishBtn = document.getElementById('mobileFinishBtn');
+  const drawStylePanel = document.getElementById('drawStylePanel');
   const undoBtn = document.getElementById('undoBtn');
   const redoBtn = document.getElementById('redoBtn');
 
@@ -880,6 +912,32 @@
   satLayer.addTo(map);
   const labelsLayerGroup = L.layerGroup().addTo(map);
   const dimLabelsLayerGroup = L.layerGroup().addTo(map);
+  const drawAnchorGroup = L.layerGroup().addTo(map); // نقط الأنكور أثناء الرسم (زوايا قائمة / منحنى)
+
+  function clearDrawAnchors(){ drawAnchorGroup.clearLayers(); }
+
+  // بيرسم نقط الأنكور اللي المستخدم حددها لحد دلوقتي: أخضر للنقط الثابتة، برتقالي لآخر نقطة
+  function renderDrawAnchors(){
+    clearDrawAnchors();
+    if(!drawingCoords || !drawingCoords.length) return;
+    if(drawStyle === 'ortho'){
+      drawingCoords.forEach((c, i) => {
+        const isLast = i === drawingCoords.length - 1;
+        L.circleMarker(c, {
+          radius: isLast ? 6 : 5, color: isLast ? '#E8A432' : '#00B4A6', weight: 2,
+          fillColor: isLast ? '#E8A432' : '#00B4A6', fillOpacity: 0.95
+        }).addTo(drawAnchorGroup);
+      });
+    } else if(drawStyle === 'curve'){
+      // في وضع القوس بنعلّم بس أول نقطة (بداية السلسلة) وآخر نقطة قوس تم تأكيدها (بداية القوس الحالي)
+      const first = drawingCoords[0];
+      const cur = arcState.start || drawingCoords[drawingCoords.length-1];
+      L.circleMarker(first, {radius:6, color:'#00B4A6', weight:2, fillColor:'#00B4A6', fillOpacity:0.95}).addTo(drawAnchorGroup);
+      if(cur && (cur[0]!==first[0] || cur[1]!==first[1])){
+        L.circleMarker(cur, {radius:6, color:'#E8A432', weight:2, fillColor:'#E8A432', fillOpacity:0.95}).addTo(drawAnchorGroup);
+      }
+    }
+  }
 
   document.getElementById('btnSat').addEventListener('click', ()=>{
     map.removeLayer(streetsLayer); map.addLayer(satLayer);
@@ -937,9 +995,11 @@
         mobileFinishBtn.style.display = 'none';
         if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
         document.getElementById('stTemp').textContent = '';
+        clearDrawAnchors();
       } else {
         if (tempLine) { map.removeLayer(tempLine); }
         tempLine = L.polyline(drawingCoords, {color:'#00B4A6', weight:2, dashArray:'6 5'}).addTo(map);
+        renderDrawAnchors();
       }
       updateHistoryButtons();
       return;
@@ -1062,11 +1122,217 @@
     return { latlng: L.latLng(projLat, projLng), distance: dist };
   }
   
+  // ============ أدوات هندسة القوس الدائري (زي أداة End Point Arc Segment) ============
+  function arcGeom(p1, p2){
+    const refLat = (p1.lat + p2.lat) / 2;
+    const a = metricXY(refLat, p1.lat, p1.lng);
+    const b = metricXY(refLat, p2.lat, p2.lng);
+    const chordX = b.x - a.x, chordY = b.y - a.y;
+    const chordLen = Math.hypot(chordX, chordY);
+    const ux = chordLen > 1e-9 ? chordX/chordLen : 1;
+    const uy = chordLen > 1e-9 ? chordY/chordLen : 0;
+    const px = -uy, py = ux; // عمودي على الوتر
+    const mid = { x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
+    return { refLat, a, b, chordLen, px, py, mid };
+  }
+
+  // بيحسب نقط القوس (مجزّأة) بمعلومية الوتر (p1,p2) وارتفاع الانحناء (sagitta) عند منتصف الوتر
+  function arcPointsFromSagitta(p1, p2, sagitta){
+    const g = arcGeom(p1, p2);
+    const h = g.chordLen / 2;
+    if(h < 1e-6 || Math.abs(sagitta) < Math.max(h*0.004, 0.05)) return null; // شبه مستقيم
+    const s = sagitta;
+    const r = (s*s + h*h) / (2*s);
+    const d = s - r;
+    const centerX = g.mid.x + g.px*d, centerY = g.mid.y + g.py*d;
+    const R = Math.abs(r);
+    const angle1 = Math.atan2(g.a.y-centerY, g.a.x-centerX);
+    const angle2 = Math.atan2(g.b.y-centerY, g.b.x-centerX);
+    const twoPi = Math.PI*2;
+    const deltaCCW = ((angle2-angle1) % twoPi + twoPi) % twoPi;
+    const deltaCW = deltaCCW - twoPi;
+    const apexX = g.mid.x + g.px*s, apexY = g.mid.y + g.py*s;
+    const distAt = (delta) => {
+      const am = angle1 + delta/2;
+      const mx = centerX + R*Math.cos(am), my = centerY + R*Math.sin(am);
+      return (mx-apexX)**2 + (my-apexY)**2;
+    };
+    const delta = distAt(deltaCCW) <= distAt(deltaCW) ? deltaCCW : deltaCW;
+    const n = Math.max(8, Math.min(72, Math.round(Math.abs(delta)/twoPi*72)+8));
+    const pts = [];
+    for(let i=0;i<=n;i++){
+      const t = i/n, ang = angle1 + delta*t;
+      const x = centerX + R*Math.cos(ang), y = centerY + R*Math.sin(ang);
+      const [lat,lng] = destPoint(p1.lat, p1.lng, x-g.a.x, y-g.a.y);
+      pts.push([lat,lng]);
+    }
+    return { pts, radius: R };
+  }
+
+  // بيحسب القوس بمعلومية نقطة انحناء (bulge point) — الماوس وهو بيسحب
+  function arcPointsFromBulgePoint(p1, p2, bulgePt){
+    const g = arcGeom(p1, p2);
+    const c = metricXY(g.refLat, bulgePt.lat, bulgePt.lng);
+    const sagitta = (c.x-g.mid.x)*g.px + (c.y-g.mid.y)*g.py;
+    return { result: arcPointsFromSagitta(p1, p2, sagitta), sign: sagitta >= 0 ? 1 : -1, sagitta };
+  }
+
+  // بيحسب القوس بمعلومية نصف قطر مُدخل يدوياً (زرار R)
+  function arcPointsFromRadiusInput(p1, p2, radiusMeters, sign){
+    const g = arcGeom(p1, p2);
+    const h = g.chordLen / 2;
+    if(!(radiusMeters > 0) || radiusMeters < h) return null;
+    const s = radiusMeters - Math.sqrt(radiusMeters*radiusMeters - h*h);
+    return arcPointsFromSagitta(p1, p2, s * (sign || 1));
+  }
+
   function pathLength(coords){
     let s=0; for(let i=0;i<coords.length-1;i++) s+=haversine(coords[i][0],coords[i][1],coords[i+1][0],coords[i+1][1]);
     return s;
   }
   function pathPerimeter(coords){ return pathLength(coords) + haversine(coords[coords.length-1][0],coords[coords.length-1][1],coords[0][0],coords[0][1]); }
+
+  // قفل الضلع الجديد على زاوية قائمة بالنسبة لأول ضلع في الرسمة (مش بالنسبة للشمال/الشرق المطلق)
+  // أول ضلع (من أول نقطة للتانية) بيترسم حر تماماً وهو اللي بيحدد اتجاه القفل للباقي
+  function orthoSnapPoint(coords, curLL){
+    const lastArr = coords[coords.length-1];
+    const last = {lat:lastArr[0], lng:lastArr[1]};
+    const dist = haversine(last.lat, last.lng, curLL.lat, curLL.lng);
+    if(dist < 1e-6) return {lat:curLL.lat, lng:curLL.lng};
+    if(coords.length < 2){
+      // لسه بنرسم أول ضلع — حر بالكامل عشان يحدد اتجاه القفل بعد كده
+      return {lat:curLL.lat, lng:curLL.lng};
+    }
+    const p0 = {lat:coords[0][0], lng:coords[0][1]};
+    const p1 = {lat:coords[1][0], lng:coords[1][1]};
+    const baseDeg = toDeg(metricAngleRad(p0, p1));
+    const curDeg = toDeg(metricAngleRad(last, curLL));
+    const snappedDeg = baseDeg + Math.round((curDeg - baseDeg)/90)*90;
+    const rad = toRad(snappedDeg);
+    const east = dist*Math.cos(rad), north = dist*Math.sin(rad);
+    const [lat,lng] = destPoint(last.lat, last.lng, east, north);
+    return {lat, lng};
+  }
+
+  // تنعيم مجموعة نقاط لمنحنى ناعم (Catmull-Rom Spline) — لسه مستخدمة لو حابب تفعّلها تاني
+  function catmullRomSmooth(points, segmentsPerSpan, closed){
+    if(!points || points.length < 3) return points ? points.slice() : [];
+    const n = points.length;
+    const get = (i) => {
+      if(closed) { const k=((i%n)+n)%n; return points[k]; }
+      if(i<0) return points[0];
+      if(i>=n) return points[n-1];
+      return points[i];
+    };
+    const out = [];
+    const segCount = closed ? n : n-1;
+    for(let i=0;i<segCount;i++){
+      const p0=get(i-1), p1=get(i), p2=get(i+1), p3=get(i+2);
+      for(let t=0;t<segmentsPerSpan;t++){
+        const u=t/segmentsPerSpan, u2=u*u, u3=u2*u;
+        const lat = 0.5*((2*p1[0]) + (-p0[0]+p2[0])*u + (2*p0[0]-5*p1[0]+4*p2[0]-p3[0])*u2 + (-p0[0]+3*p1[0]-3*p2[0]+p3[0])*u3);
+        const lng = 0.5*((2*p1[1]) + (-p0[1]+p2[1])*u + (2*p0[1]-5*p1[1]+4*p2[1]-p3[1])*u2 + (-p0[1]+3*p1[1]-3*p2[1]+p3[1])*u3);
+        out.push([lat,lng]);
+      }
+    }
+    if(!closed) out.push(points[n-1]);
+    return out;
+  }
+
+  /* ===== أداة "End Point Arc Segment": نقطة بداية + نقطة نهاية + نصف قطر (بالماوس أو بالضغط على R) ===== */
+
+  function normalizeAngle2Pi(a){ const tp=Math.PI*2; return ((a%tp)+tp)%tp; }
+
+  // مركز ونصف قطر الدائرة المارة بثلاث نقط محلية {x,y} بالمتر
+  function circumcircleXY(p1, p2, p3){
+    const {x:x1,y:y1}=p1, {x:x2,y:y2}=p2, {x:x3,y:y3}=p3;
+    const d = 2*(x1*(y2-y3) + x2*(y3-y1) + x3*(y1-y2));
+    if(Math.abs(d) < 1e-9) return null; // نقط شبه متراصة على استقامة واحدة
+    const ux = ((x1*x1+y1*y1)*(y2-y3) + (x2*x2+y2*y2)*(y3-y1) + (x3*x3+y3*y3)*(y1-y2)) / d;
+    const uy = ((x1*x1+y1*y1)*(x3-x2) + (x2*x2+y2*y2)*(x1-x3) + (x3*x3+y3*y3)*(x2-x1)) / d;
+    return { cx: ux, cy: uy, r: Math.hypot(x1-ux, y1-uy) };
+  }
+
+  // قوس دائري يمر بنقطة البداية والنهاية ونقطة انحناء ثالثة (بيتحرك بيها الماوس) — بيرجع مصفوفة [lat,lng]
+  function computeArcBy3Points(startLL, endLL, bulgeLL, segments){
+    segments = segments || 24;
+    const refLat = (startLL.lat + endLL.lat + bulgeLL.lat) / 3;
+    const S = metricXY(refLat, startLL.lat, startLL.lng);
+    const E = metricXY(refLat, endLL.lat, endLL.lng);
+    const P = metricXY(refLat, bulgeLL.lat, bulgeLL.lng);
+    const circ = circumcircleXY(S, P, E);
+    if(!circ) return [[startLL.lat,startLL.lng],[endLL.lat,endLL.lng]];
+    const aS = Math.atan2(S.y-circ.cy, S.x-circ.cx);
+    const aE = Math.atan2(E.y-circ.cy, E.x-circ.cx);
+    const aP = Math.atan2(P.y-circ.cy, P.x-circ.cx);
+    const deltaCCW = normalizeAngle2Pi(aE - aS);
+    const pRel = normalizeAngle2Pi(aP - aS);
+    const sweep = (pRel <= deltaCCW) ? deltaCCW : (deltaCCW - Math.PI*2);
+    const pts = [];
+    for(let i=0;i<=segments;i++){
+      const t=i/segments, ang=aS+sweep*t;
+      const x = circ.cx + circ.r*Math.cos(ang), y = circ.cy + circ.r*Math.sin(ang);
+      pts.push([ y/111320, x/(111320*Math.cos(toRad(refLat))) ]);
+    }
+    return pts;
+  }
+
+  // قوس دائري بنصف قطر محدد رقمياً بين نقطتين — بيختار جهة الانحناء حسب نقطة مرجعية (موضع المؤشر)
+  function computeArcByRadius(startLL, endLL, radius, sideRefLL, segments){
+    segments = segments || 24;
+    const refLat = (startLL.lat + endLL.lat) / 2;
+    const S = metricXY(refLat, startLL.lat, startLL.lng);
+    const E = metricXY(refLat, endLL.lat, endLL.lng);
+    const chordX = E.x-S.x, chordY = E.y-S.y;
+    const chordLen = Math.hypot(chordX, chordY);
+    const c = chordLen/2;
+    if(c < 1e-6) return [[startLL.lat,startLL.lng],[endLL.lat,endLL.lng]];
+    let r = Math.abs(radius);
+    if(r < c) r = c; // أقل نصف قطر ممكن هو نصف طول الوتر (نصف دائرة)
+    const mx=(S.x+E.x)/2, my=(S.y+E.y)/2;
+    const ux=chordX/chordLen, uy=chordY/chordLen;
+    const px=-uy, py=ux; // عمودي على الوتر
+    let side = 1;
+    if(sideRefLL){
+      const R = metricXY(refLat, sideRefLL.lat, sideRefLL.lng);
+      const dot = (R.x-mx)*px + (R.y-my)*py;
+      side = dot >= 0 ? 1 : -1;
+    }
+    const d = Math.sqrt(Math.max(r*r - c*c, 0));
+    const cx = mx - side*d*px, cy = my - side*d*py;
+    const aS = Math.atan2(S.y-cy, S.x-cx);
+    const aE = Math.atan2(E.y-cy, E.x-cx);
+    let deltaCCW = normalizeAngle2Pi(aE-aS);
+    const sweep = deltaCCW <= Math.PI ? deltaCCW : deltaCCW - Math.PI*2;
+    const pts = [];
+    for(let i=0;i<=segments;i++){
+      const t=i/segments, ang=aS+sweep*t;
+      const x = cx + r*Math.cos(ang), y = cy + r*Math.sin(ang);
+      pts.push([ y/111320, x/(111320*Math.cos(toRad(refLat))) ]);
+    }
+    return pts;
+  }
+
+  // نداء عند تأكيد القوس (كليك تالت أو إدخال نصف قطر بـ R) — بيضيف نقط القوس لسلسلة الرسم وبيبدأ قوس جديد من نهايته
+  function confirmArcSegment(bulgeOrRadiusRefLL, forcedRadius){
+    const S = {lat:arcState.start[0], lng:arcState.start[1]};
+    const E = {lat:arcState.end[0], lng:arcState.end[1]};
+    let arcPts;
+    if(forcedRadius != null){
+      arcPts = computeArcByRadius(S, E, forcedRadius, bulgeOrRadiusRefLL);
+    } else {
+      arcPts = computeArcBy3Points(S, E, bulgeOrRadiusRefLL);
+    }
+    arcPts.slice(1).forEach(p => drawingCoords.push(p));
+    arcState.start = drawingCoords[drawingCoords.length-1];
+    arcState.end = null;
+    arcState.step = 1;
+    if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
+    document.getElementById('stTemp').textContent = '';
+    document.getElementById('stHint').textContent = '∿ انقر لتحديد نهاية القوس التالي، أو Enter/دبل كليك لإنهاء الرسم';
+    renderDrawAnchors();
+    updateHistoryButtons();
+  }
   
   function polygonAreaMeters(coords){
     // حساب المساحة الكروية الحقيقية عبر Turf.js (بدل الإسقاط المسطّح التقريبي القديم)
@@ -1693,6 +1959,7 @@
   map.on('mousemove', e => {
     document.getElementById('stLat').textContent = e.latlng.lat.toFixed(6);
     document.getElementById('stLng').textContent = e.latlng.lng.toFixed(6);
+    lastCursorLatLng = e.latlng;
     
     if(dragCtx) {
       const snapped = dragCtx.mode==='vertex' ? effectiveLatLng(e, dragCtx.feature.id) : e.latlng;
@@ -1778,15 +2045,38 @@
         document.getElementById('stTemp').textContent = `العرض: ${width.toFixed(1)} م | الطول: ${length.toFixed(1)} م`;
       }
     }
+    else if(drawingCoords && drawingCoords.length && drawStyle==='curve' && arcState.step===2){
+      const snapped = effectiveLatLng(e);
+      const S = {lat:arcState.start[0], lng:arcState.start[1]};
+      const E = {lat:arcState.end[0], lng:arcState.end[1]};
+      const arcPts = computeArcBy3Points(S, E, snapped);
+      if(tempLine){ map.removeLayer(tempLine); }
+      tempLine = L.polyline(arcPts, {color:'#00B4A6', weight:2, dashArray:'6 5'}).addTo(map);
+      const refLat=(S.lat+E.lat)/2;
+      const chordLen = haversine(S.lat,S.lng,E.lat,E.lng);
+      document.getElementById('stTemp').textContent = 'طول الوتر: ' + chordLen.toFixed(2) + ' م — اضغط R لإدخال نصف قطر محدد';
+    }
     else if(drawingCoords && drawingCoords.length){
       const snapped = effectiveLatLng(e);
-      if(tempLine){ map.removeLayer(tempLine); }
-      const pts = drawingCoords.concat([[snapped.lat, snapped.lng]]);
-      tempLine = L.polyline(pts, {color:'#00B4A6', weight:2, dashArray:'6 5'}).addTo(map);
-      
-      const last = drawingCoords[drawingCoords.length-1];
-      const segLen = haversine(last[0],last[1], snapped.lat, snapped.lng);
-      document.getElementById('stTemp').textContent = 'طول الضلع: ' + segLen.toFixed(2) + ' م';
+      if(drawStyle==='curve' && arcState.step===1){
+        // معاينة الوتر (خط مستقيم) لحد ما يتحدد نصف القطر
+        if(tempLine){ map.removeLayer(tempLine); }
+        tempLine = L.polyline([arcState.start, [snapped.lat, snapped.lng]], {color:'#00B4A6', weight:2, dashArray:'6 5'}).addTo(map);
+        const segLen = haversine(arcState.start[0],arcState.start[1], snapped.lat, snapped.lng);
+        document.getElementById('stTemp').textContent = 'طول الوتر: ' + segLen.toFixed(2) + ' م';
+      } else if(drawStyle !== 'curve') {
+        let pt = snapped;
+        if(drawStyle==='ortho'){
+          pt = orthoSnapPoint(drawingCoords, pt);
+        }
+        if(tempLine){ map.removeLayer(tempLine); }
+        const pts = drawingCoords.concat([[pt.lat, pt.lng]]);
+        tempLine = L.polyline(pts, {color:'#00B4A6', weight:2, dashArray:'6 5'}).addTo(map);
+        
+        const last = drawingCoords[drawingCoords.length-1];
+        const segLen = haversine(last[0],last[1], pt.lat, pt.lng);
+        document.getElementById('stTemp').textContent = 'طول الضلع: ' + segLen.toFixed(2) + ' م';
+      }
     }
     else if(tool==='measure' && measurePt1){
       const snM = effectiveLatLng(e);
@@ -1831,7 +2121,28 @@
         drawingCoords=[];
         if(window.innerWidth <= 760) mobileFinishBtn.style.display = 'flex';
       }
-      drawingCoords.push([snapped.lat, snapped.lng]);
+      if(drawStyle === 'curve'){
+        if(arcState.step === 0){
+          if(drawingCoords.length === 0) drawingCoords.push([snapped.lat, snapped.lng]);
+          arcState.start = drawingCoords[drawingCoords.length-1];
+          arcState.step = 1;
+          document.getElementById('stHint').textContent = '∿ انقر لتحديد نقطة نهاية القوس...';
+        } else if(arcState.step === 1){
+          arcState.end = [snapped.lat, snapped.lng];
+          arcState.step = 2;
+          document.getElementById('stHint').textContent = '∿ حرّك الماوس لتحديد انحناء القوس ثم انقر لتأكيد، أو اضغط R لإدخال نصف القطر بالمتر';
+        } else if(arcState.step === 2){
+          confirmArcSegment(snapped);
+        }
+        renderDrawAnchors();
+      } else {
+        let pt = snapped;
+        if(drawStyle==='ortho' && drawingCoords.length){
+          pt = orthoSnapPoint(drawingCoords, snapped);
+        }
+        drawingCoords.push([pt.lat, pt.lng]);
+        renderDrawAnchors();
+      }
       updateHistoryButtons();
     } 
     else if(tool==='rectangle'){
@@ -1939,10 +2250,29 @@
     finishDrawing();
   });
 
+  drawStylePanel.addEventListener('click', e=>{
+    const b = e.target.closest('.draw-style-btn');
+    if(!b) return;
+    drawStyle = b.dataset.style;
+    drawStylePanel.querySelectorAll('.draw-style-btn').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    arcState = { step: 0, start: null, end: null };
+    if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
+    const hints = {
+      straight: 'اضغط على الخريطة للرسم',
+      ortho: '⊾ وضع الزوايا القائمة: حدد أول ضلع بحرية، والباقي هيتقفل قائم (90°) على اتجاهه تلقائياً',
+      curve: '∿ وضع القوس (End Point Arc): انقر لتحديد نقطة البداية، بعدين نقطة النهاية، بعدين حرّك الماوس لتحديد الانحناء وانقر لتأكيد — أو اضغط R لإدخال نصف قطر بالمتر'
+    };
+    document.getElementById('stHint').textContent = hints[drawStyle] || hints.straight;
+    if(drawingCoords && drawingCoords.length) renderDrawAnchors();
+  });
+
   function finishDrawing(){
     if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
     document.getElementById('stTemp').textContent='';
     mobileFinishBtn.style.display = 'none';
+    clearDrawAnchors();
+    arcState = { step: 0, start: null, end: null };
 
     if(tool==='line' && drawingCoords && drawingCoords.length>=2){
       pushStateToUndo();
@@ -1967,13 +2297,27 @@
     if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y' && !typing) { e.preventDefault(); handleRedo(); }
 
     if(e.key==='Enter' && !typing) finishDrawing();
+    if(e.key.toLowerCase()==='r' && !typing && (tool==='line'||tool==='polygon') && drawStyle==='curve' && arcState.step===2){
+      e.preventDefault();
+      const input = window.prompt('نصف قطر القوس بالمتر:');
+      if(input !== null){
+        const r = parseFloat(input);
+        if(!isNaN(r) && r > 0){
+          confirmArcSegment(lastCursorLatLng, r);
+        } else if(input.trim() !== ''){
+          alert('من فضلك أدخل رقم صحيح أكبر من صفر لنصف القطر');
+        }
+      }
+    }
     if(e.key==='Escape'){
       drawingCoords=null; rect3Point.step = 0; circlePending=null;
+      arcState = { step: 0, start: null, end: null };
       rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none'; document.getElementById('divideHud').style.display='none'; dividePendingLayerId=null; dividePendingFeatureId=null;
       cancelDivideAngleMode(); divideComputedAngle = null;
       mobileFinishBtn.style.display = 'none';
       closeMobileEditPad();
       if(tempLine){map.removeLayer(tempLine); tempLine=null;}
+      clearDrawAnchors();
       if(measurePt1){ measurePt1=null; }
       if(measureMarker){ map.removeLayer(measureMarker); measureMarker=null; }
       if(measureLine){ map.removeLayer(measureLine); measureLine=null; }
@@ -2031,6 +2375,8 @@
     btn.classList.add('active');
     tool = btn.dataset.tool;
     drawingCoords=null; rect3Point.step = 0; circlePending=null;
+    arcState = { step: 0, start: null, end: null };
+    clearDrawAnchors();
     rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none'; document.getElementById('divideHud').style.display='none'; dividePendingLayerId=null; dividePendingFeatureId=null;
     cancelDivideAngleMode(); divideComputedAngle = null;
     mobileFinishBtn.style.display = 'none';
@@ -2055,6 +2401,7 @@
     mapEl.classList.toggle('tool-select', tool==='select');
     mapEl.classList.toggle('tool-draw', tool!=='select');
     map.doubleClickZoom[(tool==='line'||tool==='polygon')?'disable':'enable']();
+    drawStylePanel.classList.toggle('show', tool==='line' || tool==='polygon');
     updateHistoryButtons();
   });
 
