@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>أداة الرسم المكانى المهنية - دقة الزوايا</title>
+<title>Sptial Drawing</title>
   <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#1a73e8">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -615,6 +615,10 @@
         إنهـاء الرسم
       </button>
 
+      <button class="mobile-finish-btn" id="lengthsCloseBtn" style="display:none; bottom:76px; background:#E8A432;" title="حدد طول الضلع القادم من أول نقطة، وطول آخر ضلع من آخر نقطة، عشان يقفل المضلع تلقائي (اختصار: C)">
+        🔒 دول آخر ضلعين
+      </button>
+
       <div class="draw-style-panel" id="drawStylePanel">
         <button class="draw-style-btn active" id="drawStyleStraightBtn" data-style="straight" title="رسم حر (خطوط مستقيمة عادية)">
           <svg viewBox="0 0 24 24"><line x1="5" y1="19" x2="19" y2="5" stroke-width="2.3" stroke-linecap="round"/></svg>
@@ -626,6 +630,10 @@
         <div class="draw-style-sep"></div>
         <button class="draw-style-btn" id="drawStyleCurveBtn" data-style="curve" title="قوس بنقطة بداية ونهاية ونصف قطر (End Point Arc Segment) — اضغط R لإدخال نصف قطر بالمتر">
           <svg viewBox="0 0 24 24"><path d="M4 18 C 4 8, 20 16, 20 5" stroke-width="2.3" fill="none" stroke-linecap="round"/></svg>
+        </button>
+        <div class="draw-style-sep"></div>
+        <button class="draw-style-btn" id="drawStyleLengthsBtn" data-style="lengths" title="رسم بالأطوال — تكتب طول كل ضلع وتحدد اتجاهه بالماوس/الإصبع، وتقفل المضلع بأطوال آخر ضلعين (اضغط C للإغلاق)">
+          <svg viewBox="0 0 24 24"><polyline points="4,19 12,6 20,19" stroke-width="2.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       </div>
 
@@ -913,8 +921,10 @@
   let layerExpandState = {};  // tracks which layer IDs are expanded in the list
   let featureInfoPendingF = null; // feature waiting for name/description input
   let tool = 'select';
-  let drawStyle = 'straight'; // 'straight' | 'ortho' | 'curve' — نمط رسم الخط/المضلع
+  let drawStyle = 'straight'; // 'straight' | 'ortho' | 'curve' | 'lengths' — نمط رسم الخط/المضلع
   let arcState = { step: 0, start: null, end: null }; // حالة رسم القوس في وضع المنحنى (زي End Point Arc Segment)
+  let lengthsPendingLen = null; // الطول (بالمتر) المطلوب تثبيته للضلع القادم في وضع "رسم بالأطوال"
+  let lengthsClosingActive = false; // true وإحنا مستنيين المستخدم يختار نقطة الغلق من الاحتمالين المعروضين
   let lastCursorLatLng = null;
   let selection = null;
   let drawingCoords = null;
@@ -981,6 +991,7 @@
   const labelsLayerGroup = L.layerGroup().addTo(map);
   const dimLabelsLayerGroup = L.layerGroup().addTo(map);
   const drawAnchorGroup = L.layerGroup().addTo(map); // نقط الأنكور أثناء الرسم (زوايا قائمة / منحنى)
+  const lengthsCandidateGroup = L.layerGroup().addTo(map); // نقط تقاطع احتمالات غلق المضلع في وضع "رسم بالأطوال"
 
   function clearDrawAnchors(){ drawAnchorGroup.clearLayers(); }
 
@@ -988,7 +999,7 @@
   function renderDrawAnchors(){
     clearDrawAnchors();
     if(!drawingCoords || !drawingCoords.length) return;
-    if(drawStyle === 'ortho'){
+    if(drawStyle === 'ortho' || drawStyle === 'lengths'){
       drawingCoords.forEach((c, i) => {
         const isLast = i === drawingCoords.length - 1;
         L.circleMarker(c, {
@@ -996,6 +1007,7 @@
           fillColor: isLast ? '#E8A432' : '#00B4A6', fillOpacity: 0.95
         }).addTo(drawAnchorGroup);
       });
+      if(drawStyle === 'lengths') updateLengthsCloseBtnVisibility();
     } else if(drawStyle === 'curve'){
       // في وضع القوس بنعلّم بس أول نقطة (بداية السلسلة) وآخر نقطة قوس تم تأكيدها (بداية القوس الحالي)
       const first = drawingCoords[0];
@@ -1058,9 +1070,12 @@
 
     if (drawingCoords && drawingCoords.length > 0) {
       drawingCoords.pop();
+      lengthsPendingLen = null;
+      cancelLengthsClosing();
       if (drawingCoords.length === 0) {
         drawingCoords = null;
         mobileFinishBtn.style.display = 'none';
+        document.getElementById('lengthsCloseBtn').style.display = 'none';
         if (tempLine) { map.removeLayer(tempLine); tempLine = null; }
         document.getElementById('stTemp').textContent = '';
         clearDrawAnchors();
@@ -1320,6 +1335,118 @@
     const east = dist*Math.cos(rad), north = dist*Math.sin(rad);
     const [lat,lng] = destPoint(last.lat, last.lng, east, north);
     return {lat, lng};
+  }
+
+  /* ===== وضع "رسم بالأطوال": كل ضلع بطول محدد مكتوب يدوياً + اتجاه حر بالماوس/الإصبع ===== */
+
+  // بتحسب النقطة التالية بحيث تبقى على بعد "dist" متر بالظبط من آخر نقطة، في اتجاه المؤشر الحالي
+  function lengthsSnapPoint(lastLL, curLL, dist){
+    if(!(dist > 0)) return curLL;
+    const ang = metricAngleRad(lastLL, curLL);
+    const east = dist*Math.cos(ang), north = dist*Math.sin(ang);
+    const [lat,lng] = destPoint(lastLL.lat, lastLL.lng, east, north);
+    return {lat, lng};
+  }
+
+  // بيدور على نقط تقاطع دائرتين (مركز كل واحدة نقطة ونصف قطرها الطول المدخل) — بيرجع مصفوفة نقط lat/lng أو null لو مفيش تقاطع
+  function circleCircleIntersectionLL(c1LL, r1, c2LL, r2){
+    const refLat = (c1LL.lat + c2LL.lat) / 2;
+    const c1 = metricXY(refLat, c1LL.lat, c1LL.lng);
+    const c2 = metricXY(refLat, c2LL.lat, c2LL.lng);
+    const dx = c2.x - c1.x, dy = c2.y - c1.y;
+    const d = Math.hypot(dx, dy);
+    if(d < 1e-6) return null; // نفس النقطة تقريباً
+    if(d > r1 + r2 + 1e-6 || d < Math.abs(r1 - r2) - 1e-6) return null; // لا يوجد تقاطع بالأطوال دي
+    const a = (r1*r1 - r2*r2 + d*d) / (2*d);
+    const h = Math.sqrt(Math.max(r1*r1 - a*a, 0));
+    const xm = c1.x + a*(dx/d), ym = c1.y + a*(dy/d);
+    const rx = -dy*(h/d), ry = dx*(h/d);
+    const toLL = (p) => ({ lat: p.y/111320, lng: p.x/(111320*Math.cos(toRad(refLat))) });
+    if(h < 1e-6) return [toLL({x:xm, y:ym})]; // الدائرتين متماستين — نقطة وحيدة
+    return [toLL({x:xm+rx, y:ym+ry}), toLL({x:xm-rx, y:ym-ry})];
+  }
+
+  // بيطلب من المستخدم طول الضلع القادم (بالمتر)، ويرجع null لو ألغى أو مفيش رقم صحيح
+  function promptLengthsNextLen(){
+    const input = window.prompt('طول الضلع القادم بالمتر (سيب فاضي أو اضغط إلغاء للرسم الحر):');
+    if(input === null || input.trim() === '') return null;
+    const v = parseFloat(input);
+    if(isNaN(v) || v <= 0){ alert('من فضلك أدخل رقم صحيح أكبر من صفر للطول.'); return promptLengthsNextLen(); }
+    return v;
+  }
+
+  function updateLengthsCloseBtnVisibility(){
+    const btn = document.getElementById('lengthsCloseBtn');
+    if(!btn) return;
+    const show = (tool==='line' || tool==='polygon') && drawStyle==='lengths' &&
+                 drawingCoords && drawingCoords.length >= 2 && !lengthsClosingActive;
+    btn.style.display = show ? 'flex' : 'none';
+  }
+
+  function cancelLengthsClosing(){
+    lengthsClosingActive = false;
+    lengthsCandidateGroup.clearLayers();
+    updateLengthsCloseBtnVisibility();
+  }
+
+  // بيبدأ إجراء غلق المضلع بطولين: من أول نقطة رسمها المستخدم، ومن آخر نقطة رسمها
+  function startLengthsClosing(){
+    if(!drawingCoords || drawingCoords.length < 2) return;
+    lengthsClosingActive = true;
+    lengthsPendingLen = null;
+    if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
+    updateLengthsCloseBtnVisibility();
+    const p0 = {lat:drawingCoords[0][0], lng:drawingCoords[0][1]};
+    const pk = {lat:drawingCoords[drawingCoords.length-1][0], lng:drawingCoords[drawingCoords.length-1][1]};
+
+    (function askLoop(){
+      const inA = window.prompt('طول الضلع الواصل من أول نقطة رسمتها في المضلع (بالمتر):');
+      if(inA === null){ cancelLengthsClosing(); return; }
+      const lenA = parseFloat(inA);
+      if(isNaN(lenA) || lenA <= 0){ alert('من فضلك أدخل رقم صحيح أكبر من صفر.'); askLoop(); return; }
+
+      const inB = window.prompt('طول آخر ضلع، الواصل من آخر نقطة رسمتها في المضلع (بالمتر):');
+      if(inB === null){ cancelLengthsClosing(); return; }
+      const lenB = parseFloat(inB);
+      if(isNaN(lenB) || lenB <= 0){ alert('من فضلك أدخل رقم صحيح أكبر من صفر.'); askLoop(); return; }
+
+      const pts = circleCircleIntersectionLL(p0, lenA, pk, lenB);
+      if(!pts){
+        alert('الطولين دول مش هيسمحوا بغلق المضلع (المسافة بين أول وآخر نقطة مايناسبهاش مجموع أو فرق الطولين) — عدّل الطول وجرّب تاني.');
+        askLoop();
+        return;
+      }
+      showLengthsClosingCandidates(pts, p0, pk);
+    })();
+  }
+
+  // بيعرض احتمال أو احتمالين لنقطة الغلق على الخريطة عشان المستخدم يختار بالنقر (أو يقفل تلقائي لو احتمال واحد بس)
+  function showLengthsClosingCandidates(pts, p0, pk){
+    lengthsCandidateGroup.clearLayers();
+    if(pts.length === 1){ finalizeLengthsClose(pts[0]); return; }
+    document.getElementById('stHint').textContent = '🔒 فيه نقطتين ممكنتين لغلق المضلع — دوس على النقطة المناسبة على الخريطة عشان تأكدها';
+    pts.forEach((pt, idx) => {
+      L.polyline([[pk.lat,pk.lng],[pt.lat,pt.lng]], {color:'#E8A432', weight:1.5, dashArray:'4 4', opacity:0.65}).addTo(lengthsCandidateGroup);
+      L.polyline([[pt.lat,pt.lng],[p0.lat,p0.lng]], {color:'#E8A432', weight:1.5, dashArray:'4 4', opacity:0.65}).addTo(lengthsCandidateGroup);
+      const marker = L.circleMarker([pt.lat, pt.lng], {
+        radius: 9, color:'#E8A432', weight:3, fillColor:'#E8A432', fillOpacity:0.85
+      }).addTo(lengthsCandidateGroup);
+      marker.bindTooltip('نقطة الغلق ' + (idx+1), {permanent:true, direction:'top', offset:[0,-10]});
+      marker.on('click', (ev)=>{
+        if(ev.originalEvent) L.DomEvent.stopPropagation(ev.originalEvent);
+        finalizeLengthsClose(pt);
+      });
+    });
+  }
+
+  // بيثبّت نقطة الغلق المختارة كآخر نقطة في المضلع، وبيقفل الرسمة تلقائي
+  function finalizeLengthsClose(pt){
+    drawingCoords.push([pt.lat, pt.lng]);
+    lengthsCandidateGroup.clearLayers();
+    lengthsClosingActive = false;
+    lengthsPendingLen = null;
+    renderDrawAnchors();
+    finishDrawing();
   }
 
   // تنعيم مجموعة نقاط لمنحنى ناعم (Catmull-Rom Spline) — لسه مستخدمة لو حابب تفعّلها تاني
@@ -2180,10 +2307,13 @@
         tempLine = L.polyline([arcState.start, [snapped.lat, snapped.lng]], {color:'#00B4A6', weight:2, dashArray:'6 5'}).addTo(map);
         const segLen = haversine(arcState.start[0],arcState.start[1], snapped.lat, snapped.lng);
         document.getElementById('stTemp').textContent = 'طول الوتر: ' + segLen.toFixed(2) + ' م';
-      } else if(drawStyle !== 'curve') {
+      } else if(drawStyle !== 'curve' && !(drawStyle==='lengths' && lengthsClosingActive)) {
         let pt = snapped;
         if(drawStyle==='ortho'){
           pt = orthoSnapPoint(drawingCoords, pt);
+        } else if(drawStyle==='lengths' && lengthsPendingLen){
+          const lastLL = {lat:drawingCoords[drawingCoords.length-1][0], lng:drawingCoords[drawingCoords.length-1][1]};
+          pt = lengthsSnapPoint(lastLL, pt, lengthsPendingLen);
         }
         if(tempLine){ map.removeLayer(tempLine); }
         const pts = drawingCoords.concat([[pt.lat, pt.lng]]);
@@ -2215,6 +2345,9 @@
 
   /* ---------- Map click ---------- */
   map.on('click', e=>{
+    if((tool==='line'||tool==='polygon') && drawStyle==='lengths' && lengthsClosingActive){
+      return; // مستنيين اختيار نقطة الغلق من الاحتمالات المعروضة على الخريطة
+    }
     if(tool==='divide' && divideAngleMode){
       handleDivideMapClick(e.latlng);
       return;
@@ -2253,11 +2386,24 @@
         renderDrawAnchors();
       } else {
         let pt = snapped;
+        const wasEmpty = drawingCoords.length === 0;
         if(drawStyle==='ortho' && drawingCoords.length){
           pt = orthoSnapPoint(drawingCoords, snapped);
+        } else if(drawStyle==='lengths' && drawingCoords.length && lengthsPendingLen){
+          const lastLL = {lat:drawingCoords[drawingCoords.length-1][0], lng:drawingCoords[drawingCoords.length-1][1]};
+          pt = lengthsSnapPoint(lastLL, snapped, lengthsPendingLen);
         }
         drawingCoords.push([pt.lat, pt.lng]);
         renderDrawAnchors();
+        if(drawStyle==='lengths'){
+          lengthsPendingLen = promptLengthsNextLen();
+          document.getElementById('stHint').textContent = lengthsPendingLen
+            ? `📏 حرّك الماوس/إصبعك لتحديد اتجاه الضلع (طوله ثابت ${lengthsPendingLen} م) وانقر لتثبيته`
+            : (wasEmpty
+                ? '📏 وضع الرسم بالأطوال: انقر لتحديد أول نقطة، وهيتطلب منك الطول بعد كل نقطة'
+                : '📏 انقر لتحديد النقطة بحرية، أو استخدم زر "دول آخر ضلعين" (C) لغلق المضلع بطولين');
+          updateLengthsCloseBtnVisibility();
+        }
       }
       updateHistoryButtons();
     } 
@@ -2373,20 +2519,31 @@
     drawStylePanel.querySelectorAll('.draw-style-btn').forEach(x=>x.classList.remove('active'));
     b.classList.add('active');
     arcState = { step: 0, start: null, end: null };
+    lengthsPendingLen = null;
+    cancelLengthsClosing();
     if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
     const hints = {
       straight: 'اضغط على الخريطة للرسم',
       ortho: '⊾ وضع الزوايا القائمة: حدد أول ضلع بحرية، والباقي هيتقفل قائم (90°) على اتجاهه تلقائياً',
-      curve: '∿ وضع القوس (End Point Arc): انقر لتحديد نقطة البداية، بعدين نقطة النهاية، بعدين حرّك الماوس لتحديد الانحناء وانقر لتأكيد — أو اضغط R لإدخال نصف قطر بالمتر'
+      curve: '∿ وضع القوس (End Point Arc): انقر لتحديد نقطة البداية، بعدين نقطة النهاية، بعدين حرّك الماوس لتحديد الانحناء وانقر لتأكيد — أو اضغط R لإدخال نصف قطر بالمتر',
+      lengths: '📏 وضع الرسم بالأطوال: انقر لتحديد أول نقطة، اكتب طول كل ضلع وحدد اتجاهه بالماوس/الإصبع، وفي الآخر دوس زر "دول آخر ضلعين" (C) عشان تقفل المضلع بطولين'
     };
     document.getElementById('stHint').textContent = hints[drawStyle] || hints.straight;
     if(drawingCoords && drawingCoords.length) renderDrawAnchors();
+  });
+
+  document.getElementById('lengthsCloseBtn').addEventListener('click', ()=>{
+    startLengthsClosing();
   });
 
   function finishDrawing(){
     if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
     document.getElementById('stTemp').textContent='';
     mobileFinishBtn.style.display = 'none';
+    document.getElementById('lengthsCloseBtn').style.display = 'none';
+    lengthsCandidateGroup.clearLayers();
+    lengthsPendingLen = null;
+    lengthsClosingActive = false;
     clearDrawAnchors();
     arcState = { step: 0, start: null, end: null };
 
@@ -2425,9 +2582,16 @@
         }
       }
     }
+    if(e.key.toLowerCase()==='c' && !typing && (tool==='line'||tool==='polygon') && drawStyle==='lengths' &&
+       drawingCoords && drawingCoords.length>=2 && !lengthsClosingActive){
+      e.preventDefault();
+      startLengthsClosing();
+    }
     if(e.key==='Escape'){
       drawingCoords=null; rect3Point.step = 0; circlePending=null;
       arcState = { step: 0, start: null, end: null };
+      lengthsPendingLen = null; lengthsClosingActive = false; lengthsCandidateGroup.clearLayers();
+      document.getElementById('lengthsCloseBtn').style.display = 'none';
       rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none'; document.getElementById('pointUtmHud').style.display='none'; document.getElementById('divideHud').style.display='none'; dividePendingLayerId=null; dividePendingFeatureId=null;
       document.getElementById('areaCalcHud').style.display='none';
       cancelDivideAngleMode(); divideComputedAngle = null;
@@ -2501,6 +2665,8 @@
     tool = btn.dataset.tool;
     drawingCoords=null; rect3Point.step = 0; circlePending=null;
     arcState = { step: 0, start: null, end: null };
+    lengthsPendingLen = null; lengthsClosingActive = false; lengthsCandidateGroup.clearLayers();
+    document.getElementById('lengthsCloseBtn').style.display = 'none';
     clearDrawAnchors();
     rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none'; document.getElementById('pointUtmHud').style.display='none'; document.getElementById('divideHud').style.display='none'; dividePendingLayerId=null; dividePendingFeatureId=null;
     document.getElementById('areaCalcHud').style.display='none';
