@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -752,6 +751,17 @@
         </div>
       </div>
 
+      <!-- ── لوحة إدخال عامة (طول/نصف قطر) بديلة عن نوافذ prompt الافتراضية ── -->
+      <div class="rect-hud" id="inlineValueHud" style="width:220px;display:none;top:60px;left:10px;">
+        <h4 id="ivhTitle">إدخال قيمة</h4>
+        <div id="ivhFields"></div>
+        <div id="ivhError" style="color:#e05252;font-size:10.5px;margin-top:2px;display:none;"></div>
+        <div class="row-btns">
+          <button class="btn-cancel" id="ivhCancel">إلغاء</button>
+          <button class="btn-create" id="ivhConfirm">تأكيد</button>
+        </div>
+      </div>
+
       <!-- ── محرر صفحة الكشكول (Layout Page Editor) ── -->
       <div class="rect-hud" id="notebookHud" style="width:250px;display:none;top:60px;left:10px;border-color:#8AA9C7;max-height:85vh;overflow-y:auto;">
         <h4 style="color:#5B84AC;">📓 تعديل صفحة الكشكول</h4>
@@ -1221,6 +1231,7 @@
     if (drawingCoords && drawingCoords.length > 0) {
       drawingCoords.pop();
       lengthsPendingLen = null;
+      hideInlineValueHud();
       cancelLengthsClosing();
       if (drawingCoords.length === 0) {
         drawingCoords = null;
@@ -1282,6 +1293,75 @@
 
   /* ---------- Geometry helpers ---------- */
   function uid(){ return 'f' + Math.random().toString(36).slice(2,10); }
+
+  /* ===== لوحة إدخال قيمة عامة (طول/نصف قطر...) — بديل غير-محظور لنوافذ window.prompt ===== */
+  function showInlineValueHud({title, fields, confirmLabel, cancelLabel, onConfirm, onCancel}){
+    const hud = document.getElementById('inlineValueHud');
+    document.getElementById('ivhTitle').textContent = title || 'إدخال قيمة';
+    const fieldsContainer = document.getElementById('ivhFields');
+    fieldsContainer.innerHTML = '';
+    const errEl = document.getElementById('ivhError');
+    errEl.style.display = 'none'; errEl.textContent = '';
+
+    fields.forEach(f=>{
+      const label = document.createElement('label');
+      label.textContent = f.label;
+      const input = document.createElement('input');
+      input.type = 'number'; input.id = 'ivh_' + f.id;
+      input.step = f.step || '0.01'; input.min = f.min != null ? f.min : '0.01';
+      if(f.value != null) input.value = f.value;
+      if(f.placeholder) input.placeholder = f.placeholder;
+      fieldsContainer.appendChild(label);
+      fieldsContainer.appendChild(input);
+    });
+
+    document.getElementById('ivhConfirm').textContent = confirmLabel || 'تأكيد';
+    document.getElementById('ivhCancel').textContent = cancelLabel || 'إلغاء';
+    hud.style.display = 'block';
+
+    const inputs = Array.from(fieldsContainer.querySelectorAll('input'));
+    setTimeout(()=>{ if(inputs[0]){ inputs[0].focus(); inputs[0].select(); } }, 30);
+
+    function getValues(){ return fields.map(f => parseFloat(document.getElementById('ivh_'+f.id).value)); }
+    function showError(msg){ errEl.textContent = msg; errEl.style.display = 'block'; }
+    function doConfirm(){
+      const values = getValues();
+      if(values.some(v => isNaN(v) || v <= 0)){ showError('من فضلك أدخل أرقام صحيحة أكبر من صفر في كل الحقول.'); return; }
+      const result = onConfirm ? onConfirm(values, showError) : undefined;
+      if(result !== false) hideInlineValueHud();
+    }
+    function doCancel(){
+      hideInlineValueHud();
+      if(onCancel) onCancel();
+    }
+
+    // نستبدل الأزرار بنسخة جديدة عشان نتخلص من أي مستمعين قدامى من استدعاء سابق
+    const confirmBtn = document.getElementById('ivhConfirm');
+    const newConfirmBtn = confirmBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+    newConfirmBtn.addEventListener('click', doConfirm);
+
+    const cancelBtn = document.getElementById('ivhCancel');
+    const newCancelBtn = cancelBtn.cloneNode(true);
+    cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+    newCancelBtn.addEventListener('click', doCancel);
+
+    inputs.forEach((inp,i)=>{
+      inp.addEventListener('keydown', ev=>{
+        if(ev.key === 'Enter'){
+          ev.preventDefault();
+          if(i === inputs.length-1) doConfirm(); else inputs[i+1].focus();
+        } else if(ev.key === 'Escape'){
+          doCancel();
+        }
+      });
+    });
+  }
+  function hideInlineValueHud(){
+    const hud = document.getElementById('inlineValueHud');
+    if(hud) hud.style.display = 'none';
+  }
+
   function toRad(d){ return d*Math.PI/180; }
   function toDeg(r){ return r*180/Math.PI; }
   
@@ -1516,13 +1596,25 @@
     return [toLL({x:xm+rx, y:ym+ry}), toLL({x:xm-rx, y:ym-ry})];
   }
 
-  // بيطلب من المستخدم طول الضلع القادم (بالمتر)، ويرجع null لو ألغى أو مفيش رقم صحيح
-  function promptLengthsNextLen(){
-    const input = window.prompt('طول الضلع القادم بالمتر (سيب فاضي أو اضغط إلغاء للرسم الحر):');
-    if(input === null || input.trim() === '') return null;
-    const v = parseFloat(input);
-    if(isNaN(v) || v <= 0){ alert('من فضلك أدخل رقم صحيح أكبر من صفر للطول.'); return promptLengthsNextLen(); }
-    return v;
+  // بيفتح لوحة إدخال طول الضلع القادم بدل نافذة prompt المحظورة
+  function askNextSegmentLength(wasEmpty){
+    document.getElementById('stHint').textContent = wasEmpty
+      ? '📏 وضع الرسم بالأطوال: اكتب طول الضلع الأول في اللوحة، أو دوس "رسم حر"'
+      : '📏 اكتب طول الضلع القادم في اللوحة، أو دوس "رسم حر"';
+    showInlineValueHud({
+      title: '📏 طول الضلع القادم',
+      fields: [{id:'len', label:'الطول (متر)', placeholder:'مثلاً 12.5'}],
+      confirmLabel: 'تثبيت الطول',
+      cancelLabel: 'رسم حر',
+      onConfirm: (values)=>{
+        lengthsPendingLen = values[0];
+        document.getElementById('stHint').textContent = `📏 حرّك الماوس/إصبعك لتحديد اتجاه الضلع (طوله ثابت ${lengthsPendingLen} م) وانقر لتثبيته`;
+      },
+      onCancel: ()=>{
+        lengthsPendingLen = null;
+        document.getElementById('stHint').textContent = '📏 انقر لتحديد النقطة بحرية، أو استخدم زر "دول آخر ضلعين" (C) لغلق المضلع بطولين';
+      }
+    });
   }
 
   function updateLengthsCloseBtnVisibility(){
@@ -1545,29 +1637,30 @@
     lengthsClosingActive = true;
     lengthsPendingLen = null;
     if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
+    hideInlineValueHud(); // نقفل لوحة "طول الضلع القادم" لو كانت فاتحة
     updateLengthsCloseBtnVisibility();
     const p0 = {lat:drawingCoords[0][0], lng:drawingCoords[0][1]};
     const pk = {lat:drawingCoords[drawingCoords.length-1][0], lng:drawingCoords[drawingCoords.length-1][1]};
 
-    (function askLoop(){
-      const inA = window.prompt('طول الضلع الواصل من أول نقطة رسمتها في المضلع (بالمتر):');
-      if(inA === null){ cancelLengthsClosing(); return; }
-      const lenA = parseFloat(inA);
-      if(isNaN(lenA) || lenA <= 0){ alert('من فضلك أدخل رقم صحيح أكبر من صفر.'); askLoop(); return; }
-
-      const inB = window.prompt('طول آخر ضلع، الواصل من آخر نقطة رسمتها في المضلع (بالمتر):');
-      if(inB === null){ cancelLengthsClosing(); return; }
-      const lenB = parseFloat(inB);
-      if(isNaN(lenB) || lenB <= 0){ alert('من فضلك أدخل رقم صحيح أكبر من صفر.'); askLoop(); return; }
-
-      const pts = circleCircleIntersectionLL(p0, lenA, pk, lenB);
-      if(!pts){
-        alert('الطولين دول مش هيسمحوا بغلق المضلع (المسافة بين أول وآخر نقطة مايناسبهاش مجموع أو فرق الطولين) — عدّل الطول وجرّب تاني.');
-        askLoop();
-        return;
-      }
-      showLengthsClosingCandidates(pts, p0, pk);
-    })();
+    showInlineValueHud({
+      title: '🔒 إغلاق المضلع بطولين',
+      fields: [
+        {id:'lenA', label:'الطول من أول نقطة رسمتها (م)', placeholder:'مثلاً 10'},
+        {id:'lenB', label:'الطول من آخر نقطة رسمتها (م)', placeholder:'مثلاً 8'}
+      ],
+      confirmLabel: 'احسب نقطة الغلق',
+      cancelLabel: 'إلغاء',
+      onConfirm: (values, showError)=>{
+        const [lenA, lenB] = values;
+        const pts = circleCircleIntersectionLL(p0, lenA, pk, lenB);
+        if(!pts){
+          showError('الطولين دول مش هيسمحوا بغلق المضلع (المسافة بين أول وآخر نقطة مايناسبهاش مجموع أو فرق الطولين) — عدّل الطول وجرّب تاني.');
+          return false; // سيب اللوحة مفتوحة يعدّل ويجرب تاني
+        }
+        showLengthsClosingCandidates(pts, p0, pk);
+      },
+      onCancel: ()=>{ cancelLengthsClosing(); }
+    });
   }
 
   // بيعرض احتمال أو احتمالين لنقطة الغلق على الخريطة عشان المستخدم يختار بالنقر (أو يقفل تلقائي لو احتمال واحد بس)
@@ -3402,12 +3495,7 @@
         drawingCoords.push([pt.lat, pt.lng]);
         renderDrawAnchors();
         if(drawStyle==='lengths'){
-          lengthsPendingLen = promptLengthsNextLen();
-          document.getElementById('stHint').textContent = lengthsPendingLen
-            ? `📏 حرّك الماوس/إصبعك لتحديد اتجاه الضلع (طوله ثابت ${lengthsPendingLen} م) وانقر لتثبيته`
-            : (wasEmpty
-                ? '📏 وضع الرسم بالأطوال: انقر لتحديد أول نقطة، وهيتطلب منك الطول بعد كل نقطة'
-                : '📏 انقر لتحديد النقطة بحرية، أو استخدم زر "دول آخر ضلعين" (C) لغلق المضلع بطولين');
+          askNextSegmentLength(wasEmpty);
           updateLengthsCloseBtnVisibility();
         }
       }
@@ -3526,6 +3614,7 @@
     b.classList.add('active');
     arcState = { step: 0, start: null, end: null };
     lengthsPendingLen = null;
+    hideInlineValueHud();
     cancelLengthsClosing();
     if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
     const hints = {
@@ -3550,6 +3639,7 @@
     lengthsCandidateGroup.clearLayers();
     lengthsPendingLen = null;
     lengthsClosingActive = false;
+    hideInlineValueHud();
     clearDrawAnchors();
     arcState = { step: 0, start: null, end: null };
 
@@ -3578,15 +3668,14 @@
     if(e.key==='Enter' && !typing) finishDrawing();
     if(e.key.toLowerCase()==='r' && !typing && (tool==='line'||tool==='polygon') && drawStyle==='curve' && arcState.step===2){
       e.preventDefault();
-      const input = window.prompt('نصف قطر القوس بالمتر:');
-      if(input !== null){
-        const r = parseFloat(input);
-        if(!isNaN(r) && r > 0){
-          confirmArcSegment(lastCursorLatLng, r);
-        } else if(input.trim() !== ''){
-          alert('من فضلك أدخل رقم صحيح أكبر من صفر لنصف القطر');
-        }
-      }
+      const cursorAtOpen = lastCursorLatLng;
+      showInlineValueHud({
+        title: '∿ نصف قطر القوس',
+        fields: [{id:'r', label:'نصف القطر (متر)', placeholder:'مثلاً 5'}],
+        confirmLabel: 'تأكيد القوس',
+        cancelLabel: 'إلغاء',
+        onConfirm: (values)=>{ confirmArcSegment(cursorAtOpen, values[0]); }
+      });
     }
     if(e.key.toLowerCase()==='c' && !typing && (tool==='line'||tool==='polygon') && drawStyle==='lengths' &&
        drawingCoords && drawingCoords.length>=2 && !lengthsClosingActive){
@@ -3598,6 +3687,7 @@
       arcState = { step: 0, start: null, end: null };
       lengthsPendingLen = null; lengthsClosingActive = false; lengthsCandidateGroup.clearLayers();
       document.getElementById('lengthsCloseBtn').style.display = 'none';
+      hideInlineValueHud();
       rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none'; document.getElementById('pointUtmHud').style.display='none'; document.getElementById('divideHud').style.display='none'; dividePendingLayerId=null; dividePendingFeatureId=null;
       document.getElementById('areaCalcHud').style.display='none';
       cancelDivideAngleMode(); divideComputedAngle = null;
@@ -3673,6 +3763,7 @@
     arcState = { step: 0, start: null, end: null };
     lengthsPendingLen = null; lengthsClosingActive = false; lengthsCandidateGroup.clearLayers();
     document.getElementById('lengthsCloseBtn').style.display = 'none';
+    hideInlineValueHud();
     clearDrawAnchors();
     rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none'; document.getElementById('pointUtmHud').style.display='none'; document.getElementById('divideHud').style.display='none'; dividePendingLayerId=null; dividePendingFeatureId=null;
     document.getElementById('areaCalcHud').style.display='none';
