@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -363,6 +364,7 @@
   @media print{
     .toolbar,.sidebar,.statusbar,.basemap-toggle,.drive-control,
     .rect-hud,.mobile-sidebar-toggle,.mobile-finish-btn,.mobile-edit-pad,
+    #notebookPrintConfirmBar,
     .leaflet-control,.leaflet-top,.leaflet-bottom{display:none!important;}
     .app,.main,.canvas-wrap{height:100vh!important;display:block!important;}
     #map{height:100vh!important;width:100vw!important;}
@@ -751,7 +753,7 @@
       </div>
 
       <!-- ── محرر صفحة الكشكول (Layout Page Editor) ── -->
-      <div class="rect-hud" id="notebookHud" style="width:250px;display:none;top:60px;left:10px;border-color:#8AA9C7;">
+      <div class="rect-hud" id="notebookHud" style="width:250px;display:none;top:60px;left:10px;border-color:#8AA9C7;max-height:85vh;overflow-y:auto;">
         <h4 style="color:#5B84AC;">📓 تعديل صفحة الكشكول</h4>
         <label>اسم الصفحة</label>
         <input type="text" id="nbPageName" placeholder="مثلاً: كروكي قطعة 12">
@@ -784,6 +786,7 @@
           <option value="custom">مقياس مخصص...</option>
         </select>
         <input type="number" id="nbScaleCustom" value="1000" min="1" step="1" style="display:none;" placeholder="مقام المقياس (مثلاً 750)">
+        <button class="btn-cancel" id="nbAutoFit" style="width:100%;margin:4px 0 8px;" title="يختار أنسب اتجاه ومقياس رسم عشان المضلع المحدد يملا الورقة بأقل مساحة فاضية">🔍 ملائمة تلقائية للمحدد</button>
         <label>حجم مربع الكشكول (ملم على الورق)</label>
         <input type="number" id="nbGridMM" value="5" min="1" step="0.5">
         <div style="font-size:10.5px;color:var(--text-muted);margin:2px 0 8px;">= <b id="nbGridMetersReadout">5.0</b> متر على الأرض لكل مربع</div>
@@ -795,6 +798,12 @@
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px;"><input type="checkbox" id="nbShowLengthsTable" checked style="width:auto;"> جدول أطوال الأضلاع</label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px;"><input type="checkbox" id="nbShowVerticesTable" checked style="width:auto;"> جدول إحداثيات القطاعات</label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px;"><input type="checkbox" id="nbShowAttrsTable" checked style="width:auto;"> جدول بيانات المضلعات الداخلية</label>
+        <div style="font-size:10.5px;color:var(--text-muted);margin:10px 0 3px;border-top:1px solid var(--border);padding-top:8px;">🏷️ الكرتوش (بيانات ثابتة أسفل الصفحة):</div>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="nbShowTitleBlock" style="width:auto;"> إظهار الكرتوش</label>
+        <input type="text" id="nbTbOrg" placeholder="اسم الجهة (مثلاً GARPAD)" style="margin-top:6px;">
+        <input type="text" id="nbTbDrawnBy" placeholder="رسمها" style="margin-top:6px;">
+        <input type="text" id="nbTbRef" placeholder="رقم مرجعي" style="margin-top:6px;">
+        <input type="text" id="nbTbDate" placeholder="التاريخ" style="margin-top:6px;">
         <div class="row-btns">
           <button class="btn-cancel" id="nbCenterOnSelection">توسيط على المحدد</button>
           <button class="btn-create" id="nbCloseHud">تم</button>
@@ -815,19 +824,28 @@
         <input type="range" id="penWidth" min="1" max="8" step="0.5" value="2">
         <label>درجة النعومة (Smooth)</label>
         <input type="range" id="penSmooth" min="0" max="100" step="5" value="50">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:6px;"><input type="checkbox" id="penSnapGrid" style="width:auto;"> لصق على خطوط شبكة الكشكول</label>
         <div class="row-btns">
           <button class="btn-cancel" id="penClearAll">مسح كل الرسم</button>
           <button class="btn-create" id="penHudClose">تم</button>
         </div>
       </div>
 
-      <!-- ── إطار عرض الطباعة (مقياس + شمال) ── -->
+      <!-- ── شريط تأكيد الطباعة (معاينة قبل الطباعة الفعلية) ── -->
+      <div id="notebookPrintConfirmBar" style="display:none;position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:900;background:var(--bg-panel);border:1.5px solid var(--accent);border-radius:10px;padding:10px 16px;box-shadow:0 8px 24px rgba(0,0,0,.4);display:flex;align-items:center;gap:10px;font-size:12px;">
+        <span id="notebookPrintConfirmText">📄 راجع الخريطة على الشاشة، وبعدين دوس اطبع</span>
+        <button class="btn-create" id="notebookPrintConfirmGo" style="padding:6px 14px;">🖨️ اطبع الآن</button>
+        <button class="btn-cancel" id="notebookPrintConfirmSkip" style="padding:6px 14px;display:none;">تخطي</button>
+        <button class="btn-cancel" id="notebookPrintConfirmCancel" style="padding:6px 14px;">إلغاء</button>
+      </div>
+
       <div id="notebookFrameHud" style="display:none;position:absolute;z-index:640;pointer-events:none;">
         <div id="notebookPolygonTitle" style="display:none;position:absolute;top:8px;left:50%;transform:translateX(-50%);pointer-events:none;background:rgba(255,255,255,.9);border:1px solid #bbb;border-radius:5px;padding:4px 12px;font-weight:800;font-size:13px;color:#1B3968;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.15);font-family:var(--sans);"></div>
         <div id="notebookNorthArrow" style="position:absolute;top:8px;left:8px;pointer-events:none;">
           <svg width="34" height="44" viewBox="0 0 34 44"><path d="M17 2 L27 30 L17 23 L7 30 Z" fill="#3A5068" stroke="#fff" stroke-width="1.2"/><text x="17" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#3A5068" font-family="sans-serif">N</text></svg>
         </div>
         <div id="notebookScaleBar" style="position:absolute;bottom:8px;left:8px;pointer-events:none;font-family:var(--sans);"></div>
+        <div id="notebookTitleBlock" style="display:none;position:absolute;bottom:8px;right:8px;pointer-events:none;background:rgba(255,255,255,.92);border:1.5px solid #444;border-radius:4px;padding:6px 10px;font-size:9.5px;font-family:var(--sans);color:#222;min-width:130px;line-height:1.6;"></div>
       </div>
 
 
@@ -1013,6 +1031,7 @@
       <div class="section-title">صفحات الكشكول (Layout)</div>
       <div id="notebookPageList"></div>
       <button class="add-btn" id="addNotebookPageBtn">+ صفحة كشكول جديدة</button>
+      <button class="add-btn" id="exportAllPagesBtn" style="margin-top:6px;">🖨️ تصدير كل الصفحات PDF</button>
     </div>
   </div>
 
@@ -1052,7 +1071,7 @@
   let notebookFrameLayer = null;  // L.Rectangle لإطار الورقة (للصفحة النشطة)
   let notebookGridLayer = null;   // طبقة الشبكة المخصصة (للصفحة النشطة)
   const PAPER_SIZES_MM = { A4:[297,210], A3:[420,297], A2:[594,420], A1:[841,594] }; // [الطويل, القصير] بالملم
-  let penSettings = { brush:'pencil', color:'#2b2b2b', width:2, smoothness:50 };
+  let penSettings = { brush:'pencil', color:'#2b2b2b', width:2, smoothness:50, snapToGrid:false };
   let penStrokeLayer = null; // L.LayerGroup لكل ضربات القلم المحفوظة
   let penDrawing = null; // {points:[[lat,lng]...]} أثناء الرسم الحالي فقط
   let penTempLine = null; // خط معاينة حي أثناء الرسم بالقلم
@@ -1611,6 +1630,20 @@
     return (mm * scaleDenom) / 1000;
   }
 
+  function snapPenPointToGrid(lat, lng){
+    if(!penSettings.snapToGrid) return {lat, lng};
+    const page = getActivePage();
+    if(!page) return {lat, lng};
+    const spacingM = mmToGroundMeters(page.gridMM, page.scaleDenom);
+    if(!(spacingM > 0)) return {lat, lng};
+    const refLat = page.center.lat;
+    const o = metricXY(refLat, page.center.lat, page.center.lng);
+    const p = metricXY(refLat, lat, lng);
+    const gx = Math.round((p.x - o.x) / spacingM) * spacingM + o.x;
+    const gy = Math.round((p.y - o.y) / spacingM) * spacingM + o.y;
+    return { lat: gy / 111320, lng: gx / (111320 * Math.cos(toRad(refLat))) };
+  }
+
   function getSelectedScaleDenom(){
     const sel = document.getElementById('nbScale').value;
     if(sel === 'custom') return Math.max(1, parseFloat(document.getElementById('nbScaleCustom').value) || 1000);
@@ -1650,6 +1683,7 @@
       paper: 'A4', orientation: 'landscape',
       scaleDenom: 500, gridMM: 5,
       showScaleBar: true, showNorth: true, showTitle: true,
+      titleBlock: { show:false, org:'', drawnBy:'', ref:'', date: new Date().toLocaleDateString('ar-EG') },
       background: 'satellite'
     };
   }
@@ -1660,6 +1694,45 @@
     const wMM = page.orientation === 'landscape' ? longMM : shortMM;
     const hMM = page.orientation === 'landscape' ? shortMM : longMM;
     return { wM: mmToGroundMeters(wMM, page.scaleDenom), hM: mmToGroundMeters(hMM, page.scaleDenom) };
+  }
+
+  // ملائمة تلقائية: تختار أنسب اتجاه ومقياس رسم (بنفس مقاس الورقة الحالي) عشان المضلع المحدد يملا الصفحة
+  // ملحوظة: من غير تدوير — الخريطة شمال-فوق ثابتة دايمًا (Leaflet مايدعمش تدوير الخريطة)
+  function autoFitPageToSelection(){
+    const f = getSelectedPolygonFeature();
+    const page = getActivePage();
+    if(!f || !page){ alert('حدد مضلع من الخريطة الأول عشان تقدر تعمل ملائمة تلقائية.'); return; }
+    const b = L.latLngBounds(f.coords);
+    const center = b.getCenter();
+    const refLat = center.lat;
+    const nw = metricXY(refLat, b.getNorthWest().lat, b.getNorthWest().lng);
+    const se = metricXY(refLat, b.getSouthEast().lat, b.getSouthEast().lng);
+    const bboxW = Math.abs(se.x - nw.x), bboxH = Math.abs(nw.y - se.y);
+    const PADDING = 1.25;
+    const neededW = bboxW * PADDING, neededH = bboxH * PADDING;
+    const dims = PAPER_SIZES_MM[page.paper] || PAPER_SIZES_MM.A4;
+    const [longMM, shortMM] = dims;
+    const scales = [200,500,1000,2500,5000,10000];
+    let best = null;
+    ['landscape','portrait'].forEach(orient=>{
+      const wMM = orient==='landscape' ? longMM : shortMM;
+      const hMM = orient==='landscape' ? shortMM : longMM;
+      scales.forEach(sc=>{
+        const paperWM = mmToGroundMeters(wMM, sc), paperHM = mmToGroundMeters(hMM, sc);
+        if(paperWM >= neededW && paperHM >= neededH){
+          if(!best || sc < best.sc) best = {orient, sc};
+        }
+      });
+    });
+    if(!best){
+      best = {orient: bboxW >= bboxH ? 'landscape' : 'portrait', sc: 10000};
+      alert('المضلع كبير جدًا حتى بمقياس 1:10000 على مقاس الورقة الحالي — استخدم مقاس ورقة أكبر (A2/A1) لنتيجة أدق.');
+    }
+    page.orientation = best.orient;
+    page.scaleDenom = best.sc;
+    page.center = {lat: center.lat, lng: center.lng};
+    openPageEditor(page.id);
+    scheduleSave();
   }
 
   function applyNotebookBackground(bg){
@@ -1832,10 +1905,25 @@
     const polyName = selF && selF.attrs && (selF.attrs['الاسم'] || selF.attrs['اسم'] || selF.attrs['name'] || selF.attrs['رقم القطعة']);
     if(page.showTitle !== false && polyName){ titleEl.textContent = polyName; titleEl.style.display = 'block'; }
     else titleEl.style.display = 'none';
+    ensureTitleBlockDefaults(page);
+    const tbEl = document.getElementById('notebookTitleBlock');
+    if(page.titleBlock.show){
+      const rows = [];
+      if(page.titleBlock.org) rows.push(`<div><b>الجهة:</b> ${escapeHtml(page.titleBlock.org)}</div>`);
+      if(page.titleBlock.date) rows.push(`<div><b>التاريخ:</b> ${escapeHtml(page.titleBlock.date)}</div>`);
+      if(page.titleBlock.drawnBy) rows.push(`<div><b>رسمها:</b> ${escapeHtml(page.titleBlock.drawnBy)}</div>`);
+      if(page.titleBlock.ref) rows.push(`<div><b>رقم مرجعي:</b> ${escapeHtml(page.titleBlock.ref)}</div>`);
+      tbEl.innerHTML = rows.length ? rows.join('') : '<div style="color:#999;">الكرتوش فاضي — املأ بياناته من لوحة التعديل</div>';
+      tbEl.style.display = 'block';
+    } else tbEl.style.display = 'none';
     repositionNotebookTables();
   }
 
   // ---- جداول بيانات المضلع المحدد (مساحة/أطوال/إحداثيات) — قابلة للسحب جوه صفحة الكشكول النشطة ----
+  function ensureTitleBlockDefaults(page){
+    if(!page.titleBlock) page.titleBlock = { show:false, org:'', drawnBy:'', ref:'', date: new Date().toLocaleDateString('ar-EG') };
+  }
+
   function ensureTableDefaults(page){
     if(!page.tables) page.tables = {
       area: {show:true, xPct:3, yPct:68},
@@ -2089,6 +2177,12 @@
     document.getElementById('nbShowLengthsTable').checked = page.tables.lengths.show;
     document.getElementById('nbShowVerticesTable').checked = page.tables.vertices.show;
     document.getElementById('nbShowAttrsTable').checked = page.tables.attrs.show;
+    ensureTitleBlockDefaults(page);
+    document.getElementById('nbShowTitleBlock').checked = page.titleBlock.show;
+    document.getElementById('nbTbOrg').value = page.titleBlock.org || '';
+    document.getElementById('nbTbDrawnBy').value = page.titleBlock.drawnBy || '';
+    document.getElementById('nbTbRef').value = page.titleBlock.ref || '';
+    document.getElementById('nbTbDate').value = page.titleBlock.date || '';
     updateGridReadout(page);
     document.getElementById('notebookHud').style.display = 'block';
   }
@@ -2110,6 +2204,12 @@
     page.tables.lengths.show = document.getElementById('nbShowLengthsTable').checked;
     page.tables.vertices.show = document.getElementById('nbShowVerticesTable').checked;
     page.tables.attrs.show = document.getElementById('nbShowAttrsTable').checked;
+    ensureTitleBlockDefaults(page);
+    page.titleBlock.show = document.getElementById('nbShowTitleBlock').checked;
+    page.titleBlock.org = document.getElementById('nbTbOrg').value;
+    page.titleBlock.drawnBy = document.getElementById('nbTbDrawnBy').value;
+    page.titleBlock.ref = document.getElementById('nbTbRef').value;
+    page.titleBlock.date = document.getElementById('nbTbDate').value;
     updateGridReadout(page);
     applyNotebookBackground(page.background);
     renderNotebookFrame();
@@ -2171,30 +2271,91 @@
     });
   }
 
+  let notebookPrintQueue = null; // {pages:[...], index} لو تصدير جماعي شغال، وإلا null
+
+  function preparePagePrintView(page, onReady){
+    setActiveNotebookPage(page.id);
+    setTimeout(()=>{
+      map.fitBounds(notebookFrameLayer.getBounds(), {padding:[0,0]});
+      setTimeout(onReady, 500); // مهلة صغيرة لتحميل بلاطات الخريطة بعد الزووم
+    }, 100);
+  }
+
+  function showPrintConfirmBar(text, showSkip){
+    document.getElementById('notebookPrintConfirmText').textContent = text;
+    document.getElementById('notebookPrintConfirmSkip').style.display = showSkip ? 'inline-block' : 'none';
+    document.getElementById('notebookPrintConfirmBar').style.display = 'flex';
+  }
+  function hidePrintConfirmBar(){
+    document.getElementById('notebookPrintConfirmBar').style.display = 'none';
+  }
+
+  function triggerPrintForActivePage(page){
+    const dims = PAPER_SIZES_MM[page.paper] || PAPER_SIZES_MM.A4;
+    const [longMM, shortMM] = dims;
+    const wMM = page.orientation === 'landscape' ? longMM : shortMM;
+    const hMM = page.orientation === 'landscape' ? shortMM : longMM;
+    let styleTag = document.getElementById('notebookPrintPageSize');
+    if(!styleTag){ styleTag = document.createElement('style'); styleTag.id = 'notebookPrintPageSize'; document.head.appendChild(styleTag); }
+    styleTag.textContent = `@page { size: ${wMM}mm ${hMM}mm; margin:0; }`;
+    if(notebookFrameLayer) notebookFrameLayer.setStyle({opacity:0, fillOpacity:0}); // نخفي إطار الاسترشاد الأحمر وقت الطباعة بس
+    document.body.classList.add('notebook-print-mode');
+    window.print();
+  }
+
   function exportNotebookPageToPDF(pageId){
     const page = state.notebookPages.find(p=>p.id===pageId);
     if(!page) return;
-    setActiveNotebookPage(pageId);
-    document.getElementById('stHint').textContent = '🖨️ بيجهز صفحة "'+page.name+'" للطباعة... هيفتح صندوق الطباعة، اختار "Save as PDF"';
-    setTimeout(()=>{
-      map.fitBounds(notebookFrameLayer.getBounds(), {padding:[0,0]});
-      setTimeout(()=>{
-        const dims = PAPER_SIZES_MM[page.paper] || PAPER_SIZES_MM.A4;
-        const [longMM, shortMM] = dims;
-        const wMM = page.orientation === 'landscape' ? longMM : shortMM;
-        const hMM = page.orientation === 'landscape' ? shortMM : longMM;
-        let styleTag = document.getElementById('notebookPrintPageSize');
-        if(!styleTag){ styleTag = document.createElement('style'); styleTag.id = 'notebookPrintPageSize'; document.head.appendChild(styleTag); }
-        styleTag.textContent = `@page { size: ${wMM}mm ${hMM}mm; margin:0; }`;
-        if(notebookFrameLayer) notebookFrameLayer.setStyle({opacity:0, fillOpacity:0}); // نخفي إطار الاسترشاد الأحمر وقت الطباعة بس
-        document.body.classList.add('notebook-print-mode');
-        window.print();
-      }, 500); // مهلة صغيرة لتحميل بلاطات الخريطة بعد الزووم
-    }, 100);
+    notebookPrintQueue = null;
+    document.getElementById('stHint').textContent = '🖨️ بيجهز صفحة "'+page.name+'" للمعاينة...';
+    preparePagePrintView(page, ()=>{
+      showPrintConfirmBar('📄 صفحة "'+page.name+'" — راجعها على الشاشة، وبعدين دوس "اطبع الآن"', false);
+    });
   }
+
+  function advancePrintQueue(){
+    if(!notebookPrintQueue) return;
+    const {pages, index} = notebookPrintQueue;
+    if(index >= pages.length){
+      notebookPrintQueue = null;
+      hidePrintConfirmBar();
+      document.getElementById('stHint').textContent = '✅ خلصت تصدير كل صفحات الكشكول';
+      return;
+    }
+    const page = pages[index];
+    document.getElementById('stHint').textContent = `🖨️ صفحة ${index+1} من ${pages.length}: "${page.name}"...`;
+    preparePagePrintView(page, ()=>{
+      showPrintConfirmBar(`📄 صفحة ${index+1}/${pages.length}: "${page.name}" — راجعها وبعدين اطبع`, true);
+    });
+  }
+
+  document.getElementById('notebookPrintConfirmGo').addEventListener('click', ()=>{
+    const page = getActivePage();
+    hidePrintConfirmBar();
+    if(page) triggerPrintForActivePage(page);
+  });
+  document.getElementById('notebookPrintConfirmCancel').addEventListener('click', ()=>{
+    hidePrintConfirmBar();
+    notebookPrintQueue = null;
+  });
+  document.getElementById('notebookPrintConfirmSkip').addEventListener('click', ()=>{
+    if(notebookPrintQueue){ notebookPrintQueue.index++; }
+    hidePrintConfirmBar();
+    advancePrintQueue();
+  });
+  document.getElementById('exportAllPagesBtn').addEventListener('click', ()=>{
+    if(!state.notebookPages.length){ alert('مفيش صفحات كشكول محفوظة عشان تصدرها.'); return; }
+    notebookPrintQueue = {pages: state.notebookPages.slice(), index:0};
+    advancePrintQueue();
+  });
+
   window.addEventListener('afterprint', ()=>{
     document.body.classList.remove('notebook-print-mode');
     if(notebookFrameLayer) notebookFrameLayer.setStyle({opacity:1, fillOpacity:0.02});
+    if(notebookPrintQueue){
+      notebookPrintQueue.index++;
+      setTimeout(()=> advancePrintQueue(), 400);
+    }
   });
 
   document.getElementById('notebookModeBtn').addEventListener('click', ()=>{
@@ -2210,6 +2371,7 @@
     scheduleSave();
     document.getElementById('stHint').textContent = '📓 اتعملت صفحة كشكول جديدة — اسحب الإطار الأحمر لتحديد مكانها، وعدّل إعداداتها من اللوحة';
   });
+  document.getElementById('nbAutoFit').addEventListener('click', ()=> autoFitPageToSelection());
   document.getElementById('nbCloseHud').addEventListener('click', ()=>{ document.getElementById('notebookHud').style.display='none'; });
   document.getElementById('nbCenterOnSelection').addEventListener('click', ()=>{
     const c = computeNotebookCenterFromSelection();
@@ -2221,7 +2383,7 @@
     map.panTo(c);
     scheduleSave();
   });
-  ['nbPageName','nbBackground','nbPaperSize','nbOrientation','nbScale','nbScaleCustom','nbGridMM','nbShowScaleBar','nbShowNorth','nbShowTitle','nbShowAreaTable','nbShowLengthsTable','nbShowVerticesTable','nbShowAttrsTable'].forEach(id=>{
+  ['nbPageName','nbBackground','nbPaperSize','nbOrientation','nbScale','nbScaleCustom','nbGridMM','nbShowScaleBar','nbShowNorth','nbShowTitle','nbShowAreaTable','nbShowLengthsTable','nbShowVerticesTable','nbShowAttrsTable','nbShowTitleBlock','nbTbOrg','nbTbDrawnBy','nbTbRef','nbTbDate'].forEach(id=>{
     const el = document.getElementById(id);
     const evt = (el.tagName==='SELECT' || el.type==='checkbox' || el.type==='color') ? 'change' : 'input';
     el.addEventListener(evt, ()=>{
@@ -2267,6 +2429,7 @@
   document.getElementById('penColor').addEventListener('input', e=>{ penSettings.color = e.target.value; });
   document.getElementById('penWidth').addEventListener('input', e=>{ penSettings.width = parseFloat(e.target.value); });
   document.getElementById('penSmooth').addEventListener('input', e=>{ penSettings.smoothness = parseFloat(e.target.value); });
+  document.getElementById('penSnapGrid').addEventListener('change', e=>{ penSettings.snapToGrid = e.target.checked; });
   document.getElementById('penHudClose').addEventListener('click', ()=>{ document.getElementById('penHud').style.display='none'; });
   document.getElementById('penClearAll').addEventListener('click', ()=>{
     if(!state.notebookSketches.length) return;
@@ -3009,7 +3172,8 @@
     lastCursorLatLng = e.latlng;
 
     if(tool==='pen' && penDrawing){
-      penDrawing.points.push([e.latlng.lat, e.latlng.lng]);
+      const sp = snapPenPointToGrid(e.latlng.lat, e.latlng.lng);
+      penDrawing.points.push([sp.lat, sp.lng]);
       if(penTempLine) map.removeLayer(penTempLine);
       penTempLine = L.polyline(penDrawing.points, penBrushStyle(penSettings.brush, penSettings.color, penSettings.width, false)).addTo(map);
       document.getElementById('stTemp').textContent = '✏️ بيرسم...';
@@ -3160,7 +3324,8 @@
     if(tool !== 'pen') return;
     L.DomEvent.stopPropagation(e);
     map.dragging.disable();
-    penDrawing = { points: [[e.latlng.lat, e.latlng.lng]] };
+    const sp = snapPenPointToGrid(e.latlng.lat, e.latlng.lng);
+    penDrawing = { points: [[sp.lat, sp.lng]] };
   });
   const endPenStroke = () => {
     if(!penDrawing) return;
