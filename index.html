@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.20.9/proj4.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
@@ -152,7 +153,8 @@
   .save-indicator{opacity:0;transition:opacity .3s;color:var(--teal);}
   .save-indicator.show{opacity:1;}
 
-  .rect-hud{position:absolute;background:var(--bg-panel);border:1px solid var(--accent);border-radius:10px;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:600;width:200px;display:none;}
+  .rect-hud{position:absolute;background:var(--bg-panel);border:1px solid var(--accent);border-radius:10px;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:600;width:200px;display:none;max-height:calc(100vh - 150px);overflow-y:auto;}
+  .basemap-toggle,.drive-control{z-index:960;}
   .rect-hud h4{margin:0 0 8px;font-size:12px;color:var(--accent);font-weight:600;}
   .rect-hud label{display:block;font-size:10.5px;color:var(--text-muted);margin-top:6px;}
   .rect-hud input, .rect-hud select{width:100%;background:var(--bg-panel-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 7px;font-family:var(--mono);font-size:12px;margin-top:2px;}
@@ -343,7 +345,7 @@
     .drive-control{top:8px;right:8px;padding:6px 8px;gap:5px;flex-wrap:wrap;max-width:44vw;}
     .drive-control .drive-msg{font-size:9px;}
     .drive-control button{font-size:9.5px;padding:4px 6px;}
-    .rect-hud{left:50% !important;top:50% !important;transform:translate(-50%,-50%);width:82vw;max-width:260px;}
+    .rect-hud{left:50% !important;top:50% !important;transform:translate(-50%,-50%);width:82vw;max-width:260px;max-height:calc(100vh - 190px) !important;overflow-y:auto !important;}
     .statusbar{font-size:10px;gap:10px;padding:0 8px;flex-wrap:wrap;height:auto;min-height:28px;}
   }
 
@@ -388,6 +390,29 @@
   }
   .nb-vertex-label span{color:#1B3968;}
   .nb-side-label span{color:#8B2E2E;}
+
+  /* ---- لوحة الكرتوش الرسمي (طراز GARPAD) ---- */
+  .tb-panel{
+    background:#fff; border-left:2px solid #7A5A1E; border-top:1.5px solid #7A5A1E; border-bottom:1.5px solid #7A5A1E;
+    overflow:hidden; direction:rtl; font-family:var(--sans); color:#111; box-sizing:border-box;
+  }
+  .tb-logo-wrap{width:100%;line-height:0;}
+  .tb-logo-img{width:100%;display:block;}
+  .tb-org-name{background:#FCF3D9;text-align:center;font-weight:800;padding:.5em 0;border-bottom:1px solid #7A5A1E;}
+  .tb-org-name div{font-size:1.05em;line-height:1.7;}
+  table.tb-grid{width:100%;border-collapse:collapse;table-layout:fixed;}
+  table.tb-grid td{border:1px solid #7A5A1E;padding:.35em .5em;font-size:.95em;vertical-align:middle;}
+  .tb-label{background:#FCF3D9;font-weight:800;text-align:center;width:22%;}
+  .tb-value{background:#fff;text-align:right;}
+  .tb-empty{color:#aaa;}
+  .tb-area-type{background:#FCF3D9;text-align:center;font-weight:700;}
+  .tb-area-h{background:#DCE6ED;text-align:center;font-weight:700;width:26%;}
+  .tb-area-v{text-align:center;font-weight:800;}
+  .tb-bh{background:#FCF3D9;text-align:center;font-weight:700;}
+  .tb-sign-row{display:flex;border:1px solid #7A5A1E;border-top:none;}
+  .tb-sign-cell{flex:1;background:#FCF3D9;text-align:center;font-size:.9em;padding:.5em .3em;border-right:1px solid #7A5A1E;}
+  .tb-sign-cell:last-child{border-right:none;}
+  .tb-footnote{text-align:center;font-size:.72em;color:#555;padding:.4em 0;}
 
   /* ---- Print: map only ---- */
   @media print{
@@ -596,6 +621,19 @@
             </button>
           </div>
           <div class="ribbon-group-caption">كشكول (Layout)</div>
+        </div>
+
+        <div class="ribbon-group">
+          <div class="ribbon-group-row">
+            <button class="tool-btn" id="rasterAddBtn" title="ارفع صورة راستر (خريطة ممسوحة ضوئيًا) وصحّحها جغرافيًا">
+              <svg viewBox="0 0 24 24">
+                <rect x="3" y="4" width="18" height="15" rx="1.5" fill="currentColor" opacity=".12" stroke-width="1.8"/>
+                <path d="M3 15l5-5 4 4 4-5 5 6" stroke-width="1.8" fill="none"/>
+                <circle cx="8" cy="8.5" r="1.6" fill="currentColor" stroke="none"/>
+              </svg><span>راستر</span>
+            </button>
+          </div>
+          <div class="ribbon-group-caption">خرائط راستر</div>
         </div>
 
       </div>
@@ -823,7 +861,7 @@
       </div>
 
       <!-- ── لوحة إدخال عامة (طول/نصف قطر) بديلة عن نوافذ prompt الافتراضية ── -->
-      <div class="rect-hud" id="inlineValueHud" style="width:220px;display:none;top:60px;left:10px;">
+      <div class="rect-hud" id="inlineValueHud" style="width:220px;display:none;top:110px;left:10px;">
         <h4 id="ivhTitle">إدخال قيمة</h4>
         <div id="ivhFields"></div>
         <div id="ivhError" style="color:#e05252;font-size:10.5px;margin-top:2px;display:none;"></div>
@@ -834,7 +872,7 @@
       </div>
 
       <!-- ── محرر صفحة الكشكول (Layout Page Editor) ── -->
-      <div class="rect-hud" id="notebookHud" style="width:250px;display:none;top:60px;left:10px;border-color:#8AA9C7;max-height:85vh;overflow-y:auto;">
+      <div class="rect-hud" id="notebookHud" style="width:250px;display:none;top:110px;left:10px;border-color:#8AA9C7;max-height:calc(100vh - 160px);overflow-y:auto;">
         <h4 style="color:#5B84AC;">📓 تعديل صفحة الكشكول</h4>
         <label>اسم الصفحة</label>
         <input type="text" id="nbPageName" placeholder="مثلاً: كروكي قطعة 12">
@@ -880,10 +918,21 @@
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px;"><input type="checkbox" id="nbShowVerticesTable" checked style="width:auto;"> جدول إحداثيات القطاعات</label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px;"><input type="checkbox" id="nbShowAttrsTable" checked style="width:auto;"> جدول بيانات المضلعات الداخلية</label>
         <div style="font-size:10.5px;color:var(--text-muted);margin:10px 0 3px;border-top:1px solid var(--border);padding-top:8px;">🏷️ الكرتوش (بيانات ثابتة أسفل الصفحة):</div>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="nbShowTitleBlock" style="width:auto;"> إظهار الكرتوش</label>
-        <input type="text" id="nbTbOrg" placeholder="اسم الجهة (مثلاً GARPAD)" style="margin-top:6px;">
-        <input type="text" id="nbTbDrawnBy" placeholder="رسمها" style="margin-top:6px;">
-        <input type="text" id="nbTbRef" placeholder="رقم مرجعي" style="margin-top:6px;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="nbShowTitleBlock" style="width:auto;"> إظهار الكرتوش (لوحة جانبية بشكل رسمي)</label>
+        <textarea id="nbTbDecision" placeholder="نص القرار (مثال: معاينة استكمال اجراءات بناء على قرار المدير التنفيذى رقم ... بتاريخ ...)" rows="2" style="margin-top:6px;"></textarea>
+        <input type="text" id="nbTbOwner" placeholder="صاحب الشأن" style="margin-top:6px;">
+        <input type="text" id="nbTbDistrict" placeholder="الناحية" style="margin-top:6px;">
+        <input type="text" id="nbTbGovernorate" placeholder="المحافظة" style="margin-top:6px;">
+        <input type="text" id="nbTbLandUse" placeholder="نوع الأرض (مثال: اشجار فاكهه)" style="margin-top:6px;">
+        <div style="display:flex;gap:4px;margin-top:6px;">
+          <input type="text" id="nbTbFeddan" placeholder="فدان" style="text-align:center;">
+          <input type="text" id="nbTbQirat" placeholder="قيراط" style="text-align:center;">
+          <input type="text" id="nbTbSahm" placeholder="سهم" style="text-align:center;">
+        </div>
+        <textarea id="nbTbBuildings" placeholder="المبانى — سطر لكل مبنى بصيغة: الوصف, الرقم, المساحة بالمتر&#10;مثال: سكن خاص, 1, 121" rows="3" style="margin-top:6px;"></textarea>
+        <input type="text" id="nbTbCultivations" placeholder="الزراعات" style="margin-top:6px;">
+        <input type="text" id="nbTbNotes" placeholder="ملاحظات" style="margin-top:6px;">
+        <input type="text" id="nbTbSurveyor" placeholder="القائم بأعمال المساحة" style="margin-top:6px;">
         <input type="text" id="nbTbDate" placeholder="التاريخ" style="margin-top:6px;">
         <div class="row-btns">
           <button class="btn-cancel" id="nbCenterOnSelection">توسيط على المحدد</button>
@@ -892,7 +941,7 @@
       </div>
 
       <!-- ── القلم الحر: نوع الفرشة/اللون/النعومة ── -->
-      <div class="rect-hud" id="penHud" style="width:210px;display:none;top:60px;left:10px;border-color:#C79A4E;">
+      <div class="rect-hud" id="penHud" style="width:210px;display:none;top:110px;left:10px;border-color:#C79A4E;max-height:calc(100vh - 160px);overflow-y:auto;">
         <h4 style="color:#C79A4E;">✏️ القلم الحر</h4>
         <label>نوع الفرشة</label>
         <select id="penBrush">
@@ -912,6 +961,66 @@
         </div>
       </div>
 
+      <!-- ── لوحة خرائط الراستر: رفع + تصحيح جغرافي + إدارة ── -->
+      <div class="rect-hud" id="rasterHud" style="width:255px;display:none;top:110px;left:10px;border-color:#5B84AC;max-height:calc(100vh - 160px);overflow-y:auto;">
+        <h4 style="color:#5B84AC;">🗺️ خرائط الراستر</h4>
+
+        <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:4px;">١) اختار صورة الخريطة (JPG/PNG)</div>
+        <input type="file" id="rasterImgFile" accept="image/*">
+
+        <div style="font-size:10.5px;color:var(--text-muted);margin:8px 0 4px;">٢) ملف إحداثيات World File (اختياري — jgw/pgw/wld/tfw). لو موجود هيتحط تلقائي من غير تصحيح يدوي</div>
+        <input type="file" id="rasterWorldFile" accept=".jgw,.pgw,.wld,.tfw,.jpgw,.pngw,.tifw,text/plain">
+        <label style="margin-top:6px;">نظام إحداثيات ملف الـ World File</label>
+        <select id="rasterCrsSelect"></select>
+
+        <div style="font-size:10.5px;color:var(--text-muted);margin:8px 0 4px;">٣) لو مفيش World File — اختار طريقة التصحيح اليدوي بعد الإضافة</div>
+        <select id="rasterManualMethod">
+          <option value="rigid">نقطتين تحكم (تكبير + تدوير، من غير تحريف)</option>
+          <option value="free">سحب 4 أركان حرة (Free distort)</option>
+          <option value="gcp">🎯 نقط تحكم بإحداثيات مدخلة يدويًا (2-4 نقط)</option>
+        </select>
+
+        <div class="row-btns" style="margin-top:8px;">
+          <button class="btn-create" id="rasterAddConfirmBtn" style="width:100%;">➕ إضافة الخريطة</button>
+        </div>
+
+        <div style="font-size:10.5px;color:var(--text-muted);margin:10px 0 3px;border-top:1px solid var(--border);padding-top:8px;">الخرائط المضافة:</div>
+        <div id="rasterList"></div>
+
+        <div class="row-btns">
+          <button class="btn-create" id="rasterHudClose" style="width:100%;">تم</button>
+        </div>
+      </div>
+
+      <!-- ── شريط تأكيد أثناء سحب أركان الراستر ── -->
+      <div id="rasterEditBar" style="display:none;position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:900;background:var(--bg-panel);border:1.5px solid #5B84AC;border-radius:10px;padding:10px 16px;box-shadow:0 8px 24px rgba(0,0,0,.4);display:flex;align-items:center;gap:10px;font-size:12px;">
+        <span id="rasterEditBarText">🖐️ اسحب النقط الزرقا لتظبيط مكان الخريطة فوق القمر الصناعي</span>
+        <button class="btn-create" id="rasterEditBarDone" style="padding:6px 14px;">✅ تم التصحيح</button>
+      </div>
+
+      <!-- ── نافذة نقط التحكم (Georeferencing بإحداثيات مدخلة يدويًا) ── -->
+      <div id="rasterGcpModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:950;align-items:center;justify-content:center;">
+        <div style="background:var(--bg-panel);border:1.5px solid #5B84AC;border-radius:10px;padding:16px;max-width:92vw;max-height:92vh;overflow:auto;display:flex;gap:16px;flex-wrap:wrap;">
+          <div>
+            <h4 style="color:#5B84AC;margin-top:0;">🎯 نقط تحكم بإحداثيات مدخلة</h4>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;max-width:60vw;">دوس على أي نقطة معروفة في الصورة (زاوية مبنى، تقاطع طرق...)، وبعدين اكتب إحداثياتها الحقيقية على اليمين. لازم نقطتين على الأقل — 3 نقط بتظبط الميل والتمدد، و4 نقط بتظبط أي تحريف/منظور كمان.</div>
+            <div id="rasterGcpImgWrap" style="position:relative;display:inline-block;cursor:crosshair;line-height:0;">
+              <img id="rasterGcpImg" style="display:block;max-width:60vw;max-height:70vh;user-select:none;">
+            </div>
+          </div>
+          <div style="width:270px;display:flex;flex-direction:column;">
+            <label>نظام إحداثيات القيم اللي هتدخلها</label>
+            <select id="rasterGcpCrsSelect"></select>
+            <div style="font-size:10.5px;color:var(--text-muted);margin:6px 0;">لو WGS84: اكتب Lng (خط الطول) ثم Lat (خط العرض). لو نظام تاني: اكتب X ثم Y بنفس وحداته.</div>
+            <div id="rasterGcpPointsList" style="flex:1;overflow-y:auto;max-height:45vh;"></div>
+            <div class="row-btns" style="margin-top:8px;">
+              <button class="btn-cancel" id="rasterGcpCancelBtn" style="flex:1;">إلغاء</button>
+              <button class="btn-create" id="rasterGcpComputeBtn" style="flex:1;">✅ احسب وضع الخريطة</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- ── شريط تأكيد الطباعة (معاينة قبل الطباعة الفعلية) ── -->
       <div id="notebookPrintConfirmBar" style="display:none;position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:900;background:var(--bg-panel);border:1.5px solid var(--accent);border-radius:10px;padding:10px 16px;box-shadow:0 8px 24px rgba(0,0,0,.4);display:flex;align-items:center;gap:10px;font-size:12px;">
         <span id="notebookPrintConfirmText">📄 راجع الخريطة على الشاشة، وبعدين دوس اطبع</span>
@@ -928,6 +1037,7 @@
         <div id="notebookScaleBar" style="position:absolute;bottom:8px;left:8px;pointer-events:none;font-family:var(--sans);"></div>
         <div id="notebookTitleBlock" style="display:none;position:absolute;bottom:8px;right:8px;pointer-events:none;background:rgba(255,255,255,.92);border:1.5px solid #444;border-radius:4px;padding:6px 10px;font-size:9.5px;font-family:var(--sans);color:#222;min-width:130px;line-height:1.6;"></div>
       </div>
+      <div id="notebookTitlePanel" class="tb-panel" style="display:none;position:absolute;z-index:640;pointer-events:none;"></div>
 
 
       <!-- ── حاسبة المساحة: فدان/قيراط/سهم ↔ متر مربع ── -->
@@ -1134,7 +1244,8 @@
     friendFileIds: [], friendLastPulled: {},   // friendLastPulled: {fileId: timestamp}
     userName: null,
     notebookSketches: [], // ضربات القلم الحر المحفوظة: {id, points:[[lat,lng]...], color, brush, width, smoothness}
-    notebookPages: [] // صفحات الكشكول (Layout) المحفوظة: {id, name, center, paper, orientation, scaleDenom, gridMM, showScaleBar, showNorth, background}
+    notebookPages: [], // صفحات الكشكول (Layout) المحفوظة: {id, name, center, paper, orientation, scaleDenom, gridMM, showScaleBar, showNorth, background}
+    rasters: [] // خرائط الراستر المضافة: {id, name, show, opacity, dataURL, naturalW, naturalH, corners:[[lat,lng]x4] (TL,TR,BR,BL)}
   };
   let friendLayers = [];      // read-only layers pulled from friends' Drive files (each layer carries .fid = owning friend's File ID)
   let friendLayerGroups = {}; // separate Leaflet layer groups for friend data, keyed by fid+'__'+layer.id
@@ -1154,6 +1265,108 @@
   let notebookFrameLayer = null;  // L.Rectangle لإطار الورقة (للصفحة النشطة)
   let notebookGridLayer = null;   // طبقة الشبكة المخصصة (للصفحة النشطة)
   const PAPER_SIZES_MM = { A4:[297,210], A3:[420,297], A2:[594,420], A1:[841,594] }; // [الطويل, القصير] بالملم
+  const TITLE_PANEL_RATIO = 0.30; // نسبة عرض لوحة الكرتوش الرسمي من إجمالي عرض الورقة (زي نموذج GARPAD)
+
+  // ===== أنظمة الإحداثيات (لقراءة ملفات World File غير WGS84) =====
+  const RASTER_CRS_OPTIONS = [
+    {code:'EPSG:4326', label:'WGS84 (درجات، افتراضي)'},
+    {code:'EPSG:32635', label:'UTM Zone 35N (WGS84)'},
+    {code:'EPSG:32636', label:'UTM Zone 36N (WGS84)'},
+    {code:'EPSG:22992', label:'مصر 1907 / الحزام الأحمر (Red Belt)'},
+    {code:'EPSG:22993', label:'مصر 1907 / الحزام الأرجواني (Purple Belt)'}
+  ];
+  if(window.proj4){
+    proj4.defs('EPSG:32635','+proj=utm +zone=35 +datum=WGS84 +units=m +no_defs');
+    proj4.defs('EPSG:32636','+proj=utm +zone=36 +datum=WGS84 +units=m +no_defs');
+    proj4.defs('EPSG:22992','+proj=tmerc +lat_0=30 +lon_0=31 +k=1 +x_0=615000 +y_0=810000 +ellps=helmert +towgs84=-127.535,113.495,-12.7,1.603747,-0.153612,-5.364408,5.33745 +units=m +no_defs +type=crs');
+    proj4.defs('EPSG:22993','+proj=tmerc +lat_0=30 +lon_0=27 +k=1 +x_0=700000 +y_0=200000 +ellps=helmert +towgs84=-130,110,-13,0,0,0,0 +units=m +no_defs +type=crs');
+  }
+  function projectedToLatLng(x, y, epsgCode){
+    if(!epsgCode || epsgCode === 'EPSG:4326') return {lat:y, lng:x};
+    try{
+      const [lng, lat] = proj4(epsgCode, 'EPSG:4326', [x, y]);
+      return {lat, lng};
+    }catch(e){ console.error('proj4 transform failed', e); return {lat:y, lng:x}; }
+  }
+
+  // ===== World File (.jgw/.pgw/.wld/.tfw) =====
+  function parseWorldFile(text){
+    const nums = text.trim().split(/\s+/).map(parseFloat);
+    if(nums.length < 6 || nums.some(isNaN)) return null;
+    const [A,D,B,E,C,F] = nums;
+    return {A,D,B,E,C,F};
+  }
+  function worldFileToXY(wf, col, row){
+    return { x: wf.A*col + wf.B*row + wf.C, y: wf.D*col + wf.E*row + wf.F };
+  }
+
+  // ===== Homography (تحويل إسقاطي عام لـ 4 نقاط تحكم) =====
+  function solveLinearSystem8(A,b){
+    const n = A.length;
+    const M = A.map((row,i)=>row.concat([b[i]]));
+    for(let col=0; col<n; col++){
+      let piv = col;
+      for(let r=col+1;r<n;r++) if(Math.abs(M[r][col]) > Math.abs(M[piv][col])) piv = r;
+      const tmp = M[col]; M[col]=M[piv]; M[piv]=tmp;
+      const pv = M[col][col];
+      if(Math.abs(pv) < 1e-12) continue;
+      for(let c=col;c<=n;c++) M[col][c] /= pv;
+      for(let r=0;r<n;r++){
+        if(r===col) continue;
+        const f = M[r][col];
+        if(f===0) continue;
+        for(let c=col;c<=n;c++) M[r][c] -= f*M[col][c];
+      }
+    }
+    return M.map(row=>row[n]);
+  }
+  // src/dst: مصفوفات من 4 نقاط [x,y] — بيرجع h11..h33 (9 قيم، h33=1)
+  function computeHomography(src, dst){
+    const A = [], b = [];
+    for(let i=0;i<4;i++){
+      const x=src[i][0], y=src[i][1], X=dst[i][0], Y=dst[i][1];
+      A.push([x,y,1,0,0,0,-x*X,-y*X]); b.push(X);
+      A.push([0,0,0,x,y,1,-x*Y,-y*Y]); b.push(Y);
+    }
+    const h = solveLinearSystem8(A,b);
+    return [h[0],h[1],h[2], h[3],h[4],h[5], h[6],h[7],1];
+  }
+  // بيحوّل الـ homography (9 قيم) لسلسلة CSS matrix3d جاهزة للاستخدام كـ transform
+  function homographyToCssMatrix3d(h){
+    return 'matrix3d('+[
+      h[0],h[3],0,h[6],
+      h[1],h[4],0,h[7],
+      0,0,1,0,
+      h[2],h[5],0,h[8]
+    ].join(',')+')';
+  }
+
+  // ===== تصغير الصورة قبل التخزين (base64) عشان ميضربش حد التخزين المحلي =====
+  function downscaleImageFile(file, maxDim){
+    return new Promise((resolve, reject)=>{
+      const img = new Image();
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        img.onload = ()=>{
+          let w = img.naturalWidth, h = img.naturalHeight;
+          if(Math.max(w,h) > maxDim){
+            const ratio = maxDim / Math.max(w,h);
+            w = Math.round(w*ratio); h = Math.round(h*ratio);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve({ dataURL: canvas.toDataURL('image/jpeg', 0.85), w, h });
+        };
+        img.onerror = reject;
+        img.src = reader.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  const GARPAD_LOGO_B64 = 'data:image/jpeg;base64,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';
   let penSettings = { brush:'pencil', color:'#2b2b2b', width:2, smoothness:50, snapToGrid:false };
   let penStrokeLayer = null; // L.LayerGroup لكل ضربات القلم المحفوظة
   let penDrawing = null; // {points:[[lat,lng]...]} أثناء الرسم الحالي فقط
@@ -1211,6 +1424,11 @@
 
   const map = L.map('map', {zoomControl:false, center:[29.9792, 31.1342], zoom:16, worldCopyJump:true});
   L.control.zoom({position:'topleft'}).addTo(map);
+
+  const rasterPane = map.createPane('rasterPane');
+  rasterPane.style.zIndex = 350; // فوق طبقة التايلز (200) وتحت طبقات الرسم (overlayPane ~400) عشان يترسم فوقه
+  rasterPane.style.pointerEvents = 'none';
+  const rasterHandleGroup = L.layerGroup().addTo(map); // نقط سحب أركان الراستر وقت التصحيح اليدوي
 
   const satLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
     attribution: '© Google Maps', maxZoom: 20
@@ -1849,7 +2067,7 @@
       paper: 'A4', orientation: 'landscape',
       scaleDenom: 500, gridMM: 5,
       showScaleBar: true, showNorth: true, showTitle: true,
-      titleBlock: { show:false, org:'', drawnBy:'', ref:'', date: new Date().toLocaleDateString('ar-EG') },
+      titleBlock: newTitleBlockDefaults(),
       background: 'satellite'
     };
   }
@@ -2073,21 +2291,108 @@
     else titleEl.style.display = 'none';
     ensureTitleBlockDefaults(page);
     const tbEl = document.getElementById('notebookTitleBlock');
+    const panelEl = document.getElementById('notebookTitlePanel');
+    const frameW = Math.abs(se.x-nw.x), frameH = Math.abs(se.y-nw.y);
     if(page.titleBlock.show){
-      const rows = [];
-      if(page.titleBlock.org) rows.push(`<div><b>الجهة:</b> ${escapeHtml(page.titleBlock.org)}</div>`);
-      if(page.titleBlock.date) rows.push(`<div><b>التاريخ:</b> ${escapeHtml(page.titleBlock.date)}</div>`);
-      if(page.titleBlock.drawnBy) rows.push(`<div><b>رسمها:</b> ${escapeHtml(page.titleBlock.drawnBy)}</div>`);
-      if(page.titleBlock.ref) rows.push(`<div><b>رقم مرجعي:</b> ${escapeHtml(page.titleBlock.ref)}</div>`);
-      tbEl.innerHTML = rows.length ? rows.join('') : '<div style="color:#999;">الكرتوش فاضي — املأ بياناته من لوحة التعديل</div>';
-      tbEl.style.display = 'block';
-    } else tbEl.style.display = 'none';
+      tbEl.style.display = 'none'; // الصندوق القديم بقى مستبدل باللوحة الجانبية الرسمية
+      const panelW = frameW * (TITLE_PANEL_RATIO/(1-TITLE_PANEL_RATIO));
+      panelEl.style.left = (Math.max(nw.x,se.x))+'px';
+      panelEl.style.top = Math.min(nw.y,se.y)+'px';
+      panelEl.style.width = panelW+'px';
+      panelEl.style.height = frameH+'px';
+      panelEl.style.fontSize = Math.max(7, Math.min(15, panelW/24))+'px';
+      panelEl.innerHTML = buildOfficialTitleBlockHTML(page.titleBlock);
+      panelEl.style.display = 'block';
+    } else {
+      tbEl.style.display = 'none';
+      panelEl.style.display = 'none';
+    }
     repositionNotebookTables();
   }
 
   // ---- جداول بيانات المضلع المحدد (مساحة/أطوال/إحداثيات) — قابلة للسحب جوه صفحة الكشكول النشطة ----
+  function newTitleBlockDefaults(){
+    return {
+      show:false,
+      decisionText:'', ownerName:'', district:'', governorate:'',
+      landUseType:'', areaFeddan:'', areaQirat:'', areaSahm:'',
+      buildingsText:'', cultivations:'', notes:'', surveyorName:'',
+      date: new Date().toLocaleDateString('ar-EG')
+    };
+  }
+
   function ensureTitleBlockDefaults(page){
-    if(!page.titleBlock) page.titleBlock = { show:false, org:'', drawnBy:'', ref:'', date: new Date().toLocaleDateString('ar-EG') };
+    if(!page.titleBlock){ page.titleBlock = newTitleBlockDefaults(); return; }
+    const d = newTitleBlockDefaults();
+    // توافق مع صفحات قديمة كانت بتستخدم حقول org/drawnBy/ref القديمة
+    if(page.titleBlock.decisionText === undefined && page.titleBlock.ref){
+      page.titleBlock.decisionText = page.titleBlock.ref;
+    }
+    if(page.titleBlock.ownerName === undefined && page.titleBlock.drawnBy){
+      page.titleBlock.ownerName = page.titleBlock.drawnBy;
+    }
+    Object.keys(d).forEach(k=>{ if(page.titleBlock[k] === undefined) page.titleBlock[k] = d[k]; });
+  }
+
+  // بيانات المبانى: كل سطر "وصف المبنى, رقم المبنى, المساحة بالمتر" — بيترجم لجدول + إجمالي
+  function parseBuildingsText(txt){
+    const rows = [];
+    let total = 0;
+    (txt||'').split('\n').forEach(line=>{
+      line = line.trim();
+      if(!line) return;
+      const parts = line.split(',').map(s=>s.trim());
+      const desc = parts[0] || '';
+      const num = parts[1] || '';
+      const area = parseFloat(parts[2]) || 0;
+      total += area;
+      rows.push({desc, num, area: parts[2] || ''});
+    });
+    return {rows, total};
+  }
+
+  // بناء لوحة الكرتوش الرسمي (كامل) على طراز نموذج الهيئة العامة لمشروعات التعمير والتنمية الزراعية
+  function buildOfficialTitleBlockHTML(tb){
+    const esc = escapeHtml;
+    const bld = parseBuildingsText(tb.buildingsText);
+    const buildingsRows = bld.rows.map(r=>
+      `<tr><td>${esc(r.num)}</td><td style="text-align:right;">${esc(r.desc)}</td><td>${esc(r.area)}</td></tr>`
+    ).join('');
+    return `
+      <div class="tb-logo-wrap"><img src="${GARPAD_LOGO_B64}" class="tb-logo-img"></div>
+      <div class="tb-org-name">
+        <div>الهيئة العامة لمشروعات التعمير والتنمية الزراعية</div>
+        <div>الإدارة المركزية للمشروعات المدنية</div>
+        <div>الإدارة العامة للمساحة</div>
+      </div>
+      <table class="tb-grid">
+        <tr><td class="tb-label" rowspan="1">القرار</td><td class="tb-value">${esc(tb.decisionText)||'<span class="tb-empty">—</span>'}</td></tr>
+        <tr><td class="tb-label" rowspan="3">توصيف قطعة الأرض</td><td class="tb-value"><b>صاحب الشأن</b> &nbsp; ${esc(tb.ownerName)||'<span class="tb-empty">—</span>'}</td></tr>
+        <tr><td class="tb-value"><b>الناحية</b> &nbsp; ${esc(tb.district)||'<span class="tb-empty">—</span>'}</td></tr>
+        <tr><td class="tb-value"><b>المحافظة</b> &nbsp; ${esc(tb.governorate)||'<span class="tb-empty">—</span>'}</td></tr>
+      </table>
+      <table class="tb-grid">
+        <tr><td class="tb-label" rowspan="2">المساحة الاجمالية</td><td class="tb-area-type" colspan="3">${esc(tb.landUseType)||'&nbsp;'}</td></tr>
+        <tr><td class="tb-area-h">فدان</td><td class="tb-area-h">قيراط</td><td class="tb-area-h">سهم</td></tr>
+        <tr><td></td><td class="tb-area-v">${esc(tb.areaFeddan)||'0'}</td><td class="tb-area-v">${esc(tb.areaQirat)||'0'}</td><td class="tb-area-v">${esc(tb.areaSahm)||'0'}</td></tr>
+      </table>
+      ${bld.rows.length ? `
+      <table class="tb-grid">
+        <tr><td class="tb-label" rowspan="${bld.rows.length+2}">المبانى</td>
+            <td class="tb-bh">رقم المبنى</td><td class="tb-bh">وصف المبنى</td><td class="tb-bh">متر٢</td></tr>
+        ${buildingsRows}
+        <tr><td colspan="2" class="tb-value"><b>إجمالى المبانى (م²)</b></td><td class="tb-value"><b>${bld.total.toFixed(2)}</b></td></tr>
+      </table>` : ''}
+      <table class="tb-grid">
+        <tr><td class="tb-label">الزراعات</td><td class="tb-value">${esc(tb.cultivations)||'<span class="tb-empty">—</span>'}</td></tr>
+        <tr><td class="tb-label">ملاحظات</td><td class="tb-value">${esc(tb.notes)||'<span class="tb-empty">—</span>'}</td></tr>
+      </table>
+      <div class="tb-sign-row">
+        <div class="tb-sign-cell"><b>القائم بأعمال المساحة</b><br>${esc(tb.surveyorName)||'<span class="tb-empty">—</span>'}</div>
+        <div class="tb-sign-cell"><b>التوقيع</b><br>&nbsp;</div>
+      </div>
+      <div class="tb-footnote">الرفع المساحي والبيانات طبقًا لإرشاد صاحب الشأن — ${esc(tb.date)}</div>
+    `;
   }
 
   function ensureTableDefaults(page){
@@ -2345,9 +2650,18 @@
     document.getElementById('nbShowAttrsTable').checked = page.tables.attrs.show;
     ensureTitleBlockDefaults(page);
     document.getElementById('nbShowTitleBlock').checked = page.titleBlock.show;
-    document.getElementById('nbTbOrg').value = page.titleBlock.org || '';
-    document.getElementById('nbTbDrawnBy').value = page.titleBlock.drawnBy || '';
-    document.getElementById('nbTbRef').value = page.titleBlock.ref || '';
+    document.getElementById('nbTbDecision').value = page.titleBlock.decisionText || '';
+    document.getElementById('nbTbOwner').value = page.titleBlock.ownerName || '';
+    document.getElementById('nbTbDistrict').value = page.titleBlock.district || '';
+    document.getElementById('nbTbGovernorate').value = page.titleBlock.governorate || '';
+    document.getElementById('nbTbLandUse').value = page.titleBlock.landUseType || '';
+    document.getElementById('nbTbFeddan').value = page.titleBlock.areaFeddan || '';
+    document.getElementById('nbTbQirat').value = page.titleBlock.areaQirat || '';
+    document.getElementById('nbTbSahm').value = page.titleBlock.areaSahm || '';
+    document.getElementById('nbTbBuildings').value = page.titleBlock.buildingsText || '';
+    document.getElementById('nbTbCultivations').value = page.titleBlock.cultivations || '';
+    document.getElementById('nbTbNotes').value = page.titleBlock.notes || '';
+    document.getElementById('nbTbSurveyor').value = page.titleBlock.surveyorName || '';
     document.getElementById('nbTbDate').value = page.titleBlock.date || '';
     updateGridReadout(page);
     document.getElementById('notebookHud').style.display = 'block';
@@ -2372,9 +2686,18 @@
     page.tables.attrs.show = document.getElementById('nbShowAttrsTable').checked;
     ensureTitleBlockDefaults(page);
     page.titleBlock.show = document.getElementById('nbShowTitleBlock').checked;
-    page.titleBlock.org = document.getElementById('nbTbOrg').value;
-    page.titleBlock.drawnBy = document.getElementById('nbTbDrawnBy').value;
-    page.titleBlock.ref = document.getElementById('nbTbRef').value;
+    page.titleBlock.decisionText = document.getElementById('nbTbDecision').value;
+    page.titleBlock.ownerName = document.getElementById('nbTbOwner').value;
+    page.titleBlock.district = document.getElementById('nbTbDistrict').value;
+    page.titleBlock.governorate = document.getElementById('nbTbGovernorate').value;
+    page.titleBlock.landUseType = document.getElementById('nbTbLandUse').value;
+    page.titleBlock.areaFeddan = document.getElementById('nbTbFeddan').value;
+    page.titleBlock.areaQirat = document.getElementById('nbTbQirat').value;
+    page.titleBlock.areaSahm = document.getElementById('nbTbSahm').value;
+    page.titleBlock.buildingsText = document.getElementById('nbTbBuildings').value;
+    page.titleBlock.cultivations = document.getElementById('nbTbCultivations').value;
+    page.titleBlock.notes = document.getElementById('nbTbNotes').value;
+    page.titleBlock.surveyorName = document.getElementById('nbTbSurveyor').value;
     page.titleBlock.date = document.getElementById('nbTbDate').value;
     updateGridReadout(page);
     applyNotebookBackground(page.background);
@@ -2442,7 +2765,13 @@
   function preparePagePrintView(page, onReady){
     setActiveNotebookPage(page.id);
     setTimeout(()=>{
-      map.fitBounds(notebookFrameLayer.getBounds(), {padding:[0,0]});
+      ensureTitleBlockDefaults(page);
+      let reserveRight = 0;
+      if(page.titleBlock.show){
+        const mapW = document.getElementById('map').clientWidth;
+        reserveRight = mapW * TITLE_PANEL_RATIO;
+      }
+      map.fitBounds(notebookFrameLayer.getBounds(), {paddingTopLeft:[0,0], paddingBottomRight:[reserveRight,0]});
       setTimeout(onReady, 500); // مهلة صغيرة لتحميل بلاطات الخريطة بعد الزووم
     }, 100);
   }
@@ -2549,7 +2878,7 @@
     map.panTo(c);
     scheduleSave();
   });
-  ['nbPageName','nbBackground','nbPaperSize','nbOrientation','nbScale','nbScaleCustom','nbGridMM','nbShowScaleBar','nbShowNorth','nbShowTitle','nbShowAreaTable','nbShowLengthsTable','nbShowVerticesTable','nbShowAttrsTable','nbShowTitleBlock','nbTbOrg','nbTbDrawnBy','nbTbRef','nbTbDate'].forEach(id=>{
+  ['nbPageName','nbBackground','nbPaperSize','nbOrientation','nbScale','nbScaleCustom','nbGridMM','nbShowScaleBar','nbShowNorth','nbShowTitle','nbShowAreaTable','nbShowLengthsTable','nbShowVerticesTable','nbShowAttrsTable','nbShowTitleBlock','nbTbDecision','nbTbOwner','nbTbDistrict','nbTbGovernorate','nbTbLandUse','nbTbFeddan','nbTbQirat','nbTbSahm','nbTbBuildings','nbTbCultivations','nbTbNotes','nbTbSurveyor','nbTbDate'].forEach(id=>{
     const el = document.getElementById(id);
     const evt = (el.tagName==='SELECT' || el.type==='checkbox' || el.type==='color') ? 'change' : 'input';
     el.addEventListener(evt, ()=>{
@@ -2977,6 +3306,372 @@
     scheduleSave();
   }
 
+  /* ================== خرائط الراستر (رفع + تصحيح جغرافي + رسم فوقها) ================== */
+  let rasterEditState = null; // {rasterId, mode:'free'|'rigid'} أثناء سحب الأركان
+
+  function metricToLatLng(refLat, x, y){
+    return { lat: y/111320, lng: x/(111320*Math.cos(toRad(refLat))) };
+  }
+
+  // بيحسب أركان مستطيل (BL,BR) بناءً على ركنين علويين (TL,TR) مع الحفاظ على نسبة أبعاد الصورة (بدون تحريف)
+  function rigidCornersFromTLTR(TL, TR, hOverW){
+    const refLat = TL.lat;
+    const o = metricXY(refLat, TL.lat, TL.lng);
+    const p = metricXY(refLat, TR.lat, TR.lng);
+    const dx = p.x-o.x, dy = p.y-o.y;
+    const w = Math.max(1e-6, Math.sqrt(dx*dx+dy*dy));
+    const h = w * hOverW;
+    const rowX = dy/w, rowY = -dx/w; // اتجاه عمودي على الضلع العلوي (نزولًا)
+    const bl = metricToLatLng(refLat, o.x+rowX*h, o.y+rowY*h);
+    const br = metricToLatLng(refLat, p.x+rowX*h, p.y+rowY*h);
+    return [TL, TR, {lat:br.lat,lng:br.lng}, {lat:bl.lat,lng:bl.lng}];
+  }
+
+  function defaultInitialCorners(){
+    // مستطيل ابتدائي في نص الشاشة الحالية بمقاس معقول، لحد ما المستخدم يظبطه يدويًا
+    const c = map.getCenter();
+    const b = map.getBounds();
+    const halfW = (b.getEast()-b.getWest())*0.18, halfH = (b.getNorth()-b.getSouth())*0.18;
+    return [
+      {lat:c.lat+halfH, lng:c.lng-halfW}, // TL
+      {lat:c.lat+halfH, lng:c.lng+halfW}, // TR
+      {lat:c.lat-halfH, lng:c.lng+halfW}, // BR
+      {lat:c.lat-halfH, lng:c.lng-halfW}  // BL
+    ];
+  }
+
+  function getRaster(id){ return state.rasters.find(r=>r.id===id); }
+
+  function renderRasters(){
+    if(!rasterPane) return;
+    // امسح أي صور مش موجودة/متخفية دلوقتي
+    Array.from(rasterPane.querySelectorAll('img[data-raster-id]')).forEach(img=>{
+      const r = getRaster(img.getAttribute('data-raster-id'));
+      if(!r || !r.show) img.remove();
+    });
+    state.rasters.forEach(r=>{
+      if(!r.show) return;
+      let img = rasterPane.querySelector('img[data-raster-id="'+r.id+'"]');
+      if(!img){
+        img = document.createElement('img');
+        img.setAttribute('data-raster-id', r.id);
+        img.style.position = 'absolute';
+        img.style.left = '0'; img.style.top = '0';
+        img.style.transformOrigin = '0 0';
+        img.style.willChange = 'transform';
+        img.draggable = false;
+        rasterPane.appendChild(img);
+      }
+      if(img.src !== r.dataURL) img.src = r.dataURL;
+      img.style.width = r.naturalW + 'px';
+      img.style.height = r.naturalH + 'px';
+      img.style.opacity = (r.opacity != null ? r.opacity : 0.85);
+      const src = [[0,0],[r.naturalW,0],[r.naturalW,r.naturalH],[0,r.naturalH]];
+      const dst = r.corners.map(c=>{ const p = map.latLngToLayerPoint([c.lat,c.lng]); return [p.x,p.y]; });
+      const h = computeHomography(src, dst);
+      img.style.transform = homographyToCssMatrix3d(h);
+    });
+  }
+
+  function renderRasterList(){
+    const container = document.getElementById('rasterList');
+    if(!container) return;
+    container.innerHTML = '';
+    if(!state.rasters.length){
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'لسه ملقيتش خرائط راستر مضافة';
+      container.appendChild(empty);
+      return;
+    }
+    state.rasters.forEach(r=>{
+      const box = document.createElement('div');
+      box.style.cssText = 'border:1px solid var(--border);border-radius:6px;padding:6px 8px;margin-bottom:6px;';
+      box.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;flex:1;min-width:0;">
+            <input type="checkbox" class="rst-show" style="width:auto;" ${r.show?'checked':''}>
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;">${escapeHtml(r.name)}</span>
+          </label>
+          <button class="btn-cancel rst-del" title="حذف" style="padding:3px 7px;">🗑️</button>
+        </div>
+        <label style="font-size:10px;margin-top:4px;">شفافية</label>
+        <input type="range" class="rst-opacity" min="0.1" max="1" step="0.05" value="${r.opacity!=null?r.opacity:0.85}">
+        <div class="row-btns" style="margin-top:4px;flex-wrap:wrap;">
+          <button class="btn-cancel rst-edit-free" style="flex:1;font-size:10.5px;min-width:70px;">🔓 4 أركان</button>
+          <button class="btn-cancel rst-edit-rigid" style="flex:1;font-size:10.5px;min-width:70px;">📐 نقطتين</button>
+          <button class="btn-cancel rst-edit-gcp" style="flex:1;font-size:10.5px;min-width:70px;">🎯 نقط تحكم</button>
+        </div>
+      `;
+      box.querySelector('.rst-show').addEventListener('change', e=>{ r.show = e.target.checked; renderRasters(); scheduleSave(); });
+      box.querySelector('.rst-del').addEventListener('click', ()=>{
+        if(!confirm('تحذف خريطة "'+r.name+'"؟')) return;
+        state.rasters = state.rasters.filter(x=>x.id!==r.id);
+        if(rasterEditState && rasterEditState.rasterId===r.id) stopRasterCornerEdit();
+        renderRasters(); renderRasterList(); scheduleSave();
+      });
+      box.querySelector('.rst-opacity').addEventListener('input', e=>{ r.opacity = parseFloat(e.target.value); renderRasters(); });
+      box.querySelector('.rst-opacity').addEventListener('change', ()=> scheduleSave());
+      box.querySelector('.rst-edit-free').addEventListener('click', ()=> startRasterCornerEdit(r.id, 'free'));
+      box.querySelector('.rst-edit-rigid').addEventListener('click', ()=> startRasterCornerEdit(r.id, 'rigid'));
+      box.querySelector('.rst-edit-gcp').addEventListener('click', ()=>{
+        document.getElementById('rasterHud').style.display = 'none';
+        openGcpModal({dataURL:r.dataURL, naturalW:r.naturalW, naturalH:r.naturalH, existingRasterId:r.id, pendingName:r.name});
+      });
+      container.appendChild(box);
+    });
+  }
+
+  function addRasterRecord(name, dataURL, w, h, corners){
+    const r = { id:uid(), name, show:true, opacity:0.85, dataURL, naturalW:w, naturalH:h, corners };
+    state.rasters.push(r);
+    renderRasters(); renderRasterList(); scheduleSave();
+    return r;
+  }
+
+  function makeHandleIcon(){
+    return L.divIcon({
+      className: 'nb-map-label',
+      html: '<div style="width:16px;height:16px;border-radius:50%;background:#2E7BD6;border:2.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);"></div>',
+      iconSize: [16,16], iconAnchor: [8,8]
+    });
+  }
+
+  function startRasterCornerEdit(rasterId, mode){
+    const r = getRaster(rasterId);
+    if(!r) return;
+    stopRasterCornerEdit();
+    rasterEditState = { rasterId, mode };
+    document.getElementById('rasterEditBarText').textContent = mode==='rigid'
+      ? '🖐️ اسحب النقطتين (الزاوية العلوية اليمين واليسار) لتظبيط الوضع والحجم والدوران'
+      : '🖐️ اسحب أي زاوية من الأربعة لتظبيط الخريطة فوق القمر الصناعي';
+    document.getElementById('rasterEditBar').style.display = 'flex';
+    rebuildRasterHandles();
+  }
+
+  function rebuildRasterHandles(){
+    rasterHandleGroup.clearLayers();
+    if(!rasterEditState) return;
+    const r = getRaster(rasterEditState.rasterId);
+    if(!r) return;
+    const hOverW = r.naturalH / r.naturalW;
+    const cornerIdx = rasterEditState.mode === 'rigid' ? [0,1] : [0,1,2,3]; // TL,TR فقط في وضع نقطتين
+    cornerIdx.forEach(i=>{
+      const c = r.corners[i];
+      const marker = L.marker([c.lat,c.lng], {icon: makeHandleIcon(), draggable:true, pane:'markerPane'}).addTo(rasterHandleGroup);
+      marker.on('drag', e=>{
+        const ll = e.target.getLatLng();
+        r.corners[i] = {lat:ll.lat, lng:ll.lng};
+        if(rasterEditState.mode === 'rigid'){
+          const [TL,TR,BR,BL] = rigidCornersFromTLTR(r.corners[0], r.corners[1], hOverW);
+          r.corners = [TL,TR,BR,BL];
+        }
+        renderRasters();
+      });
+      marker.on('dragend', ()=> scheduleSave());
+    });
+  }
+
+  function stopRasterCornerEdit(){
+    rasterHandleGroup.clearLayers();
+    document.getElementById('rasterEditBar').style.display = 'none';
+    rasterEditState = null;
+  }
+
+  document.getElementById('rasterEditBarDone').addEventListener('click', stopRasterCornerEdit);
+
+  document.getElementById('rasterAddBtn').addEventListener('click', ()=>{
+    const sel = document.getElementById('rasterCrsSelect');
+    if(!sel.options.length){
+      RASTER_CRS_OPTIONS.forEach(o=>{
+        const opt = document.createElement('option'); opt.value=o.code; opt.textContent=o.label; sel.appendChild(opt);
+      });
+    }
+    renderRasterList();
+    document.getElementById('rasterHud').style.display = 'block';
+  });
+  document.getElementById('rasterHudClose').addEventListener('click', ()=>{
+    document.getElementById('rasterHud').style.display = 'none';
+  });
+
+  document.getElementById('rasterAddConfirmBtn').addEventListener('click', async ()=>{
+    const imgInput = document.getElementById('rasterImgFile');
+    const wfInput = document.getElementById('rasterWorldFile');
+    if(!imgInput.files[0]){ alert('اختار صورة الخريطة الأول.'); return; }
+    const btn = document.getElementById('rasterAddConfirmBtn');
+    btn.disabled = true; btn.textContent = '⏳ بيرفع...';
+    try{
+      const imgFile = imgInput.files[0];
+      const { dataURL, w, h } = await downscaleImageFile(imgFile, 2000);
+      let corners;
+      if(wfInput.files[0]){
+        const text = await wfInput.files[0].text();
+        const wf = parseWorldFile(text);
+        if(!wf){ alert('ملف الإحداثيات مش بصيغة World File صحيحة (لازم 6 أسطر أرقام).'); btn.disabled=false; btn.textContent='➕ إضافة الخريطة'; return; }
+        // نفس نسبة التصغير اللي حصلت للصورة (لو الصورة الأصلية أكبر من الحد الأقصى) لازم تتطبق على أبعاد البكسل قبل تحويلها لإحداثيات
+        const origImg = new Image();
+        const origDataUrl = await new Promise((res)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(imgFile); });
+        await new Promise(res=>{ origImg.onload=res; origImg.src=origDataUrl; });
+        const epsg = document.getElementById('rasterCrsSelect').value || 'EPSG:4326';
+        const corners4 = [[0,0],[origImg.naturalWidth,0],[origImg.naturalWidth,origImg.naturalHeight],[0,origImg.naturalHeight]];
+        corners = corners4.map(([col,row])=>{
+          const xy = worldFileToXY(wf, col, row);
+          return projectedToLatLng(xy.x, xy.y, epsg);
+        });
+      } else {
+        corners = defaultInitialCorners();
+      }
+      const name = imgFile.name || ('راستر ' + (state.rasters.length+1));
+      if(wfInput.files[0]){
+        addRasterRecord(name, dataURL, w, h, corners);
+        document.getElementById('rasterHud').style.display = 'none';
+      } else {
+        const method = document.getElementById('rasterManualMethod').value;
+        document.getElementById('rasterHud').style.display = 'none';
+        if(method === 'gcp'){
+          openGcpModal({dataURL, naturalW:w, naturalH:h, existingRasterId:null, pendingName:name});
+        } else {
+          const r = addRasterRecord(name, dataURL, w, h, corners);
+          startRasterCornerEdit(r.id, method);
+        }
+      }
+      imgInput.value=''; wfInput.value='';
+    }catch(e){
+      console.error(e);
+      alert('حصل خطأ أثناء رفع الصورة — جرب صورة تانية.');
+    }
+    btn.disabled = false; btn.textContent = '➕ إضافة الخريطة';
+  });
+
+  map.on('move zoom', renderRasters);
+
+  /* ---- تصحيح بنقط تحكم بإحداثيات مدخلة يدويًا (2=Similarity / 3=Affine / 4=Homography) ---- */
+  function applyHomographyPoint(h, x, y){
+    const X = h[0]*x + h[1]*y + h[2];
+    const Y = h[3]*x + h[4]*y + h[5];
+    const W = h[6]*x + h[7]*y + h[8];
+    return [X/W, Y/W];
+  }
+  function computeSimilarity(src, dst){
+    const s0=src[0], s1=src[1], d0=dst[0], d1=dst[1];
+    const sdx=s1[0]-s0[0], sdy=s1[1]-s0[1];
+    const ddx=d1[0]-d0[0], ddy=d1[1]-d0[1];
+    const lenS = Math.hypot(sdx,sdy) || 1e-9;
+    const lenD = Math.hypot(ddx,ddy);
+    return { s0, d0, scale: lenD/lenS, angle: Math.atan2(ddy,ddx) - Math.atan2(sdy,sdx) };
+  }
+  function applySimilarity(t, p){
+    const rx = p[0]-t.s0[0], ry = p[1]-t.s0[1];
+    const cos = Math.cos(t.angle), sin = Math.sin(t.angle);
+    const rrx = (rx*cos - ry*sin) * t.scale;
+    const rry = (rx*sin + ry*cos) * t.scale;
+    return [t.d0[0]+rrx, t.d0[1]+rry];
+  }
+  function computeAffine(src, dst){
+    const A = src.map(p=>[p[0],p[1],1]);
+    const abc = solveLinearSystem8(A, dst.map(p=>p[0]));
+    const def = solveLinearSystem8(A, dst.map(p=>p[1]));
+    return { a:abc[0], b:abc[1], c:abc[2], d:def[0], e:def[1], f:def[2] };
+  }
+  function applyAffine(t, p){ return [ t.a*p[0]+t.b*p[1]+t.c, t.d*p[0]+t.e*p[1]+t.f ]; }
+
+  let gcpSession = null;
+
+  function openGcpModal({dataURL, naturalW, naturalH, existingRasterId, pendingName}){
+    gcpSession = { dataURL, naturalW, naturalH, existingRasterId, pendingName, points: [] };
+    const sel = document.getElementById('rasterGcpCrsSelect');
+    if(!sel.options.length){
+      RASTER_CRS_OPTIONS.forEach(o=>{ const opt=document.createElement('option'); opt.value=o.code; opt.textContent=o.label; sel.appendChild(opt); });
+    }
+    document.getElementById('rasterGcpImg').src = dataURL;
+    renderGcpPoints();
+    document.getElementById('rasterGcpModal').style.display = 'flex';
+  }
+  function closeGcpModal(){
+    document.getElementById('rasterGcpModal').style.display = 'none';
+    gcpSession = null;
+  }
+  function renderGcpPoints(){
+    if(!gcpSession) return;
+    const wrap = document.getElementById('rasterGcpImgWrap');
+    Array.from(wrap.querySelectorAll('.gcp-marker')).forEach(m=>m.remove());
+    const img = document.getElementById('rasterGcpImg');
+    const isWgs = document.getElementById('rasterGcpCrsSelect').value === 'EPSG:4326' || !document.getElementById('rasterGcpCrsSelect').value;
+    const scaleX = (img.clientWidth||1) / gcpSession.naturalW;
+    const scaleY = (img.clientHeight||1) / gcpSession.naturalH;
+    gcpSession.points.forEach((p,i)=>{
+      const dot = document.createElement('div');
+      dot.className = 'gcp-marker';
+      dot.style.cssText = `position:absolute;left:${p.px*scaleX-9}px;top:${p.py*scaleY-9}px;width:18px;height:18px;border-radius:50%;background:#E0542B;color:#fff;font-size:10.5px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5);pointer-events:none;`;
+      dot.textContent = (i+1);
+      wrap.appendChild(dot);
+    });
+    const list = document.getElementById('rasterGcpPointsList');
+    list.innerHTML = '';
+    gcpSession.points.forEach((p,i)=>{
+      const row = document.createElement('div');
+      row.style.cssText = 'border:1px solid var(--border);border-radius:6px;padding:6px;margin-bottom:6px;';
+      row.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <b style="font-size:11px;">نقطة ${i+1}</b>
+          <button class="btn-cancel gcp-del" style="padding:2px 6px;font-size:10px;">🗑️</button>
+        </div>
+        <div style="display:flex;gap:4px;margin-top:4px;">
+          <input type="number" step="any" class="gcp-x" placeholder="${isWgs?'Lng':'X'}" value="${p.worldX!=null?p.worldX:''}">
+          <input type="number" step="any" class="gcp-y" placeholder="${isWgs?'Lat':'Y'}" value="${p.worldY!=null?p.worldY:''}">
+        </div>
+      `;
+      row.querySelector('.gcp-del').addEventListener('click', ()=>{ gcpSession.points.splice(i,1); renderGcpPoints(); });
+      row.querySelector('.gcp-x').addEventListener('input', e=>{ p.worldX = parseFloat(e.target.value); });
+      row.querySelector('.gcp-y').addEventListener('input', e=>{ p.worldY = parseFloat(e.target.value); });
+      list.appendChild(row);
+    });
+  }
+  document.getElementById('rasterGcpImgWrap').addEventListener('click', e=>{
+    if(!gcpSession) return;
+    if(gcpSession.points.length >= 4){ alert('4 نقط أقصى حد متاح حاليًا لتصحيح الراستر.'); return; }
+    const img = document.getElementById('rasterGcpImg');
+    const rect = img.getBoundingClientRect();
+    const px = (e.clientX-rect.left) * (gcpSession.naturalW/img.clientWidth);
+    const py = (e.clientY-rect.top) * (gcpSession.naturalH/img.clientHeight);
+    gcpSession.points.push({px, py, worldX:null, worldY:null});
+    renderGcpPoints();
+  });
+  document.getElementById('rasterGcpCrsSelect').addEventListener('change', renderGcpPoints);
+  document.getElementById('rasterGcpCancelBtn').addEventListener('click', closeGcpModal);
+  document.getElementById('rasterGcpComputeBtn').addEventListener('click', ()=>{
+    if(!gcpSession) return;
+    const pts = gcpSession.points;
+    if(pts.length < 2){ alert('محتاج نقطتين على الأقل.'); return; }
+    if(pts.some(p=>p.worldX==null || p.worldY==null || isNaN(p.worldX) || isNaN(p.worldY))){ alert('كمّل إحداثيات كل النقط الأول.'); return; }
+    const epsg = document.getElementById('rasterGcpCrsSelect').value || 'EPSG:4326';
+    const worldLatLng = pts.map(p => projectedToLatLng(p.worldX, p.worldY, epsg));
+    const refLat = worldLatLng[0].lat;
+    const srcPx = pts.map(p=>[p.px, p.py]);
+    const dstXY = worldLatLng.map(ll=>{ const m = metricXY(refLat, ll.lat, ll.lng); return [m.x, m.y]; });
+    const w = gcpSession.naturalW, h = gcpSession.naturalH;
+    const corners4px = [[0,0],[w,0],[w,h],[0,h]];
+    let cornersXY;
+    if(pts.length === 2){
+      const t = computeSimilarity(srcPx, dstXY);
+      cornersXY = corners4px.map(p => applySimilarity(t, p));
+    } else if(pts.length === 3){
+      const t = computeAffine(srcPx, dstXY);
+      cornersXY = corners4px.map(p => applyAffine(t, p));
+    } else {
+      const Hm = computeHomography(srcPx, dstXY);
+      cornersXY = corners4px.map(p => applyHomographyPoint(Hm, p[0], p[1]));
+    }
+    const corners = cornersXY.map(([x,y])=>{ const ll = metricToLatLng(refLat, x, y); return {lat:ll.lat, lng:ll.lng}; });
+    if(gcpSession.existingRasterId){
+      const r = getRaster(gcpSession.existingRasterId);
+      if(r){ r.corners = corners; renderRasters(); scheduleSave(); }
+    } else {
+      addRasterRecord(gcpSession.pendingName, gcpSession.dataURL, w, h, corners);
+    }
+    closeGcpModal();
+  });
+
   /* ---------- Persistence ---------- */
   function scheduleSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(doSave, 700); }
   function doSave(){
@@ -2984,7 +3679,12 @@
       localStorage.setItem('gis-tool-state-v2', JSON.stringify({state}));
       const ind=document.getElementById('saveIndicator'); ind.classList.add('show');
       setTimeout(()=>ind.classList.remove('show'),1200);
-    }catch(e){ console.error('save failed', e); }
+    }catch(e){
+      console.error('save failed', e);
+      if(e && (e.name === 'QuotaExceededError' || /quota/i.test(e.message||''))){
+        document.getElementById('stHint').textContent = '⚠️ مساحة التخزين المحلي امتلأت — قلل حجم/عدد خرائط الراستر عشان يقدر يحفظ شغلك';
+      }
+    }
   }
   function loadState(){
     try{
@@ -2995,7 +3695,9 @@
     if(!state.friendLastPulled) state.friendLastPulled = {};
     if(!Array.isArray(state.notebookSketches)) state.notebookSketches = [];
     if(!Array.isArray(state.notebookPages)) state.notebookPages = [];
+    if(!Array.isArray(state.rasters)) state.rasters = [];
     renderLayerList(); renderFeatures(); renderPenStrokes(); renderNotebookPageList();
+    renderRasterList(); renderRasters();
     const all=[]; state.layers.forEach(l=>l.features.forEach(f=>f.coords.forEach(c=>all.push(c))));
     if(all.length) map.fitBounds(L.latLngBounds(all), {padding:[40,40]});
   }
