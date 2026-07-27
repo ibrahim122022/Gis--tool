@@ -12,6 +12,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.20.9/proj4.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
@@ -84,6 +86,7 @@
   #goToCoordsBtn {--tc:#00B4A6;}
   #undoBtn,#redoBtn{--tc:#7A9AAA;}
   #snapBtn   {--tc:#D4A020;}
+  #midSnapBtn{--tc:#7B68EE;}
   #locateBtn {--tc:#E8457A;}
   #fitBtn    {--tc:#00B4A6;}
   #exportBtn {--tc:#00B4A6;}
@@ -377,19 +380,34 @@
   .fcolor-row button:hover{color:var(--teal);border-color:var(--teal);}
 
   .nb-table{border-collapse:collapse;width:100%;}
+  /* ---- مساحة عمل إخراج اللوحات (Layout) — عناصر حرة قابلة بالسحب والتحجيم ---- */
+  #lyAddElMenu .ly-add-item{
+    display:block; width:100%; text-align:right; background:none; border:none; color:var(--text);
+    padding:7px 10px; border-radius:6px; cursor:pointer; font-size:12.5px; font-family:var(--sans);
+  }
+  #lyAddElMenu .ly-add-item:hover{ background:var(--bg-panel-2); }
+  .ly-el{
+    position:absolute; box-sizing:border-box; overflow:hidden; cursor:move;
+    border:1.5px dashed transparent;
+  }
+  .ly-el:hover{ border-color:rgba(0,120,140,.4); }
+  .ly-el.selected{ border-color:var(--teal); border-style:solid; }
+  .ly-el .ly-resize-handle{
+    position:absolute; left:-6px; bottom:-6px; width:14px; height:14px; border-radius:50%;
+    background:var(--teal); border:2px solid #fff; cursor:nwse-resize; display:none; z-index:5;
+  }
+  .ly-el.selected .ly-resize-handle{ display:block; }
+  .ly-el-mapframe{ background:#e4e4e4; }
+  .ly-el-mapframe img{ position:absolute; inset:0; width:100%; height:100%; object-fit:fill; pointer-events:none; }
+  .ly-el-placeholder{ display:flex; align-items:center; justify-content:center; height:100%; color:#888; font-size:11px; text-align:center; padding:8px; }
+  .ly-el-table{ background:#fff; border:1px solid #333 !important; font-size:9px; }
+  .ly-el-table .ly-table-head{ background:#FCF3D9; color:#111; padding:2px 6px; font-weight:700; border-bottom:1px solid #333; }
+  .ly-el-table .ly-table-body{ padding:3px 5px; overflow:auto; }
   .nb-table td,.nb-table th{border:1px solid #ccd6e0;padding:2px 5px;text-align:center;white-space:nowrap;}
   .nb-table th{background:#eef3f8;font-weight:700;}
-  .nb-drag-table{direction:rtl;}
 
-  /* ---- حروف الفيرتكس/الضلع فوق المضلع (صفحة الكشكول) — هالة بيضاء تبرز الحرف ---- */
+  /* ---- هالة بيضاء شفافة تُستخدم لمقابض سحب أركان الراستر فوق الخريطة ---- */
   .nb-map-label{background:transparent!important;border:none!important;box-shadow:none!important;}
-  .nb-map-label span{
-    display:inline-block; font-size:12.5px; font-weight:800; font-family:var(--sans); white-space:nowrap;
-    text-shadow:-2px -2px 0 #fff,2px -2px 0 #fff,-2px 2px 0 #fff,2px 2px 0 #fff,
-                -2px 0 0 #fff,2px 0 0 #fff,0 -2px 0 #fff,0 2px 0 #fff;
-  }
-  .nb-vertex-label span{color:#1B3968;}
-  .nb-side-label span{color:#8B2E2E;}
 
   /* ---- لوحة الكرتوش الرسمي (طراز GARPAD) ---- */
   .tb-panel{
@@ -418,11 +436,28 @@
   @media print{
     .toolbar,.sidebar,.statusbar,.basemap-toggle,.drive-control,
     .rect-hud,.mobile-sidebar-toggle,.mobile-finish-btn,.mobile-edit-pad,
-    #notebookPrintConfirmBar,
     .leaflet-control,.leaflet-top,.leaflet-bottom{display:none!important;}
     .app,.main,.canvas-wrap{height:100vh!important;display:block!important;}
     #map{height:100vh!important;width:100vw!important;}
   }
+  /* نفس قواعد الإخفاء أعلاه، لكن مفعّلة أيضًا أثناء المعاينة على الشاشة والتصدير المباشر JPG/PDF (مش بس وقت الطباعة الفعلية) */
+  body.notebook-print-mode .toolbar,
+  body.notebook-print-mode .sidebar,
+  body.notebook-print-mode .statusbar,
+  body.notebook-print-mode .basemap-toggle,
+  body.notebook-print-mode .drive-control,
+  body.notebook-print-mode .rect-hud,
+  body.notebook-print-mode .mobile-sidebar-toggle,
+  body.notebook-print-mode .mobile-finish-btn,
+  body.notebook-print-mode .mobile-edit-pad,
+  body.notebook-print-mode .draw-style-panel,
+  body.notebook-print-mode .leaflet-control,
+  body.notebook-print-mode .leaflet-top,
+  body.notebook-print-mode .leaflet-bottom{display:none!important;}
+  body.notebook-print-mode .app,
+  body.notebook-print-mode .main,
+  body.notebook-print-mode .canvas-wrap{height:100vh!important;display:block!important;}
+  body.notebook-print-mode #map{height:100vh!important;width:100vw!important;}
 </style>
 </head>
 <body>
@@ -474,6 +509,12 @@
                 <line x1="12" y1="17" x2="12" y2="21" stroke-width="2" opacity=".55"/>
                 <path d="M9.5 21h5" stroke-width="2.2"/>
               </svg><span>سناب</span>
+            </button>
+            <button class="tool-btn active" id="midSnapBtn" title="تفعيل/تعطيل الإسناب على منتصف الضلع — يسمح لك تبدأ الرسم من نص أي ضلع موجود">
+              <svg viewBox="0 0 24 24">
+                <line x1="4" y1="18" x2="20" y2="6" stroke-width="2.2"/>
+                <circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/>
+              </svg><span>نص الضلع</span>
             </button>
           </div>
           <div class="ribbon-group-caption">تحديد وتحرير</div>
@@ -613,14 +654,14 @@
 
         <div class="ribbon-group">
           <div class="ribbon-group-row">
-            <button class="tool-btn" id="notebookModeBtn" title="فتح تبويب صفحات الكشكول (Layout) — احفظ، اعرض، اخفِ، أو صدّر PDF">
+            <button class="tool-btn" id="layoutModeBtn" title="فتح تبويب إخراج اللوحات — لقطة ثابتة من الخريطة + كرتوش + جداول، وتصدير JPG/PDF بمقاس ورقة حقيقي">
               <svg viewBox="0 0 24 24">
                 <rect x="4" y="2.5" width="16" height="19" rx="1.5" fill="currentColor" opacity=".1" stroke-width="1.8"/>
                 <path d="M8 2.5v19M13 2.5v19M4 7.5h16M4 12.5h16M4 17.5h16" stroke-width="1"/>
-              </svg><span>كشكول</span>
+              </svg><span>اللوحات</span>
             </button>
           </div>
-          <div class="ribbon-group-caption">كشكول (Layout)</div>
+          <div class="ribbon-group-caption">إخراج اللوحات (Layout)</div>
         </div>
 
         <div class="ribbon-group">
@@ -774,6 +815,14 @@
         <button class="draw-style-btn" id="drawStyleLengthsBtn" data-style="lengths" title="رسم بالأطوال — تكتب طول كل ضلع وتحدد اتجاهه بالماوس/الإصبع، وتقفل المضلع بأطوال آخر ضلعين (اضغط C للإغلاق)">
           <svg viewBox="0 0 24 24"><polyline points="4,19 12,6 20,19" stroke-width="2.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
+        <div class="draw-style-sep"></div>
+        <button class="draw-style-btn" id="drawStyleParallelBtn" data-style="parallel" title="رسم موازي لضلع — انقر أول حاجة على ضلع موجود يتحدد كمرجع، وبعدين كل ضلع ترسمه هيتقفل موازي لاتجاهه">
+          <svg viewBox="0 0 24 24"><line x1="4" y1="8" x2="20" y2="8" stroke-width="2.3" stroke-linecap="round"/><line x1="4" y1="17" x2="20" y2="17" stroke-width="2.3" stroke-linecap="round"/></svg>
+        </button>
+        <div class="draw-style-sep"></div>
+        <button class="draw-style-btn" id="drawStylePerpendicularBtn" data-style="perpendicular" title="رسم عمودي على ضلع — انقر أول حاجة على ضلع موجود يتحدد كمرجع، وبعدين كل ضلع ترسمه هيتقفل عمودي عليه">
+          <svg viewBox="0 0 24 24"><line x1="4" y1="20" x2="4" y2="4" stroke-width="2.3" stroke-linecap="round"/><line x1="4" y1="4" x2="20" y2="4" stroke-width="2.3" stroke-linecap="round"/><rect x="4" y="4" width="4" height="4" fill="none" stroke-width="1.6"/></svg>
+        </button>
       </div>
 
       <div class="basemap-toggle">
@@ -872,73 +921,108 @@
       </div>
 
       <!-- ── محرر صفحة الكشكول (Layout Page Editor) ── -->
-      <div class="rect-hud" id="notebookHud" style="width:250px;display:none;top:110px;left:10px;border-color:#8AA9C7;max-height:calc(100vh - 160px);overflow-y:auto;">
-        <h4 style="color:#5B84AC;">📓 تعديل صفحة الكشكول</h4>
-        <label>اسم الصفحة</label>
-        <input type="text" id="nbPageName" placeholder="مثلاً: كروكي قطعة 12">
-        <label>الخلفية</label>
-        <select id="nbBackground">
-          <option value="satellite">قمر صناعي (Google)</option>
-          <option value="street">خريطة عادية (Street Map)</option>
-          <option value="white">خلفية بيضاء</option>
-        </select>
+      <!-- ══════ مساحة عمل إخراج اللوحات (Layout) — بملء الشاشة، منفصلة تمامًا عن خريطة الرسم ══════ -->
+      <div id="layoutView" style="display:none;position:fixed;inset:0;z-index:850;background:#4b4b4b;flex-direction:column;">
+        <div id="layoutViewToolbar" style="flex-shrink:0;background:var(--bg-panel);border-bottom:1px solid var(--border);padding:8px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <button class="btn-cancel" id="lyBackBtn" title="رجوع لخريطة الرسم">◀ رجوع للخريطة</button>
+          <input type="text" id="lyName" placeholder="اسم اللوحة" style="width:150px;">
+          <select id="lyPaper" style="width:66px;">
+            <option value="A4">A4</option>
+            <option value="A3">A3</option>
+            <option value="A2">A2</option>
+            <option value="A1">A1</option>
+            <option value="A0">A0</option>
+          </select>
+          <select id="lyOrientation" style="width:100px;">
+            <option value="landscape">أفقي</option>
+            <option value="portrait">رأسي</option>
+          </select>
+          <div style="position:relative;">
+            <button class="btn-create" id="lyAddElBtn">➕ إضافة عنصر ▾</button>
+            <div id="lyAddElMenu" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--bg-panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 20px rgba(0,0,0,.45);z-index:20;min-width:220px;padding:5px;">
+              <button class="ly-add-item" data-type="mapFrame">🗺️ إطار خريطة (Map Frame)</button>
+              <button class="ly-add-item" data-type="titleBlock">🏷️ الكرتوش الرسمي (GARPAD)</button>
+              <button class="ly-add-item" data-type="table" data-key="area">📐 جدول المساحة</button>
+              <button class="ly-add-item" data-type="table" data-key="lengths">📏 جدول أطوال الأضلاع</button>
+              <button class="ly-add-item" data-type="table" data-key="vertices">📍 جدول إحداثيات القطاعات</button>
+              <button class="ly-add-item" data-type="table" data-key="attrs">🗂️ جدول المضلعات الداخلية</button>
+              <button class="ly-add-item" data-type="northArrow">🧭 اتجاه الشمال</button>
+              <button class="ly-add-item" data-type="scaleBar">📏 مقياس الرسم</button>
+              <button class="ly-add-item" data-type="polygonTitle">🔤 اسم المضلع المرتبط</button>
+            </div>
+          </div>
+          <button class="btn-cancel" id="lyLinkFeatureBtn" title="اربطي هذه اللوحة بمضلع محدد على الخريطة عشان تتغذى جداولها">🎯 اربط بالمضلع المحدد</button>
+          <span id="lyLinkedFeatureName" style="font-size:11px;color:var(--teal);white-space:nowrap;"></span>
+          <div style="flex:1;"></div>
+          <button class="btn-cancel" id="lyExportJpgBtn">🖼️ JPG</button>
+          <button class="btn-cancel" id="lyExportPdfBtn">📕 PDF</button>
+        </div>
+        <div id="layoutViewBody" style="flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:30px;">
+          <div id="lyCanvasWrap" style="position:relative;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.5);flex-shrink:0;"></div>
+        </div>
+        <!-- لوحة خصائص العنصر المحدد حاليًا على اللوحة -->
+        <div id="lyElementProps" style="display:none;position:fixed;left:12px;top:64px;width:260px;background:var(--bg-panel);border:1px solid var(--accent);border-radius:10px;padding:10px;max-height:calc(100vh - 90px);overflow-y:auto;z-index:860;box-shadow:0 8px 24px rgba(0,0,0,.4);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <b id="lyPropsTitle" style="font-size:12.5px;color:#5B84AC;">خصائص العنصر</b>
+            <button class="icon-btn" id="lyDeleteElBtn" title="حذف العنصر">🗑️</button>
+          </div>
+          <div id="lyPropsMapFrame" style="display:none;">
+            <button class="btn-create" id="lyCaptureBtn" style="width:100%;margin-bottom:6px;">📸 التقط لقطة من موضع الخريطة الحالي</button>
+            <div style="font-size:10px;color:var(--text-muted);">زوّمي/حرّكي الخريطة العادية (بعد الرجوع لها أو من غير ما تسيبي شاشة اللوحة) لحد ما توصلي للمنظر اللي عايزاه، وبعدين دوسي الزرار</div>
+            <div id="lyMapFrameScaleReadout" style="font-size:11px;color:var(--teal);margin-top:6px;"></div>
+          </div>
+          <div id="lyPropsTitleBlock" style="display:none;">
+            <textarea id="nbTbDecision" placeholder="نص القرار" rows="2"></textarea>
+            <input type="text" id="nbTbOwner" placeholder="صاحب الشأن" style="margin-top:6px;">
+            <input type="text" id="nbTbDistrict" placeholder="الناحية" style="margin-top:6px;">
+            <input type="text" id="nbTbGovernorate" placeholder="المحافظة" style="margin-top:6px;">
+            <input type="text" id="nbTbLandUse" placeholder="نوع الأرض (مثال: اشجار فاكهه)" style="margin-top:6px;">
+            <div style="display:flex;gap:4px;margin-top:6px;">
+              <input type="text" id="nbTbFeddan" placeholder="فدان" style="text-align:center;">
+              <input type="text" id="nbTbQirat" placeholder="قيراط" style="text-align:center;">
+              <input type="text" id="nbTbSahm" placeholder="سهم" style="text-align:center;">
+            </div>
+            <textarea id="nbTbBuildings" placeholder="المبانى — سطر لكل مبنى: الوصف, الرقم, المساحة" rows="3" style="margin-top:6px;"></textarea>
+            <input type="text" id="nbTbCultivations" placeholder="الزراعات" style="margin-top:6px;">
+            <input type="text" id="nbTbNotes" placeholder="ملاحظات" style="margin-top:6px;">
+            <input type="text" id="nbTbSurveyor" placeholder="القائم بأعمال المساحة" style="margin-top:6px;">
+            <input type="text" id="nbTbDate" placeholder="التاريخ" style="margin-top:6px;">
+          </div>
+          <div id="lyPropsGeneric" style="display:none;font-size:11px;color:var(--text-muted);">اسحبي العنصر من جوه اللوحة عشان تحركيه، أو من زاويته السفلية اليمنى عشان تغيّري حجمه.</div>
+        </div>
+      </div>
+
+
+      <!-- ── سلسلة صفحات تلقائية (Map Series) — صفحة لكل مضلع في طبقة مختارة ── -->
+      <div class="rect-hud" id="mapSeriesHud" style="width:270px;display:none;top:110px;left:10px;border-color:#5B84AC;max-height:calc(100vh - 160px);overflow-y:auto;">
+        <h4 style="color:#5B84AC;">🧩 سلسلة صفحات تلقائية (Map Series)</h4>
+        <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:6px;">هتتعمل صفحة مستقلة لكل مضلع في الطبقة دي، بمقياس ومركز يتظبطوا تلقائيًا على كل مضلع، وتترص كلها في ملف PDF واحد.</div>
+        <label>الطبقة</label>
+        <select id="msLayer"></select>
         <label>مقاس الورقة</label>
-        <select id="nbPaperSize">
+        <select id="msPaper">
           <option value="A4">A4</option>
           <option value="A3">A3</option>
           <option value="A2">A2</option>
           <option value="A1">A1</option>
+          <option value="A0">A0</option>
         </select>
         <label>اتجاه الورقة</label>
-        <select id="nbOrientation">
+        <select id="msOrientation">
           <option value="landscape">أفقي (Landscape)</option>
           <option value="portrait">رأسي (Portrait)</option>
         </select>
-        <label>مقياس الرسم</label>
-        <select id="nbScale">
-          <option value="200">1 : 200</option>
-          <option value="500" selected>1 : 500</option>
-          <option value="1000">1 : 1000</option>
-          <option value="2500">1 : 2500</option>
-          <option value="5000">1 : 5000</option>
-          <option value="10000">1 : 10000</option>
-          <option value="custom">مقياس مخصص...</option>
-        </select>
-        <input type="number" id="nbScaleCustom" value="1000" min="1" step="1" style="display:none;" placeholder="مقام المقياس (مثلاً 750)">
-        <button class="btn-cancel" id="nbAutoFit" style="width:100%;margin:4px 0 8px;" title="يختار أنسب اتجاه ومقياس رسم عشان المضلع المحدد يملا الورقة بأقل مساحة فاضية">🔍 ملائمة تلقائية للمحدد</button>
-        <label>حجم مربع الكشكول (ملم على الورق)</label>
-        <input type="number" id="nbGridMM" value="5" min="1" step="0.5">
-        <div style="font-size:10.5px;color:var(--text-muted);margin:2px 0 8px;">= <b id="nbGridMetersReadout">5.0</b> متر على الأرض لكل مربع</div>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="nbShowScaleBar" checked style="width:auto;"> إظهار مقياس الرسم</label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:6px;"><input type="checkbox" id="nbShowNorth" checked style="width:auto;"> إظهار اتجاه الشمال</label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:6px;"><input type="checkbox" id="nbShowTitle" checked style="width:auto;"> إظهار اسم المضلع المحدد أعلى الصفحة</label>
-        <div style="font-size:10.5px;color:var(--text-muted);margin:8px 0 3px;">جداول بيانات المضلع المحدد (لو محدد مضلع):</div>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="nbShowAreaTable" checked style="width:auto;"> جدول المساحة</label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px;"><input type="checkbox" id="nbShowLengthsTable" checked style="width:auto;"> جدول أطوال الأضلاع</label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px;"><input type="checkbox" id="nbShowVerticesTable" checked style="width:auto;"> جدول إحداثيات القطاعات</label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px;"><input type="checkbox" id="nbShowAttrsTable" checked style="width:auto;"> جدول بيانات المضلعات الداخلية</label>
-        <div style="font-size:10.5px;color:var(--text-muted);margin:10px 0 3px;border-top:1px solid var(--border);padding-top:8px;">🏷️ الكرتوش (بيانات ثابتة أسفل الصفحة):</div>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="nbShowTitleBlock" style="width:auto;"> إظهار الكرتوش (لوحة جانبية بشكل رسمي)</label>
-        <textarea id="nbTbDecision" placeholder="نص القرار (مثال: معاينة استكمال اجراءات بناء على قرار المدير التنفيذى رقم ... بتاريخ ...)" rows="2" style="margin-top:6px;"></textarea>
-        <input type="text" id="nbTbOwner" placeholder="صاحب الشأن" style="margin-top:6px;">
-        <input type="text" id="nbTbDistrict" placeholder="الناحية" style="margin-top:6px;">
-        <input type="text" id="nbTbGovernorate" placeholder="المحافظة" style="margin-top:6px;">
-        <input type="text" id="nbTbLandUse" placeholder="نوع الأرض (مثال: اشجار فاكهه)" style="margin-top:6px;">
-        <div style="display:flex;gap:4px;margin-top:6px;">
-          <input type="text" id="nbTbFeddan" placeholder="فدان" style="text-align:center;">
-          <input type="text" id="nbTbQirat" placeholder="قيراط" style="text-align:center;">
-          <input type="text" id="nbTbSahm" placeholder="سهم" style="text-align:center;">
-        </div>
-        <textarea id="nbTbBuildings" placeholder="المبانى — سطر لكل مبنى بصيغة: الوصف, الرقم, المساحة بالمتر&#10;مثال: سكن خاص, 1, 121" rows="3" style="margin-top:6px;"></textarea>
-        <input type="text" id="nbTbCultivations" placeholder="الزراعات" style="margin-top:6px;">
-        <input type="text" id="nbTbNotes" placeholder="ملاحظات" style="margin-top:6px;">
-        <input type="text" id="nbTbSurveyor" placeholder="القائم بأعمال المساحة" style="margin-top:6px;">
-        <input type="text" id="nbTbDate" placeholder="التاريخ" style="margin-top:6px;">
-        <div class="row-btns">
-          <button class="btn-cancel" id="nbCenterOnSelection">توسيط على المحدد</button>
-          <button class="btn-create" id="nbCloseHud">تم</button>
+        <label>هامش حوالين كل مضلع</label>
+        <input type="range" id="msMargin" min="5" max="60" step="5" value="20">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:6px;"><input type="checkbox" id="msShowTitleBlock" style="width:auto;"> إظهار الكرتوش في كل صفحة (هياخد بيانات المضلع لو موجودة)</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px;"><input type="checkbox" id="msShowTables" checked style="width:auto;"> إظهار جداول المساحة/الأطوال/الإحداثيات</label>
+        <div id="msProgress" style="font-size:11px;color:var(--teal);margin:8px 0;display:none;"></div>
+        <div class="row-btns" style="margin-top:8px;">
+          <button class="btn-cancel" id="msCancelBtn" style="flex:1;">إلغاء</button>
+          <button class="btn-create" id="msStartBtn" style="flex:1;">🚀 ابدأ التصدير</button>
         </div>
       </div>
+
 
       <!-- ── القلم الحر: نوع الفرشة/اللون/النعومة ── -->
       <div class="rect-hud" id="penHud" style="width:210px;display:none;top:110px;left:10px;border-color:#C79A4E;max-height:calc(100vh - 160px);overflow-y:auto;">
@@ -1020,24 +1104,6 @@
           </div>
         </div>
       </div>
-
-      <!-- ── شريط تأكيد الطباعة (معاينة قبل الطباعة الفعلية) ── -->
-      <div id="notebookPrintConfirmBar" style="display:none;position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:900;background:var(--bg-panel);border:1.5px solid var(--accent);border-radius:10px;padding:10px 16px;box-shadow:0 8px 24px rgba(0,0,0,.4);display:flex;align-items:center;gap:10px;font-size:12px;">
-        <span id="notebookPrintConfirmText">📄 راجع الخريطة على الشاشة، وبعدين دوس اطبع</span>
-        <button class="btn-create" id="notebookPrintConfirmGo" style="padding:6px 14px;">🖨️ اطبع الآن</button>
-        <button class="btn-cancel" id="notebookPrintConfirmSkip" style="padding:6px 14px;display:none;">تخطي</button>
-        <button class="btn-cancel" id="notebookPrintConfirmCancel" style="padding:6px 14px;">إلغاء</button>
-      </div>
-
-      <div id="notebookFrameHud" style="display:none;position:absolute;z-index:640;pointer-events:none;">
-        <div id="notebookPolygonTitle" style="display:none;position:absolute;top:8px;left:50%;transform:translateX(-50%);pointer-events:none;background:rgba(255,255,255,.9);border:1px solid #bbb;border-radius:5px;padding:4px 12px;font-weight:800;font-size:13px;color:#1B3968;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.15);font-family:var(--sans);"></div>
-        <div id="notebookNorthArrow" style="position:absolute;top:8px;left:8px;pointer-events:none;">
-          <svg width="34" height="44" viewBox="0 0 34 44"><path d="M17 2 L27 30 L17 23 L7 30 Z" fill="#3A5068" stroke="#fff" stroke-width="1.2"/><text x="17" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#3A5068" font-family="sans-serif">N</text></svg>
-        </div>
-        <div id="notebookScaleBar" style="position:absolute;bottom:8px;left:8px;pointer-events:none;font-family:var(--sans);"></div>
-        <div id="notebookTitleBlock" style="display:none;position:absolute;bottom:8px;right:8px;pointer-events:none;background:rgba(255,255,255,.92);border:1.5px solid #444;border-radius:4px;padding:6px 10px;font-size:9.5px;font-family:var(--sans);color:#222;min-width:130px;line-height:1.6;"></div>
-      </div>
-      <div id="notebookTitlePanel" class="tb-panel" style="display:none;position:absolute;z-index:640;pointer-events:none;"></div>
 
 
       <!-- ── حاسبة المساحة: فدان/قيراط/سهم ↔ متر مربع ── -->
@@ -1208,7 +1274,7 @@
     <div class="tabs">
       <div class="tab active" data-panel="layersPanel">الطبقات</div>
       <div class="tab" data-panel="attrPanel">الخصائص</div>
-      <div class="tab" data-panel="notebookPanel">📓 الكشكول</div>
+      <div class="tab" data-panel="layoutPanel">🖼️ إخراج اللوحات</div>
     </div>
     <div class="panel active" id="layersPanel">
       <div class="section-title">الطبقات</div>
@@ -1218,11 +1284,11 @@
     <div class="panel" id="attrPanel">
       <div id="attrContent"><div class="empty-state">اختر عنصر من الخريطة<br>لعرض وتعديل خصائصه</div></div>
     </div>
-    <div class="panel" id="notebookPanel">
-      <div class="section-title">صفحات الكشكول (Layout)</div>
-      <div id="notebookPageList"></div>
-      <button class="add-btn" id="addNotebookPageBtn">+ صفحة كشكول جديدة</button>
-      <button class="add-btn" id="exportAllPagesBtn" style="margin-top:6px;">🖨️ تصدير كل الصفحات PDF</button>
+    <div class="panel" id="layoutPanel">
+      <div class="section-title">لوحات الإخراج (Layout)</div>
+      <div id="layoutPageList"></div>
+      <button class="add-btn" id="addLayoutPageBtn">+ لوحة جديدة</button>
+      <button class="add-btn" id="openMapSeriesBtn" style="margin-top:6px;">🧩 سلسلة صفحات تلقائية (Map Series)</button>
     </div>
   </div>
 
@@ -1244,7 +1310,7 @@
     friendFileIds: [], friendLastPulled: {},   // friendLastPulled: {fileId: timestamp}
     userName: null,
     notebookSketches: [], // ضربات القلم الحر المحفوظة: {id, points:[[lat,lng]...], color, brush, width, smoothness}
-    notebookPages: [], // صفحات الكشكول (Layout) المحفوظة: {id, name, center, paper, orientation, scaleDenom, gridMM, showScaleBar, showNorth, background}
+    layoutPages: [], // لوحات الإخراج (Layout) المحفوظة: {id, name, paper, orientation, showScaleBar, showNorth, showTitle, showAreaTable, showLengthsTable, showVerticesTable, showAttrsTable, tables, titleBlock, featureRef, mapScaleInfo}
     rasters: [] // خرائط الراستر المضافة: {id, name, show, opacity, dataURL, naturalW, naturalH, corners:[[lat,lng]x4] (TL,TR,BR,BL)}
   };
   let friendLayers = [];      // read-only layers pulled from friends' Drive files (each layer carries .fid = owning friend's File ID)
@@ -1252,7 +1318,9 @@
   let layerExpandState = {};  // tracks which layer IDs are expanded in the list
   let featureInfoPendingF = null; // feature waiting for name/description input
   let tool = 'select';
-  let drawStyle = 'straight'; // 'straight' | 'ortho' | 'curve' | 'lengths' — نمط رسم الخط/المضلع
+  let drawStyle = 'straight'; // 'straight' | 'ortho' | 'curve' | 'lengths' | 'parallel' | 'perpendicular' — نمط رسم الخط/المضلع
+  let refAngleDeg = null; // زاوية الضلع المرجعي (بالدرجات) اللي المستخدم اختاره في وضعي "موازي" أو "عمودي"
+  let midSnapEnabled = true; // تفعيل/تعطيل الإسناب على منتصف أضلاع العناصر الموجودة
   let arcState = { step: 0, start: null, end: null }; // حالة رسم القوس في وضع المنحنى (زي End Point Arc Segment)
   let lengthsPendingLen = null; // الطول (بالمتر) المطلوب تثبيته للضلع القادم في وضع "رسم بالأطوال"
   let lengthsClosingActive = false; // true وإحنا مستنيين المستخدم يختار نقطة الغلق من الاحتمالين المعروضين
@@ -1260,11 +1328,8 @@
   let selection = null;
 
   /* ===== وضع الكشكول (Notebook Mode) + القلم الحر ===== */
-  let notebookSelectedIds = new Set(); // 'layerId::featureId' — للتوسيط بس
-  let activeNotebookPageId = null; // id الصفحة المعروضة/المتاح تعديلها حالياً على الخريطة (وحدة بس شغالة بنفس الوقت)
-  let notebookFrameLayer = null;  // L.Rectangle لإطار الورقة (للصفحة النشطة)
-  let notebookGridLayer = null;   // طبقة الشبكة المخصصة (للصفحة النشطة)
-  const PAPER_SIZES_MM = { A4:[297,210], A3:[420,297], A2:[594,420], A1:[841,594] }; // [الطويل, القصير] بالملم
+  let notebookSelectedIds = new Set(); // 'layerId::featureId' — تُستخدم لتحديد عناصر لسلسلة الصفحات التلقائية (Map Series)
+  const PAPER_SIZES_MM = { A0:[1189,841], A4:[297,210], A3:[420,297], A2:[594,420], A1:[841,594] }; // [الطويل, القصير] بالملم
   const TITLE_PANEL_RATIO = 0.30; // نسبة عرض لوحة الكرتوش الرسمي من إجمالي عرض الورقة (زي نموذج GARPAD)
 
   // ===== أنظمة الإحداثيات (لقراءة ملفات World File غير WGS84) =====
@@ -1442,7 +1507,6 @@
   const drawAnchorGroup = L.layerGroup().addTo(map); // نقط الأنكور أثناء الرسم (زوايا قائمة / منحنى)
   const lengthsCandidateGroup = L.layerGroup().addTo(map); // نقط تقاطع احتمالات غلق المضلع في وضع "رسم بالأطوال"
   penStrokeLayer = L.layerGroup().addTo(map); // ضربات القلم الحر المحفوظة (كشكول)
-  const notebookLabelsLayer = L.layerGroup().addTo(map); // حروف الفيرتكس/الضلع فوق المضلع المحدد (صفحة الكشكول)
 
   function clearDrawAnchors(){ drawAnchorGroup.clearLayers(); }
 
@@ -1450,7 +1514,7 @@
   function renderDrawAnchors(){
     clearDrawAnchors();
     if(!drawingCoords || !drawingCoords.length) return;
-    if(drawStyle === 'ortho' || drawStyle === 'lengths'){
+    if(drawStyle === 'ortho' || drawStyle === 'lengths' || drawStyle === 'parallel' || drawStyle === 'perpendicular'){
       drawingCoords.forEach((c, i) => {
         const isLast = i === drawingCoords.length - 1;
         L.circleMarker(c, {
@@ -1858,6 +1922,42 @@
     return {lat, lng};
   }
 
+  // بيحسب النقطة التالية مقفولة على زاوية ضلع مرجعي تم اختياره من رسمة موجودة (موازي)، أو عموده (عمودي)
+  function refAngleSnapPoint(lastLL, curLL, baseDeg, perpendicular){
+    const dist = haversine(lastLL.lat, lastLL.lng, curLL.lat, curLL.lng);
+    if(dist < 1e-6) return {lat:curLL.lat, lng:curLL.lng};
+    const axisDeg = perpendicular ? baseDeg + 90 : baseDeg;
+    const curDeg = toDeg(metricAngleRad(lastLL, curLL));
+    // بنقفل على نفس المحور (مش بس اتجاه واحد) عشان يقدر يرسم لأي الاتجاهين على طول الضلع الموازي/العمودي
+    const snappedDeg = axisDeg + Math.round((curDeg - axisDeg)/180)*180;
+    const rad = toRad(snappedDeg);
+    const east = dist*Math.cos(rad), north = dist*Math.sin(rad);
+    const [lat,lng] = destPoint(lastLL.lat, lastLL.lng, east, north);
+    return {lat, lng};
+  }
+
+  // بيدور على أقرب ضلع من أي عنصر مرسوم حوالين نقطة نقر المستخدم، ويرجع زاويته (بالدرجات) — مستخدم كمرجع لوضعي "موازي"/"عمودي"
+  function findRefEdgeAngle(latlng){
+    const pt = map.latLngToContainerPoint(latlng);
+    const EDGE_PICK_R = 26; // بكسل — نطاق أوسع شوية عشان يبقى سهل تحديد الضلع بالإصبع على الموبايل
+    let best = null, bestDist = EDGE_PICK_R;
+    const check = (f) => {
+      if(f.type === 'point' || f.type === 'circle') return;
+      featureSnapSegments(f).forEach(seg=>{
+        const ap = map.latLngToContainerPoint(L.latLng(seg[0][0], seg[0][1]));
+        const bp = map.latLngToContainerPoint(L.latLng(seg[1][0], seg[1][1]));
+        const cp = closestPointOnSegmentPx(pt, ap, bp);
+        const d = Math.hypot(cp.x-pt.x, cp.y-pt.y);
+        if(d < bestDist){ bestDist = d; best = seg; }
+      });
+    };
+    state.layers.forEach(layer=>{ if(!layer.visible) return; layer.features.forEach(f=> check(f)); });
+    friendLayers.forEach(layer=>{ if(layer.visible === false) return; layer.features.forEach(f=> check(f)); });
+    if(!best) return null;
+    const p1 = {lat:best[0][0], lng:best[0][1]}, p2 = {lat:best[1][0], lng:best[1][1]};
+    return toDeg(metricAngleRad(p1, p2));
+  }
+
   /* ===== وضع "رسم بالأطوال": كل ضلع بطول محدد مكتوب يدوياً + اتجاه حر بالماوس/الإصبع ===== */
 
   // بتحسب النقطة التالية بحيث تبقى على بعد "dist" متر بالظبط من آخر نقطة، في اتجاه المؤشر الحالي
@@ -2008,242 +2108,11 @@
     return out;
   }
 
-  /* ================== صفحات الكشكول (Layout Pages) + القلم الحر ================== */
-
-  function mmToGroundMeters(mm, scaleDenom){
-    return (mm * scaleDenom) / 1000;
-  }
+  /* ================== لوحات الإخراج (Layout Pages) — Map Frame على طراز ArcGIS Pro ================== */
 
   function snapPenPointToGrid(lat, lng){
-    if(!penSettings.snapToGrid) return {lat, lng};
-    const page = getActivePage();
-    if(!page) return {lat, lng};
-    const spacingM = mmToGroundMeters(page.gridMM, page.scaleDenom);
-    if(!(spacingM > 0)) return {lat, lng};
-    const refLat = page.center.lat;
-    const o = metricXY(refLat, page.center.lat, page.center.lng);
-    const p = metricXY(refLat, lat, lng);
-    const gx = Math.round((p.x - o.x) / spacingM) * spacingM + o.x;
-    const gy = Math.round((p.y - o.y) / spacingM) * spacingM + o.y;
-    return { lat: gy / 111320, lng: gx / (111320 * Math.cos(toRad(refLat))) };
-  }
-
-  function getSelectedScaleDenom(){
-    const sel = document.getElementById('nbScale').value;
-    if(sel === 'custom') return Math.max(1, parseFloat(document.getElementById('nbScaleCustom').value) || 1000);
-    return parseFloat(sel);
-  }
-
-  function updateGridReadout(page){
-    const denom = page ? page.scaleDenom : getSelectedScaleDenom();
-    const mm = page ? page.gridMM : (parseFloat(document.getElementById('nbGridMM').value) || 5);
-    document.getElementById('nbGridMetersReadout').textContent = mmToGroundMeters(mm, denom).toFixed(1);
-  }
-
-  function computeNotebookCenterFromSelection(){
-    if(notebookSelectedIds.size === 0) return null;
-    const pts = [];
-    notebookSelectedIds.forEach(key=>{
-      const [layerId, featureId] = key.split('::');
-      const layer = state.layers.find(l=>l.id===layerId);
-      const f = layer && layer.features.find(x=>x.id===featureId);
-      if(f) f.coords.forEach(c=>pts.push(c));
-    });
-    if(!pts.length) return null;
-    const b = L.latLngBounds(pts);
-    const c = b.getCenter();
-    return {lat:c.lat, lng:c.lng};
-  }
-
-  function getActivePage(){
-    return state.notebookPages.find(p => p.id === activeNotebookPageId) || null;
-  }
-
-  function newPageDefaults(center){
-    return {
-      id: uid(),
-      name: 'صفحة ' + (state.notebookPages.length + 1),
-      center: center,
-      paper: 'A4', orientation: 'landscape',
-      scaleDenom: 500, gridMM: 5,
-      showScaleBar: true, showNorth: true, showTitle: true,
-      titleBlock: newTitleBlockDefaults(),
-      background: 'satellite'
-    };
-  }
-
-  function computeNotebookFrameSizeMeters(page){
-    const dims = PAPER_SIZES_MM[page.paper] || PAPER_SIZES_MM.A4;
-    const [longMM, shortMM] = dims;
-    const wMM = page.orientation === 'landscape' ? longMM : shortMM;
-    const hMM = page.orientation === 'landscape' ? shortMM : longMM;
-    return { wM: mmToGroundMeters(wMM, page.scaleDenom), hM: mmToGroundMeters(hMM, page.scaleDenom) };
-  }
-
-  // ملائمة تلقائية: تختار أنسب اتجاه ومقياس رسم (بنفس مقاس الورقة الحالي) عشان المضلع المحدد يملا الصفحة
-  // ملحوظة: من غير تدوير — الخريطة شمال-فوق ثابتة دايمًا (Leaflet مايدعمش تدوير الخريطة)
-  function autoFitPageToSelection(){
-    const f = getSelectedPolygonFeature();
-    const page = getActivePage();
-    if(!f || !page){ alert('حدد مضلع من الخريطة الأول عشان تقدر تعمل ملائمة تلقائية.'); return; }
-    const b = L.latLngBounds(f.coords);
-    const center = b.getCenter();
-    const refLat = center.lat;
-    const nw = metricXY(refLat, b.getNorthWest().lat, b.getNorthWest().lng);
-    const se = metricXY(refLat, b.getSouthEast().lat, b.getSouthEast().lng);
-    const bboxW = Math.abs(se.x - nw.x), bboxH = Math.abs(nw.y - se.y);
-    const PADDING = 1.25;
-    const neededW = bboxW * PADDING, neededH = bboxH * PADDING;
-    const dims = PAPER_SIZES_MM[page.paper] || PAPER_SIZES_MM.A4;
-    const [longMM, shortMM] = dims;
-    const scales = [200,500,1000,2500,5000,10000];
-    let best = null;
-    ['landscape','portrait'].forEach(orient=>{
-      const wMM = orient==='landscape' ? longMM : shortMM;
-      const hMM = orient==='landscape' ? shortMM : longMM;
-      scales.forEach(sc=>{
-        const paperWM = mmToGroundMeters(wMM, sc), paperHM = mmToGroundMeters(hMM, sc);
-        if(paperWM >= neededW && paperHM >= neededH){
-          if(!best || sc < best.sc) best = {orient, sc};
-        }
-      });
-    });
-    if(!best){
-      best = {orient: bboxW >= bboxH ? 'landscape' : 'portrait', sc: 10000};
-      alert('المضلع كبير جدًا حتى بمقياس 1:10000 على مقاس الورقة الحالي — استخدم مقاس ورقة أكبر (A2/A1) لنتيجة أدق.');
-    }
-    page.orientation = best.orient;
-    page.scaleDenom = best.sc;
-    page.center = {lat: center.lat, lng: center.lng};
-    openPageEditor(page.id);
-    scheduleSave();
-  }
-
-  function applyNotebookBackground(bg){
-    const btnSatEl = document.getElementById('btnSat'), btnStreetsEl = document.getElementById('btnStreets');
-    if(bg === 'satellite'){
-      if(!map.hasLayer(satLayer)) satLayer.addTo(map);
-      if(map.hasLayer(streetsLayer)) map.removeLayer(streetsLayer);
-      btnSatEl.classList.add('active'); btnStreetsEl.classList.remove('active');
-    } else if(bg === 'street'){
-      if(!map.hasLayer(streetsLayer)) streetsLayer.addTo(map);
-      if(map.hasLayer(satLayer)) map.removeLayer(satLayer);
-      btnStreetsEl.classList.add('active'); btnSatEl.classList.remove('active');
-    } else { // white
-      if(map.hasLayer(satLayer)) map.removeLayer(satLayer);
-      if(map.hasLayer(streetsLayer)) map.removeLayer(streetsLayer);
-      btnSatEl.classList.remove('active'); btnStreetsEl.classList.remove('active');
-    }
-    mapEl.style.background = (bg === 'white') ? '#ffffff' : '';
-  }
-
-  // ---- طبقة الشبكة (مربعات كشكول بمسافة أرضية حقيقية، ثابتة جغرافياً حول مركز إطار الصفحة النشطة) ----
-  const NotebookGrid = L.Layer.extend({
-    onAdd: function(map){
-      this._map = map;
-      this._canvas = L.DomUtil.create('canvas', 'notebook-grid-canvas');
-      this._canvas.style.position = 'absolute';
-      this._canvas.style.pointerEvents = 'none';
-      this._canvas.style.zIndex = 350;
-      map.getPanes().overlayPane.appendChild(this._canvas);
-      this._moveHandler = this._reset.bind(this);
-      map.on('move zoom resize', this._moveHandler);
-      this._reset();
-    },
-    onRemove: function(map){
-      L.DomUtil.remove(this._canvas);
-      map.off('move zoom resize', this._moveHandler);
-    },
-    _reset: function(){
-      const map = this._map;
-      const size = map.getSize();
-      const topLeft = map.containerPointToLayerPoint([0,0]);
-      L.DomUtil.setPosition(this._canvas, topLeft);
-      this._canvas.width = size.x;
-      this._canvas.height = size.y;
-      this._draw();
-    },
-    _draw: function(){
-      const ctx = this._canvas.getContext('2d');
-      ctx.clearRect(0,0,this._canvas.width,this._canvas.height);
-      const page = getActivePage();
-      if(!page) return;
-      const map = this._map;
-      const origin = page.center;
-      const spacingM = mmToGroundMeters(page.gridMM, page.scaleDenom);
-      if(!(spacingM > 0)) return;
-      const refLat = origin.lat;
-      const o = metricXY(refLat, origin.lat, origin.lng);
-      const b = map.getBounds().pad(0.2);
-      const corners = [b.getNorthWest(), b.getNorthEast(), b.getSouthEast(), b.getSouthWest()];
-      const xs=[], ys=[];
-      corners.forEach(c=>{ const p = metricXY(refLat, c.lat, c.lng); xs.push(p.x-o.x); ys.push(p.y-o.y); });
-      const minX=Math.min(...xs), maxX=Math.max(...xs), minY=Math.min(...ys), maxY=Math.max(...ys);
-      const toLL = (x,y) => L.latLng((o.y+y)/111320, (o.x+x)/(111320*Math.cos(toRad(refLat))));
-      const startI = Math.floor(minX/spacingM), endI = Math.ceil(maxX/spacingM);
-      const startJ = Math.floor(minY/spacingM), endJ = Math.ceil(maxY/spacingM);
-      if((endI-startI) > 400 || (endJ-startJ) > 400) return; // زووم بعيد جداً — امنع تعليق المتصفح
-
-      const drawLines = (mod, style) => {
-        ctx.strokeStyle = style; ctx.lineWidth = 1; ctx.beginPath();
-        for(let i=startI;i<=endI;i++){
-          if(mod && i%mod!==0) continue;
-          const x=i*spacingM;
-          const p1=map.latLngToContainerPoint(toLL(x,minY)), p2=map.latLngToContainerPoint(toLL(x,maxY));
-          ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y);
-        }
-        for(let j=startJ;j<=endJ;j++){
-          if(mod && j%mod!==0) continue;
-          const y=j*spacingM;
-          const p1=map.latLngToContainerPoint(toLL(minX,y)), p2=map.latLngToContainerPoint(toLL(maxX,y));
-          ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y);
-        }
-        ctx.stroke();
-      };
-      drawLines(0, 'rgba(90,130,180,0.32)');   // خطوط الكشكول الخفيفة
-      drawLines(5, 'rgba(70,105,155,0.6)');    // خط أغمق كل 5 مربعات
-    }
-  });
-
-  function renderNotebookFrame(){
-    const page = getActivePage();
-    if(!page) return;
-    const {wM,hM} = computeNotebookFrameSizeMeters(page);
-    const halfW=wM/2, halfH=hM/2;
-    const [latN] = destPoint(page.center.lat, page.center.lng, 0, halfH);
-    const [latS] = destPoint(page.center.lat, page.center.lng, 0, -halfH);
-    const [,lngE] = destPoint(page.center.lat, page.center.lng, halfW, 0);
-    const [,lngW] = destPoint(page.center.lat, page.center.lng, -halfW, 0);
-    const bounds = [[latS,lngW],[latN,lngE]];
-    if(notebookFrameLayer){
-      notebookFrameLayer.setBounds(bounds);
-    } else {
-      notebookFrameLayer = L.rectangle(bounds, {color:'#C0392B', weight:2.4, fill:true, fillOpacity:0.02, dashArray:'7 5', interactive:true}).addTo(map);
-      notebookFrameLayer.on('mousedown', e=>{
-        if(!activeNotebookPageId) return;
-        L.DomEvent.stopPropagation(e);
-        map.dragging.disable();
-        const startLatLng = e.latlng;
-        const p = getActivePage();
-        if(!p) return;
-        const startCenter = Object.assign({}, p.center);
-        const onMove = (ev)=>{
-          const pg = getActivePage(); if(!pg) return;
-          pg.center = { lat: startCenter.lat + (ev.latlng.lat-startLatLng.lat), lng: startCenter.lng + (ev.latlng.lng-startLatLng.lng) };
-          renderNotebookFrame();
-          if(notebookGridLayer) notebookGridLayer._draw();
-        };
-        const onUp = ()=>{
-          map.dragging.enable();
-          map.off('mousemove', onMove);
-          map.off('mouseup', onUp);
-          scheduleSave();
-        };
-        map.on('mousemove', onMove);
-        map.on('mouseup', onUp);
-      });
-    }
-    positionFrameHudOverlay();
+    // ملحوظة: مفهوم "شبكة الكشكول" اتشال مع إعادة بناء أداة الإخراج — القلم الحر بيرسم حر من غير التصاق شبكة
+    return {lat, lng};
   }
 
   function niceScaleLength(approx){
@@ -2252,62 +2121,6 @@
     const residual = approx/magnitude;
     let nice; if(residual<1.5) nice=1; else if(residual<3.5) nice=2; else if(residual<7.5) nice=5; else nice=10;
     return nice*magnitude;
-  }
-
-  function renderScaleBarSVG(el, page){
-    if(!notebookFrameLayer) return;
-    const {wM} = computeNotebookFrameSizeMeters(page);
-    const b = notebookFrameLayer.getBounds();
-    const frameWidthPx = Math.abs(map.latLngToContainerPoint(b.getNorthEast()).x - map.latLngToContainerPoint(b.getNorthWest()).x) || 200;
-    const targetM = niceScaleLength(wM/4);
-    const barPx = Math.max(20, (targetM/wM)*frameWidthPx);
-    const label = targetM>=1000 ? (targetM/1000)+' كم' : targetM+' م';
-    el.innerHTML = `<div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.88);padding:4px 8px;border-radius:5px;border:1px solid #bbb;box-shadow:0 1px 3px rgba(0,0,0,.15);">
-      <svg width="${barPx}" height="10"><rect x="0" y="3" width="${barPx/2}" height="6" fill="#222"/><rect x="${barPx/2}" y="3" width="${barPx/2}" height="6" fill="#fff" stroke="#222" stroke-width="1"/></svg>
-      <span style="font-size:10.5px;color:#222;font-family:var(--mono,monospace);white-space:nowrap;">1:${page.scaleDenom} — ${label}</span>
-    </div>`;
-  }
-
-  function positionFrameHudOverlay(){
-    const hud = document.getElementById('notebookFrameHud');
-    const page = getActivePage();
-    if(!page || !notebookFrameLayer){ hud.style.display='none'; return; }
-    const b = notebookFrameLayer.getBounds();
-    const nw = map.latLngToContainerPoint(b.getNorthWest());
-    const se = map.latLngToContainerPoint(b.getSouthEast());
-    hud.style.left = Math.min(nw.x,se.x)+'px';
-    hud.style.top = Math.min(nw.y,se.y)+'px';
-    hud.style.width = Math.abs(se.x-nw.x)+'px';
-    hud.style.height = Math.abs(se.y-nw.y)+'px';
-    hud.style.display = 'block';
-    document.getElementById('notebookNorthArrow').style.display = page.showNorth ? 'block' : 'none';
-    const sbEl = document.getElementById('notebookScaleBar');
-    if(page.showScaleBar){ sbEl.style.display='block'; renderScaleBarSVG(sbEl, page); }
-    else sbEl.style.display='none';
-    const titleEl = document.getElementById('notebookPolygonTitle');
-    const selF = getSelectedPolygonFeature();
-    const polyName = selF && selF.attrs && (selF.attrs['الاسم'] || selF.attrs['اسم'] || selF.attrs['name'] || selF.attrs['رقم القطعة']);
-    if(page.showTitle !== false && polyName){ titleEl.textContent = polyName; titleEl.style.display = 'block'; }
-    else titleEl.style.display = 'none';
-    ensureTitleBlockDefaults(page);
-    const tbEl = document.getElementById('notebookTitleBlock');
-    const panelEl = document.getElementById('notebookTitlePanel');
-    const frameW = Math.abs(se.x-nw.x), frameH = Math.abs(se.y-nw.y);
-    if(page.titleBlock.show){
-      tbEl.style.display = 'none'; // الصندوق القديم بقى مستبدل باللوحة الجانبية الرسمية
-      const panelW = frameW * (TITLE_PANEL_RATIO/(1-TITLE_PANEL_RATIO));
-      panelEl.style.left = (Math.max(nw.x,se.x))+'px';
-      panelEl.style.top = Math.min(nw.y,se.y)+'px';
-      panelEl.style.width = panelW+'px';
-      panelEl.style.height = frameH+'px';
-      panelEl.style.fontSize = Math.max(7, Math.min(15, panelW/24))+'px';
-      panelEl.innerHTML = buildOfficialTitleBlockHTML(page.titleBlock);
-      panelEl.style.display = 'block';
-    } else {
-      tbEl.style.display = 'none';
-      panelEl.style.display = 'none';
-    }
-    repositionNotebookTables();
   }
 
   // ---- جداول بيانات المضلع المحدد (مساحة/أطوال/إحداثيات) — قابلة للسحب جوه صفحة الكشكول النشطة ----
@@ -2395,16 +2208,6 @@
     `;
   }
 
-  function ensureTableDefaults(page){
-    if(!page.tables) page.tables = {
-      area: {show:true, xPct:3, yPct:68},
-      lengths: {show:true, xPct:3, yPct:3},
-      vertices: {show:true, xPct:52, yPct:3},
-      attrs: {show:true, xPct:52, yPct:40}
-    };
-    if(!page.tables.attrs) page.tables.attrs = {show:true, xPct:52, yPct:40};
-  }
-
   function getSelectedPolygonFeature(){
     if(!selection) return null;
     const f = getFeature(selection.layerId, selection.featureId);
@@ -2487,205 +2290,285 @@
     return html;
   }
 
-  function positionOneTable(box, page, key){
-    const host = document.getElementById('notebookFrameHud');
-    const w = host.offsetWidth || 1, h = host.offsetHeight || 1;
-    const cfg = page.tables[key];
-    box.style.left = (cfg.xPct/100*w) + 'px';
-    box.style.top = (cfg.yPct/100*h) + 'px';
+  /* ===== معمارية الإخراج: لقطة من منظور الخريطة الحالي + "مسرح" ثابت المقاس بالمليمتر (زي Map Frame في ArcGIS Pro) — يُستخدم للمعاينة الحية وللتصدير النهائي بنفس الكود ===== */
+
+  let layoutSnapshots = {}; // pageId -> dataURL (لقطة الخريطة الأخيرة؛ في الذاكرة بس، مش متخزنة محليًا عشان الحجم)
+
+  function getFeatureByRef(ref){
+    if(!ref) return null;
+    const layer = state.layers.find(l=>l.id===ref.layerId);
+    return layer && layer.features.find(f=>f.id===ref.featureId) || null;
   }
 
-  function repositionNotebookTables(){
-    const page = getActivePage();
-    if(!page || !page.tables) return;
-    document.querySelectorAll('.nb-drag-table').forEach(box=>{
-      positionOneTable(box, page, box.dataset.key);
-    });
+  let currentLayoutEditPageId = null;
+  let selectedElementId = null;
+
+  function newLayoutPageDefaults(){
+    return {
+      id: uid(),
+      name: 'لوحة ' + (state.layoutPages.length + 1),
+      paper: 'A4', orientation: 'landscape',
+      titleBlock: newTitleBlockDefaults(),
+      featureRef: null,
+      elements: []
+    };
   }
 
-  function renderNotebookVertexSideLabels(){
-    notebookLabelsLayer.clearLayers();
-    const page = getActivePage();
-    const f = getSelectedPolygonFeature();
-    if(!page || !f) return;
-    ensureTableDefaults(page);
-    const n = f.coords.length;
-    if(page.tables.vertices.show){
-      f.coords.forEach((c,i)=>{
-        const icon = L.divIcon({
-          className: 'nb-map-label nb-vertex-label',
-          html: `<span>V${i+1}</span>`,
-          iconSize: [0,0], iconAnchor: [-6,16]
-        });
-        L.marker([c[0], c[1]], {icon, interactive:false, keyboard:false}).addTo(notebookLabelsLayer);
-      });
-    }
-    if(page.tables.lengths.show){
-      for(let i=0;i<n;i++){
-        const a = f.coords[i], b = f.coords[(i+1)%n];
-        const midLat = (a[0]+b[0])/2, midLng = (a[1]+b[1])/2;
-        const icon = L.divIcon({
-          className: 'nb-map-label nb-side-label',
-          html: `<span>ض${i+1}</span>`,
-          iconSize: [0,0], iconAnchor: [6,-6]
-        });
-        L.marker([midLat, midLng], {icon, interactive:false, keyboard:false}).addTo(notebookLabelsLayer);
+  const LY_ELEMENT_DEFAULTS = {
+    mapFrame: {wPct:60, hPct:75},
+    titleBlock: {wPct:27, hPct:85},
+    table: {wPct:25, hPct:15},
+    northArrow: {wPct:7, hPct:9},
+    scaleBar: {wPct:18, hPct:5},
+    polygonTitle: {wPct:30, hPct:6}
+  };
+
+  function addLayoutElement(page, type, extra){
+    const d = LY_ELEMENT_DEFAULTS[type] || {wPct:20, hPct:10};
+    const idx = page.elements.length;
+    const el = Object.assign({
+      id: uid(), type,
+      xPct: 5 + (idx%5)*4, yPct: 5 + (idx%5)*4,
+      wPct: d.wPct, hPct: d.hPct
+    }, extra||{});
+    page.elements.push(el);
+    return el;
+  }
+
+  function getMapFrameScaleInfo(page){
+    const mf = page.elements.find(e=>e.type==='mapFrame' && e.scaleInfo);
+    return mf ? mf.scaleInfo : null;
+  }
+
+  // بيبني عنصر DOM واحد (إطار خريطة/كرتوش/جدول/شمال/مقياس/اسم مضلع) — تُستخدم نفس الدالة للمعاينة التفاعلية على مساحة العمل ولمسرح التصدير النهائي الساكن
+  function renderElementDOM(el, page, opts){
+    opts = opts || {};
+    const box = document.createElement('div');
+    box.className = 'ly-el ly-el-' + el.type.toLowerCase();
+    box.dataset.id = el.id;
+    box.style.left = el.xPct+'%'; box.style.top = el.yPct+'%';
+    box.style.width = el.wPct+'%'; box.style.height = el.hPct+'%';
+    if(!opts.interactive){ box.style.cursor = 'default'; box.style.border = 'none'; }
+
+    const f = getFeatureByRef(page.featureRef);
+    const pxW = opts.pageWidthPx || 700;
+
+    if(el.type === 'mapFrame'){
+      const snap = layoutSnapshots[el.id];
+      if(snap){
+        const img = document.createElement('img'); img.src = snap; box.appendChild(img);
+      } else {
+        const ph = document.createElement('div'); ph.className = 'ly-el-placeholder';
+        ph.textContent = 'إطار خريطة فاضي — حددّيه من هنا ودوسي "📸 التقط لقطة" على اليسار';
+        box.appendChild(ph);
       }
+    } else if(el.type === 'titleBlock'){
+      box.classList.add('tb-panel');
+      box.style.fontSize = Math.max(6, pxW*(el.wPct/100)/22) + 'px';
+      box.innerHTML = buildOfficialTitleBlockHTML(page.titleBlock);
+    } else if(el.type === 'table'){
+      const titles = {area:'📐 المساحة', lengths:'📏 أطوال الأضلاع', vertices:'📍 إحداثيات القطاعات (DD)', attrs:'🗂️ بيانات المضلعات الداخلية'};
+      const html = f ? (el.tableKey==='area'?buildAreaTableHTML(f):el.tableKey==='lengths'?buildLengthsTableHTML(f):el.tableKey==='vertices'?buildVerticesTableHTML(f):buildAttrsTableHTML(f)) : '<div style="padding:4px;color:#999;">مفيش مضلع مرتبط بيها</div>';
+      box.classList.add('ly-el-table');
+      box.style.fontSize = Math.max(7, pxW*0.012) + 'px';
+      box.innerHTML = `<div class="ly-table-head">${titles[el.tableKey]||''}</div><div class="ly-table-body">${html}</div>`;
+    } else if(el.type === 'northArrow'){
+      box.innerHTML = '<svg viewBox="0 0 34 44" style="width:100%;height:100%;display:block;"><path d="M17 2 L27 30 L17 23 L7 30 Z" fill="#3A5068" stroke="#fff" stroke-width="1.2"/><text x="17" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#3A5068" font-family="sans-serif">N</text></svg>';
+    } else if(el.type === 'scaleBar'){
+      const si = getMapFrameScaleInfo(page);
+      box.style.display = 'flex'; box.style.alignItems='center'; box.style.justifyContent='center';
+      box.style.background = 'rgba(255,255,255,.9)'; box.style.border = opts.interactive?'':'1px solid #bbb'; box.style.borderRadius='5px';
+      box.style.fontFamily = 'var(--mono,monospace)';
+      box.style.fontSize = Math.max(7, pxW*0.014) + 'px';
+      box.textContent = si ? ('1:'+si.scaleDenom+' — '+si.label) : 'مفيش إطار خريطة ملتقط لسه';
+    } else if(el.type === 'polygonTitle'){
+      box.style.display='flex'; box.style.alignItems='center'; box.style.justifyContent='center';
+      box.style.background='rgba(255,255,255,.9)'; box.style.border = opts.interactive?'':'1px solid #bbb'; box.style.borderRadius='5px';
+      box.style.fontWeight='800'; box.style.color='#1B3968';
+      box.style.fontSize = Math.max(8, pxW*0.02) + 'px';
+      box.textContent = f ? featureLabel(f) : 'مفيش مضلع مرتبط';
     }
+
+    if(opts.interactive){
+      const handle = document.createElement('div');
+      handle.className = 'ly-resize-handle';
+      box.appendChild(handle);
+    }
+    return box;
   }
 
+  function renderLayoutCanvas(page){
+    const wrap = document.getElementById('lyCanvasWrap');
+    if(!wrap) return;
+    wrap.innerHTML = '';
+    const dims = PAPER_SIZES_MM[page.paper] || PAPER_SIZES_MM.A4;
+    const [longMM, shortMM] = dims;
+    const wMM = page.orientation === 'landscape' ? longMM : shortMM;
+    const hMM = page.orientation === 'landscape' ? shortMM : longMM;
+    const bodyEl = document.getElementById('layoutViewBody');
+    const availW = Math.max(200, bodyEl.clientWidth - 60), availH = Math.max(200, bodyEl.clientHeight - 60);
+    let pageWpx = Math.min(availW, availH*(wMM/hMM));
+    pageWpx = Math.max(280, pageWpx);
+    const pageHpx = pageWpx * (hMM/wMM);
+    wrap.style.width = pageWpx+'px';
+    wrap.style.height = pageHpx+'px';
 
-  function renderNotebookTables(){
-    renderNotebookVertexSideLabels();
-    const host = document.getElementById('notebookFrameHud');
-    if(!host) return;
-    host.querySelectorAll('.nb-drag-table').forEach(el=>el.remove());
-    const page = getActivePage();
-    const f = getSelectedPolygonFeature();
-    if(!page || !f){ if(page) positionFrameHudOverlay(); return; }
-    ensureTableDefaults(page);
-    const defs = [
-      {key:'area', title:'📐 المساحة', html: buildAreaTableHTML(f)},
-      {key:'lengths', title:'📏 أطوال الأضلاع', html: buildLengthsTableHTML(f)},
-      {key:'vertices', title:'📍 إحداثيات القطاعات (DD)', html: buildVerticesTableHTML(f)},
-      {key:'attrs', title:'🗂️ بيانات المضلعات الداخلية', html: buildAttrsTableHTML(f)}
-    ];
-    defs.forEach(d=>{
-      const cfg = page.tables[d.key];
-      if(!cfg.show) return;
-      const box = document.createElement('div');
-      box.className = 'nb-drag-table';
-      box.dataset.key = d.key;
-      box.style.cssText = 'position:absolute;pointer-events:auto;background:rgba(255,255,255,.95);border:1px solid #8AA9C7;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,.18);font-size:10px;max-width:190px;';
-      box.innerHTML = `<div class="nb-drag-handle" style="cursor:move;background:#5B84AC;color:#fff;padding:3px 7px;border-radius:5px 5px 0 0;font-size:10.5px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
-          <span>${d.title}</span><span class="nb-hide-btn" title="إخفاء الجدول" style="cursor:pointer;opacity:.85;">✕</span>
-        </div>
-        <div style="padding:4px 6px;overflow:auto;max-height:160px;">${d.html}</div>`;
-      host.appendChild(box);
-      positionOneTable(box, page, d.key);
-
-      box.querySelector('.nb-drag-handle').addEventListener('mousedown', e=>{
-        e.stopPropagation(); e.preventDefault();
-        const hostRect = host.getBoundingClientRect();
-        const startX = e.clientX, startY = e.clientY;
-        const cfgNow = page.tables[d.key];
-        const startXPct = cfgNow.xPct, startYPct = cfgNow.yPct;
-        const onMove = (ev)=>{
-          const dxPct = ((ev.clientX-startX)/hostRect.width)*100;
-          const dyPct = ((ev.clientY-startY)/hostRect.height)*100;
-          cfgNow.xPct = Math.max(0, Math.min(95, startXPct+dxPct));
-          cfgNow.yPct = Math.max(0, Math.min(95, startYPct+dyPct));
-          positionOneTable(box, page, d.key);
-        };
-        const onUp = ()=>{
-          document.removeEventListener('mousemove', onMove);
-          document.removeEventListener('mouseup', onUp);
-          scheduleSave();
-        };
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
+    page.elements.forEach(el=>{
+      const box = renderElementDOM(el, page, {interactive:true, pageWidthPx:pageWpx});
+      box.addEventListener('pointerdown', e=>{
+        if(!e.target.classList.contains('ly-resize-handle')) selectLayoutElement(el.id, page);
       });
-      box.querySelector('.nb-hide-btn').addEventListener('click', e=>{
-        e.stopPropagation();
-        page.tables[d.key].show = false;
-        renderNotebookTables();
-        scheduleSave();
-      });
+      makeElementInteractive(box, page, el, wrap);
+      wrap.appendChild(box);
     });
-    positionFrameHudOverlay();
+    wrap.onpointerdown = (e)=>{ if(e.target === wrap) selectLayoutElement(null, page); };
   }
 
-
-  function setActiveNotebookPage(pageId){
-    if(activeNotebookPageId && activeNotebookPageId !== pageId) hideActiveNotebookPage();
-    activeNotebookPageId = pageId;
-    const page = getActivePage();
-    if(!page) return;
-    applyNotebookBackground(page.background);
-    if(!notebookGridLayer) notebookGridLayer = new NotebookGrid();
-    if(!map.hasLayer(notebookGridLayer)) notebookGridLayer.addTo(map);
-    renderNotebookFrame();
-    map.on('move zoom', positionFrameHudOverlay);
-    positionFrameHudOverlay();
-    renderNotebookTables();
-    renderNotebookPageList();
+  function makeElementInteractive(box, page, el, canvasEl){
+    box.addEventListener('pointerdown', e=>{
+      const mode = e.target.classList.contains('ly-resize-handle') ? 'resize' : 'move';
+      e.stopPropagation();
+      box.setPointerCapture(e.pointerId);
+      const r = canvasEl.getBoundingClientRect();
+      const startX = e.clientX, startY = e.clientY;
+      const startXPct = el.xPct, startYPct = el.yPct, startWPct = el.wPct, startHPct = el.hPct;
+      function onMove(ev){
+        const dxPct = ((ev.clientX-startX)/r.width)*100;
+        const dyPct = ((ev.clientY-startY)/r.height)*100;
+        if(mode === 'move'){
+          el.xPct = Math.max(0, Math.min(100-el.wPct, startXPct+dxPct));
+          el.yPct = Math.max(0, Math.min(100-el.hPct, startYPct+dyPct));
+        } else {
+          el.wPct = Math.max(4, Math.min(100-el.xPct, startWPct+dxPct));
+          el.hPct = Math.max(4, Math.min(100-el.yPct, startHPct+dyPct));
+        }
+        box.style.left = el.xPct+'%'; box.style.top = el.yPct+'%';
+        box.style.width = el.wPct+'%'; box.style.height = el.hPct+'%';
+      }
+      function onUp(){
+        box.removeEventListener('pointermove', onMove);
+        box.removeEventListener('pointerup', onUp);
+        scheduleSave();
+      }
+      box.addEventListener('pointermove', onMove);
+      box.addEventListener('pointerup', onUp);
+    });
   }
 
-  function hideActiveNotebookPage(){
-    if(notebookGridLayer && map.hasLayer(notebookGridLayer)) map.removeLayer(notebookGridLayer);
-    if(notebookFrameLayer){ map.removeLayer(notebookFrameLayer); notebookFrameLayer = null; }
-    document.getElementById('notebookFrameHud').style.display = 'none';
-    document.getElementById('notebookHud').style.display = 'none';
-    map.off('move zoom', positionFrameHudOverlay);
-    activeNotebookPageId = null;
-    renderNotebookTables();
-    renderNotebookPageList();
-  }
-
-  function openPageEditor(pageId){
-    setActiveNotebookPage(pageId);
-    const page = getActivePage();
-    if(!page) return;
-    document.getElementById('nbPageName').value = page.name;
-    document.getElementById('nbBackground').value = page.background;
-    document.getElementById('nbPaperSize').value = page.paper;
-    document.getElementById('nbOrientation').value = page.orientation;
-    const knownScales = ['200','500','1000','2500','5000','10000'];
-    if(knownScales.includes(String(page.scaleDenom))){
-      document.getElementById('nbScale').value = String(page.scaleDenom);
-      document.getElementById('nbScaleCustom').style.display = 'none';
-    } else {
-      document.getElementById('nbScale').value = 'custom';
-      document.getElementById('nbScaleCustom').value = page.scaleDenom;
-      document.getElementById('nbScaleCustom').style.display = 'block';
+  function selectLayoutElement(id, page){
+    selectedElementId = id;
+    document.querySelectorAll('.ly-el').forEach(b=> b.classList.toggle('selected', b.dataset.id===id));
+    const propsEl = document.getElementById('lyElementProps');
+    const el = page.elements.find(e=>e.id===id);
+    if(!el){ propsEl.style.display = 'none'; return; }
+    propsEl.style.display = 'block';
+    document.getElementById('lyPropsMapFrame').style.display = el.type==='mapFrame' ? 'block' : 'none';
+    document.getElementById('lyPropsTitleBlock').style.display = el.type==='titleBlock' ? 'block' : 'none';
+    document.getElementById('lyPropsGeneric').style.display = (el.type!=='mapFrame' && el.type!=='titleBlock') ? 'block' : 'none';
+    const titles = {mapFrame:'🗺️ إطار خريطة', titleBlock:'🏷️ الكرتوش', table:'📊 جدول بيانات', northArrow:'🧭 اتجاه الشمال', scaleBar:'📏 مقياس الرسم', polygonTitle:'🔤 اسم المضلع'};
+    document.getElementById('lyPropsTitle').textContent = titles[el.type] || 'خصائص العنصر';
+    if(el.type === 'mapFrame'){
+      document.getElementById('lyMapFrameScaleReadout').textContent = el.scaleInfo ? ('آخر مقياس ملتقط: 1:'+el.scaleInfo.scaleDenom) : 'لسه ملتقطتش لقطة لإطار الخريطة ده';
     }
-    document.getElementById('nbGridMM').value = page.gridMM;
-    document.getElementById('nbShowScaleBar').checked = page.showScaleBar;
-    document.getElementById('nbShowNorth').checked = page.showNorth;
-    document.getElementById('nbShowTitle').checked = (page.showTitle !== false);
-    ensureTableDefaults(page);
-    document.getElementById('nbShowAreaTable').checked = page.tables.area.show;
-    document.getElementById('nbShowLengthsTable').checked = page.tables.lengths.show;
-    document.getElementById('nbShowVerticesTable').checked = page.tables.vertices.show;
-    document.getElementById('nbShowAttrsTable').checked = page.tables.attrs.show;
-    ensureTitleBlockDefaults(page);
-    document.getElementById('nbShowTitleBlock').checked = page.titleBlock.show;
-    document.getElementById('nbTbDecision').value = page.titleBlock.decisionText || '';
-    document.getElementById('nbTbOwner').value = page.titleBlock.ownerName || '';
-    document.getElementById('nbTbDistrict').value = page.titleBlock.district || '';
-    document.getElementById('nbTbGovernorate').value = page.titleBlock.governorate || '';
-    document.getElementById('nbTbLandUse').value = page.titleBlock.landUseType || '';
-    document.getElementById('nbTbFeddan').value = page.titleBlock.areaFeddan || '';
-    document.getElementById('nbTbQirat').value = page.titleBlock.areaQirat || '';
-    document.getElementById('nbTbSahm').value = page.titleBlock.areaSahm || '';
-    document.getElementById('nbTbBuildings').value = page.titleBlock.buildingsText || '';
-    document.getElementById('nbTbCultivations').value = page.titleBlock.cultivations || '';
-    document.getElementById('nbTbNotes').value = page.titleBlock.notes || '';
-    document.getElementById('nbTbSurveyor').value = page.titleBlock.surveyorName || '';
-    document.getElementById('nbTbDate').value = page.titleBlock.date || '';
-    updateGridReadout(page);
-    document.getElementById('notebookHud').style.display = 'block';
+    if(el.type === 'titleBlock'){
+      ensureTitleBlockDefaults(page);
+      document.getElementById('nbTbDecision').value = page.titleBlock.decisionText || '';
+      document.getElementById('nbTbOwner').value = page.titleBlock.ownerName || '';
+      document.getElementById('nbTbDistrict').value = page.titleBlock.district || '';
+      document.getElementById('nbTbGovernorate').value = page.titleBlock.governorate || '';
+      document.getElementById('nbTbLandUse').value = page.titleBlock.landUseType || '';
+      document.getElementById('nbTbFeddan').value = page.titleBlock.areaFeddan || '';
+      document.getElementById('nbTbQirat').value = page.titleBlock.areaQirat || '';
+      document.getElementById('nbTbSahm').value = page.titleBlock.areaSahm || '';
+      document.getElementById('nbTbBuildings').value = page.titleBlock.buildingsText || '';
+      document.getElementById('nbTbCultivations').value = page.titleBlock.cultivations || '';
+      document.getElementById('nbTbNotes').value = page.titleBlock.notes || '';
+      document.getElementById('nbTbSurveyor').value = page.titleBlock.surveyorName || '';
+      document.getElementById('nbTbDate').value = page.titleBlock.date || '';
+    }
   }
 
-  function applyEditorToActivePage(){
-    const page = getActivePage();
+  function renderLayoutPageList(){
+    const container = document.getElementById('layoutPageList');
+    if(!container) return;
+    container.innerHTML = '';
+    if(!state.layoutPages.length){
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'لسه معملتيش أي لوحة إخراج — دوسي "+ لوحة جديدة"';
+      container.appendChild(empty);
+      return;
+    }
+    state.layoutPages.forEach(page=>{
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:2px;padding:6px 4px;border-bottom:1px solid var(--border);';
+      const label = document.createElement('span');
+      label.textContent = page.name;
+      label.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;cursor:pointer;';
+      label.addEventListener('click', ()=> openLayoutPageEditor(page.id));
+      row.appendChild(label);
+      function mk(icon, title, fn){
+        const b = document.createElement('button');
+        b.className = 'icon-btn'; b.title = title; b.textContent = icon;
+        b.addEventListener('click', fn);
+        return b;
+      }
+      row.appendChild(mk('✏️', 'فتح اللوحة', ()=> openLayoutPageEditor(page.id)));
+      row.appendChild(mk('🖼️', 'تصدير JPG', ()=> exportPageAsFile(page.id, 'jpg')));
+      row.appendChild(mk('📕', 'تصدير PDF', ()=> exportPageAsFile(page.id, 'pdf')));
+      row.appendChild(mk('🗑️', 'حذف اللوحة', ()=>{
+        if(!confirm('تحذفي لوحة "'+page.name+'"؟')) return;
+        page.elements.forEach(el=> delete layoutSnapshots[el.id]);
+        state.layoutPages = state.layoutPages.filter(p=>p.id!==page.id);
+        renderLayoutPageList(); scheduleSave();
+      }));
+      container.appendChild(row);
+    });
+  }
+
+  function closeLayoutView(){
+    document.getElementById('layoutView').style.display = 'none';
+    document.getElementById('lyAddElMenu').style.display = 'none';
+    currentLayoutEditPageId = null;
+    selectedElementId = null;
+    renderLayoutPageList();
+  }
+
+  function openLayoutPageEditor(pageId){
+    const page = state.layoutPages.find(p=>p.id===pageId);
     if(!page) return;
-    page.name = document.getElementById('nbPageName').value || page.name;
-    page.background = document.getElementById('nbBackground').value;
-    page.paper = document.getElementById('nbPaperSize').value;
-    page.orientation = document.getElementById('nbOrientation').value;
-    page.scaleDenom = getSelectedScaleDenom();
-    page.gridMM = parseFloat(document.getElementById('nbGridMM').value) || 5;
-    page.showScaleBar = document.getElementById('nbShowScaleBar').checked;
-    page.showNorth = document.getElementById('nbShowNorth').checked;
-    page.showTitle = document.getElementById('nbShowTitle').checked;
-    ensureTableDefaults(page);
-    page.tables.area.show = document.getElementById('nbShowAreaTable').checked;
-    page.tables.lengths.show = document.getElementById('nbShowLengthsTable').checked;
-    page.tables.vertices.show = document.getElementById('nbShowVerticesTable').checked;
-    page.tables.attrs.show = document.getElementById('nbShowAttrsTable').checked;
+    currentLayoutEditPageId = pageId;
     ensureTitleBlockDefaults(page);
-    page.titleBlock.show = document.getElementById('nbShowTitleBlock').checked;
+    if(!Array.isArray(page.elements)) page.elements = [];
+    document.getElementById('lyName').value = page.name;
+    document.getElementById('lyPaper').value = page.paper;
+    document.getElementById('lyOrientation').value = page.orientation;
+    const f = getFeatureByRef(page.featureRef);
+    document.getElementById('lyLinkedFeatureName').textContent = f ? ('✓ ' + featureLabel(f)) : '';
+    document.getElementById('layoutView').style.display = 'flex';
+    selectLayoutElement(null, page);
+    renderLayoutCanvas(page);
+  }
+
+  function applyLayoutToolbarToPage(){
+    const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+    if(!page) return;
+    page.name = document.getElementById('lyName').value || page.name;
+    page.paper = document.getElementById('lyPaper').value;
+    page.orientation = document.getElementById('lyOrientation').value;
+    renderLayoutCanvas(page);
+    renderLayoutPageList();
+    scheduleSave();
+  }
+  ['lyName','lyPaper','lyOrientation'].forEach(id=>{
+    const el = document.getElementById(id);
+    const evt = el.tagName === 'SELECT' ? 'change' : 'input';
+    el.addEventListener(evt, applyLayoutToolbarToPage);
+  });
+
+  function applyTitleBlockFieldsToPage(){
+    const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+    if(!page) return;
     page.titleBlock.decisionText = document.getElementById('nbTbDecision').value;
     page.titleBlock.ownerName = document.getElementById('nbTbOwner').value;
     page.titleBlock.district = document.getElementById('nbTbDistrict').value;
@@ -2699,195 +2582,291 @@
     page.titleBlock.notes = document.getElementById('nbTbNotes').value;
     page.titleBlock.surveyorName = document.getElementById('nbTbSurveyor').value;
     page.titleBlock.date = document.getElementById('nbTbDate').value;
-    updateGridReadout(page);
-    applyNotebookBackground(page.background);
-    renderNotebookFrame();
-    if(notebookGridLayer) notebookGridLayer._draw();
-    positionFrameHudOverlay();
-    renderNotebookTables();
-    renderNotebookPageList();
+    renderLayoutCanvas(page);
     scheduleSave();
   }
+  ['nbTbDecision','nbTbOwner','nbTbDistrict','nbTbGovernorate','nbTbLandUse','nbTbFeddan','nbTbQirat','nbTbSahm','nbTbBuildings','nbTbCultivations','nbTbNotes','nbTbSurveyor','nbTbDate'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', applyTitleBlockFieldsToPage);
+  });
 
-  function renderNotebookPageList(){
-    const container = document.getElementById('notebookPageList');
-    if(!container) return;
-    container.innerHTML = '';
-    if(!state.notebookPages.length){
-      const empty = document.createElement('div');
-      empty.className = 'empty-state';
-      empty.textContent = 'لا يوجد صفحات كشكول محفوظة بعد — دوس "+ صفحة كشكول جديدة" تحت';
-      container.appendChild(empty);
+  document.getElementById('layoutModeBtn').addEventListener('click', ()=>{
+    const tabEl = document.querySelector('.tab[data-panel="layoutPanel"]');
+    if(tabEl) tabEl.click();
+  });
+  document.getElementById('addLayoutPageBtn').addEventListener('click', ()=>{
+    const page = newLayoutPageDefaults();
+    state.layoutPages.push(page);
+    renderLayoutPageList();
+    openLayoutPageEditor(page.id);
+    scheduleSave();
+  });
+  document.getElementById('lyBackBtn').addEventListener('click', closeLayoutView);
+
+  document.getElementById('lyAddElBtn').addEventListener('click', (e)=>{
+    e.stopPropagation();
+    const menu = document.getElementById('lyAddElMenu');
+    menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+  });
+  document.addEventListener('click', ()=>{ document.getElementById('lyAddElMenu').style.display = 'none'; });
+  document.querySelectorAll('.ly-add-item').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+      if(!page) return;
+      const type = btn.dataset.type;
+      if(type === 'titleBlock' && page.elements.some(el=>el.type==='titleBlock')){
+        alert('في كرتوش واحد بالفعل على اللوحة دي — احذفيه الأول لو عايزة تضيفي واحد جديد.');
+        document.getElementById('lyAddElMenu').style.display = 'none';
+        return;
+      }
+      const extra = type === 'table' ? {tableKey: btn.dataset.key} : {};
+      const el = addLayoutElement(page, type, extra);
+      renderLayoutCanvas(page);
+      selectLayoutElement(el.id, page);
+      document.getElementById('lyAddElMenu').style.display = 'none';
+      scheduleSave();
+    });
+  });
+
+  document.getElementById('lyDeleteElBtn').addEventListener('click', ()=>{
+    const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+    if(!page || !selectedElementId) return;
+    delete layoutSnapshots[selectedElementId];
+    page.elements = page.elements.filter(e=>e.id!==selectedElementId);
+    selectLayoutElement(null, page);
+    renderLayoutCanvas(page);
+    scheduleSave();
+  });
+
+  document.getElementById('lyLinkFeatureBtn').addEventListener('click', ()=>{
+    const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+    if(!page) return;
+    if(!selection){ alert('حددي مضلع من الخريطة الأول (ارجعي للخريطة ودوسي عليه)، وبعدين افتحي اللوحة تاني ودوسي الزرار ده.'); return; }
+    const f = getFeature(selection.layerId, selection.featureId);
+    if(!f || f.type !== 'polygon'){ alert('لازم تحددي مضلع (Polygon) مش نقطة أو خط.'); return; }
+    page.featureRef = {layerId:selection.layerId, featureId:selection.featureId};
+    document.getElementById('lyLinkedFeatureName').textContent = '✓ ' + featureLabel(f);
+    renderLayoutCanvas(page);
+    scheduleSave();
+  });
+
+  document.getElementById('lyCaptureBtn').addEventListener('click', ()=>{
+    const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+    const el = page && page.elements.find(e=>e.id===selectedElementId);
+    if(!page || !el || el.type !== 'mapFrame') return;
+    captureCurrentMapView(page, el, (dataURL, scaleInfo)=>{
+      layoutSnapshots[el.id] = dataURL;
+      el.scaleInfo = scaleInfo;
+      renderLayoutCanvas(page);
+      selectLayoutElement(el.id, page);
+      document.getElementById('stHint').textContent = '✅ اتلقطت لقطة الخريطة';
+      scheduleSave();
+    }, ()=>{ alert('حصل خطأ أثناء التقاط لقطة الخريطة — جرب تاني.'); });
+  });
+
+  document.getElementById('lyExportJpgBtn').addEventListener('click', ()=>{ if(currentLayoutEditPageId) exportPageAsFile(currentLayoutEditPageId, 'jpg'); });
+  document.getElementById('lyExportPdfBtn').addEventListener('click', ()=>{ if(currentLayoutEditPageId) exportPageAsFile(currentLayoutEditPageId, 'pdf'); });
+
+  window.addEventListener('resize', ()=>{
+    if(document.getElementById('layoutView').style.display === 'flex' && currentLayoutEditPageId){
+      const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+      if(page) renderLayoutCanvas(page);
+    }
+  });
+
+  // بتاخد لقطة من المنظور الحالي للخريطة الحية بالظبط زي ما هو، وبتحسب مقياس الرسم (1:N) تلقائيًا خصيصًا لعرض إطار الخريطة (el) ده على الورقة
+  function captureCurrentMapView(page, el, onDone, onError){
+    document.getElementById('stHint').textContent = '📸 بيلتقط لقطة من منظور الخريطة الحالي...';
+    setTimeout(async ()=>{
+      try{
+        document.body.classList.add('notebook-print-mode');
+        map.invalidateSize({pan:false});
+        await new Promise(r=>setTimeout(r, 400));
+        const b = map.getBounds();
+        const groundWidthM = map.distance(L.latLng(b.getCenter().lat, b.getWest()), L.latLng(b.getCenter().lat, b.getEast()));
+        const dims = PAPER_SIZES_MM[page.paper] || PAPER_SIZES_MM.A4;
+        const [longMM, shortMM] = dims;
+        const wMM = page.orientation === 'landscape' ? longMM : shortMM;
+        const mapPhysicalWidthMM = Math.max(1, wMM * (el.wPct/100));
+        const scaleDenom = Math.round(1000 * groundWidthM / mapPhysicalWidthMM);
+        const targetM = niceScaleLength(groundWidthM/4);
+        const label = targetM >= 1000 ? (targetM/1000)+' كم' : targetM+' م';
+        const canvas = await html2canvas(document.getElementById('map'), {useCORS:true, allowTaint:true, scale:2, backgroundColor:'#ffffff'});
+        document.body.classList.remove('notebook-print-mode');
+        map.invalidateSize({pan:false});
+        onDone(canvas.toDataURL('image/jpeg', 0.93), {scaleDenom, label});
+      }catch(e){
+        console.error(e);
+        document.body.classList.remove('notebook-print-mode');
+        map.invalidateSize({pan:false});
+        if(onError) onError(e);
+      }
+    }, 80);
+  }
+
+  // تصدير مباشر لملف — JPG أو PDF بالحجم الحقيقي للورقة، من عناصر اللوحة الحالية (نفس اللي شايفاه بالظبط في مساحة العمل)
+  async function exportPageAsFile(pageId, format){
+    const page = state.layoutPages.find(p=>p.id===pageId);
+    if(!page) return;
+    if(typeof html2canvas === 'undefined' || (format==='pdf' && typeof window.jspdf === 'undefined')){
+      alert('مكتبة التصدير لسه بتتحمل — استنى شوية وحاول تاني (لازم اتصال إنترنت أول مرة تفتح الأداة).');
       return;
     }
-    state.notebookPages.forEach(page=>{
-      const isActive = activeNotebookPageId === page.id;
-      const row = document.createElement('div');
-      row.className = 'feature-item';
-      row.style.cssText = 'flex-wrap:wrap;' + (isActive ? 'background:var(--teal-soft);color:var(--teal);' : '');
-
-      const nameEl = document.createElement('span');
-      nameEl.className = 'fi-label';
-      nameEl.textContent = page.name;
-      nameEl.style.cursor = 'pointer';
-      nameEl.title = 'دوس لإعادة التسمية';
-      nameEl.addEventListener('click', ()=>{
-        const nn = prompt('اسم الصفحة:', page.name);
-        if(nn && nn.trim()){ page.name = nn.trim(); renderNotebookPageList(); scheduleSave(); }
-      });
-      row.appendChild(nameEl);
-
-      const mk = (icon, title, handler) => {
-        const b = document.createElement('button');
-        b.className = 'icon-btn'; b.title = title; b.innerHTML = icon; b.style.flexShrink = '0';
-        b.addEventListener('click', e=>{ L.DomEvent.stopPropagation(e); handler(); });
-        return b;
-      };
-      row.appendChild(mk(isActive ? '🙈' : '👁️', isActive ? 'إخفاء الصفحة' : 'إظهار الصفحة', ()=>{
-        if(isActive) hideActiveNotebookPage();
-        else { setActiveNotebookPage(page.id); map.panTo(page.center); }
-      }));
-      row.appendChild(mk('✏️', 'تعديل إعدادات الصفحة', ()=> openPageEditor(page.id)));
-      row.appendChild(mk('🖨️', 'تصدير PDF (طباعة المتصفح)', ()=> exportNotebookPageToPDF(page.id)));
-      row.appendChild(mk('🗑️', 'حذف الصفحة', ()=>{
-        if(confirm('هل تريد حذف صفحة "' + page.name + '"؟')){
-          if(activeNotebookPageId === page.id) hideActiveNotebookPage();
-          state.notebookPages = state.notebookPages.filter(p=>p.id!==page.id);
-          renderNotebookPageList(); scheduleSave();
-        }
-      }));
-      container.appendChild(row);
-    });
-  }
-
-  let notebookPrintQueue = null; // {pages:[...], index} لو تصدير جماعي شغال، وإلا null
-
-  function preparePagePrintView(page, onReady){
-    setActiveNotebookPage(page.id);
-    setTimeout(()=>{
-      ensureTitleBlockDefaults(page);
-      let reserveRight = 0;
-      if(page.titleBlock.show){
-        const mapW = document.getElementById('map').clientWidth;
-        reserveRight = mapW * TITLE_PANEL_RATIO;
-      }
-      map.fitBounds(notebookFrameLayer.getBounds(), {paddingTopLeft:[0,0], paddingBottomRight:[reserveRight,0]});
-      setTimeout(onReady, 500); // مهلة صغيرة لتحميل بلاطات الخريطة بعد الزووم
-    }, 100);
-  }
-
-  function showPrintConfirmBar(text, showSkip){
-    document.getElementById('notebookPrintConfirmText').textContent = text;
-    document.getElementById('notebookPrintConfirmSkip').style.display = showSkip ? 'inline-block' : 'none';
-    document.getElementById('notebookPrintConfirmBar').style.display = 'flex';
-  }
-  function hidePrintConfirmBar(){
-    document.getElementById('notebookPrintConfirmBar').style.display = 'none';
-  }
-
-  function triggerPrintForActivePage(page){
+    const mapFrames = page.elements.filter(el=>el.type==='mapFrame');
+    if(mapFrames.length && mapFrames.some(el=>!layoutSnapshots[el.id])){
+      alert('في إطار خريطة على اللوحة دي لسه ملتقطش لقطة — افتحي اللوحة، حددي الإطار، ودوسي "📸 التقط لقطة" الأول.');
+      return;
+    }
+    document.getElementById('stHint').textContent = '🖼️ بيجهز الملف النهائي...';
     const dims = PAPER_SIZES_MM[page.paper] || PAPER_SIZES_MM.A4;
     const [longMM, shortMM] = dims;
     const wMM = page.orientation === 'landscape' ? longMM : shortMM;
     const hMM = page.orientation === 'landscape' ? shortMM : longMM;
-    let styleTag = document.getElementById('notebookPrintPageSize');
-    if(!styleTag){ styleTag = document.createElement('style'); styleTag.id = 'notebookPrintPageSize'; document.head.appendChild(styleTag); }
-    styleTag.textContent = `@page { size: ${wMM}mm ${hMM}mm; margin:0; }`;
-    if(notebookFrameLayer) notebookFrameLayer.setStyle({opacity:0, fillOpacity:0}); // نخفي إطار الاسترشاد الأحمر وقت الطباعة بس
-    document.body.classList.add('notebook-print-mode');
-    window.print();
-  }
-
-  function exportNotebookPageToPDF(pageId){
-    const page = state.notebookPages.find(p=>p.id===pageId);
-    if(!page) return;
-    notebookPrintQueue = null;
-    document.getElementById('stHint').textContent = '🖨️ بيجهز صفحة "'+page.name+'" للمعاينة...';
-    preparePagePrintView(page, ()=>{
-      showPrintConfirmBar('📄 صفحة "'+page.name+'" — راجعها على الشاشة، وبعدين دوس "اطبع الآن"', false);
-    });
-  }
-
-  function advancePrintQueue(){
-    if(!notebookPrintQueue) return;
-    const {pages, index} = notebookPrintQueue;
-    if(index >= pages.length){
-      notebookPrintQueue = null;
-      hidePrintConfirmBar();
-      document.getElementById('stHint').textContent = '✅ خلصت تصدير كل صفحات الكشكول';
-      return;
+    const stage = document.createElement('div');
+    stage.style.cssText = `position:fixed; left:-99999px; top:0; width:${wMM}mm; height:${hMM}mm; background:#fff; overflow:hidden; direction:rtl; font-family:var(--sans);`;
+    const pageWidthPxApprox = wMM * 3.78;
+    page.elements.forEach(el=> stage.appendChild(renderElementDOM(el, page, {interactive:false, pageWidthPx:pageWidthPxApprox})));
+    document.body.appendChild(stage);
+    try{
+      await new Promise(r=> requestAnimationFrame(()=>requestAnimationFrame(r)));
+      const finalCanvas = await html2canvas(stage, {useCORS:true, allowTaint:true, scale:3, backgroundColor:'#ffffff'});
+      stage.remove();
+      const fileBase = (page.name || 'لوحة_اخراج').replace(/[^\w\u0600-\u06FF\-]+/g,'_');
+      const imgData = finalCanvas.toDataURL('image/jpeg', 0.93);
+      if(format === 'jpg'){
+        const a = document.createElement('a');
+        a.href = imgData; a.download = fileBase + '.jpg';
+        document.body.appendChild(a); a.click(); a.remove();
+      } else {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: page.orientation === 'landscape' ? 'l' : 'p', unit: 'mm', format: [wMM, hMM] });
+        pdf.addImage(imgData, 'JPEG', 0, 0, wMM, hMM);
+        pdf.save(fileBase + '.pdf');
+      }
+      document.getElementById('stHint').textContent = '✅ اتصدرت لوحة "'+page.name+'" (' + wMM + '×' + hMM + ' مم)';
+    }catch(e){
+      console.error(e);
+      stage.remove();
+      alert('حصل خطأ أثناء التصدير — جرب تاني، ولو الخريطة قمر صناعي جرب خريطة عادية (بعض بلاطات الأقمار الصناعية بترفض المشاركة عبر CORS).');
     }
-    const page = pages[index];
-    document.getElementById('stHint').textContent = `🖨️ صفحة ${index+1} من ${pages.length}: "${page.name}"...`;
-    preparePagePrintView(page, ()=>{
-      showPrintConfirmBar(`📄 صفحة ${index+1}/${pages.length}: "${page.name}" — راجعها وبعدين اطبع`, true);
-    });
   }
 
-  document.getElementById('notebookPrintConfirmGo').addEventListener('click', ()=>{
-    const page = getActivePage();
-    hidePrintConfirmBar();
-    if(page) triggerPrintForActivePage(page);
-  });
-  document.getElementById('notebookPrintConfirmCancel').addEventListener('click', ()=>{
-    hidePrintConfirmBar();
-    notebookPrintQueue = null;
-  });
-  document.getElementById('notebookPrintConfirmSkip').addEventListener('click', ()=>{
-    if(notebookPrintQueue){ notebookPrintQueue.index++; }
-    hidePrintConfirmBar();
-    advancePrintQueue();
-  });
-  document.getElementById('exportAllPagesBtn').addEventListener('click', ()=>{
-    if(!state.notebookPages.length){ alert('مفيش صفحات كشكول محفوظة عشان تصدرها.'); return; }
-    notebookPrintQueue = {pages: state.notebookPages.slice(), index:0};
-    advancePrintQueue();
-  });
-
-  window.addEventListener('afterprint', ()=>{
-    document.body.classList.remove('notebook-print-mode');
-    if(notebookFrameLayer) notebookFrameLayer.setStyle({opacity:1, fillOpacity:0.02});
-    if(notebookPrintQueue){
-      notebookPrintQueue.index++;
-      setTimeout(()=> advancePrintQueue(), 400);
-    }
-  });
-
-  document.getElementById('notebookModeBtn').addEventListener('click', ()=>{
-    const tabEl = document.querySelector('.tab[data-panel="notebookPanel"]');
-    if(tabEl) tabEl.click();
-  });
-  document.getElementById('addNotebookPageBtn').addEventListener('click', ()=>{
-    const c = computeNotebookCenterFromSelection() || (()=>{const cc=map.getCenter(); return {lat:cc.lat,lng:cc.lng};})();
-    const page = newPageDefaults(c);
-    state.notebookPages.push(page);
-    renderNotebookPageList();
-    openPageEditor(page.id);
-    scheduleSave();
-    document.getElementById('stHint').textContent = '📓 اتعملت صفحة كشكول جديدة — اسحب الإطار الأحمر لتحديد مكانها، وعدّل إعداداتها من اللوحة';
-  });
-  document.getElementById('nbAutoFit').addEventListener('click', ()=> autoFitPageToSelection());
-  document.getElementById('nbCloseHud').addEventListener('click', ()=>{ document.getElementById('notebookHud').style.display='none'; });
-  document.getElementById('nbCenterOnSelection').addEventListener('click', ()=>{
-    const c = computeNotebookCenterFromSelection();
-    const page = getActivePage();
-    if(!c || !page){ alert('حدد عنصر أو أكتر الأول من قائمة العناصر (فيه مربع اختيار صغير جنب كل عنصر) عشان تقدر توسط الإطار عليه.'); return; }
-    page.center = c;
-    renderNotebookFrame();
-    if(notebookGridLayer) notebookGridLayer._draw();
-    map.panTo(c);
-    scheduleSave();
-  });
-  ['nbPageName','nbBackground','nbPaperSize','nbOrientation','nbScale','nbScaleCustom','nbGridMM','nbShowScaleBar','nbShowNorth','nbShowTitle','nbShowAreaTable','nbShowLengthsTable','nbShowVerticesTable','nbShowAttrsTable','nbShowTitleBlock','nbTbDecision','nbTbOwner','nbTbDistrict','nbTbGovernorate','nbTbLandUse','nbTbFeddan','nbTbQirat','nbTbSahm','nbTbBuildings','nbTbCultivations','nbTbNotes','nbTbSurveyor','nbTbDate'].forEach(id=>{
-    const el = document.getElementById(id);
-    const evt = (el.tagName==='SELECT' || el.type==='checkbox' || el.type==='color') ? 'change' : 'input';
-    el.addEventListener(evt, ()=>{
-      if(id==='nbScale') document.getElementById('nbScaleCustom').style.display = (el.value==='custom') ? 'block' : 'none';
-      applyEditorToActivePage();
+  /* ===== سلسلة صفحات تلقائية (Map Series) — صفحة مستقلة لكل مضلع في طبقة مختارة، مرصوصة في ملف PDF واحد ===== */
+  document.getElementById('openMapSeriesBtn').addEventListener('click', ()=>{
+    const sel = document.getElementById('msLayer');
+    sel.innerHTML = '';
+    state.layers.forEach(l=>{
+      const opt = document.createElement('option'); opt.value = l.id; opt.textContent = l.name + ' (' + l.features.filter(f=>f.type==='polygon').length + ' مضلع)';
+      sel.appendChild(opt);
     });
+    document.getElementById('mapSeriesHud').style.display = 'block';
   });
+  document.getElementById('msCancelBtn').addEventListener('click', ()=>{
+    document.getElementById('mapSeriesHud').style.display = 'none';
+  });
+  document.getElementById('msStartBtn').addEventListener('click', ()=> startMapSeries());
 
-  /* ---- فرش القلم: رصاص (نص شفاف/خشن شوية) و جاف (خط صريح ناعم) ---- */
+  async function startMapSeries(){
+    const layer = state.layers.find(l=>l.id===document.getElementById('msLayer').value);
+    if(!layer){ alert('اختاري طبقة.'); return; }
+    const polygons = layer.features.filter(f=>f.type==='polygon');
+    if(!polygons.length){ alert('الطبقة دي مفيهاش مضلعات.'); return; }
+    if(typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined'){ alert('مكتبات التصدير لسه بتتحمل — استنى شوية وحاول تاني.'); return; }
+
+    const paper = document.getElementById('msPaper').value;
+    const orientation = document.getElementById('msOrientation').value;
+    const marginPct = (parseFloat(document.getElementById('msMargin').value) || 20) / 100;
+    const showTB = document.getElementById('msShowTitleBlock').checked;
+    const showTables = document.getElementById('msShowTables').checked;
+
+    const progressEl = document.getElementById('msProgress');
+    progressEl.style.display = 'block';
+    document.getElementById('msStartBtn').disabled = true;
+
+    const { jsPDF } = window.jspdf;
+    let pdf = null;
+    const savedCenter = map.getCenter(), savedZoom = map.getZoom();
+    const dims = PAPER_SIZES_MM[paper] || PAPER_SIZES_MM.A4;
+    const [longMM, shortMM] = dims;
+    const wMM = orientation === 'landscape' ? longMM : shortMM;
+    const hMM = orientation === 'landscape' ? shortMM : longMM;
+
+    for(let i=0;i<polygons.length;i++){
+      const f = polygons[i];
+      progressEl.textContent = `⏳ بيجهز صفحة ${i+1} من ${polygons.length} — ${featureLabel(f)}...`;
+      const page = newLayoutPageDefaults();
+      page.name = featureLabel(f) || ('مضلع ' + (i+1));
+      page.paper = paper; page.orientation = orientation;
+      page.featureRef = {layerId: layer.id, featureId: f.id};
+
+      const mapFrame = addLayoutElement(page, 'mapFrame', {xPct:3, yPct:3, wPct: showTB?65:94, hPct:94});
+      if(showTB) addLayoutElement(page, 'titleBlock', {xPct:70, yPct:3, wPct:27, hPct:94});
+      if(showTables){
+        addLayoutElement(page, 'table', {tableKey:'area', xPct:5, yPct:5, wPct:25, hPct:12});
+        addLayoutElement(page, 'table', {tableKey:'lengths', xPct:5, yPct:20, wPct:25, hPct:16});
+        addLayoutElement(page, 'table', {tableKey:'vertices', xPct:5, yPct:39, wPct:28, hPct:16});
+      }
+      addLayoutElement(page, 'northArrow', {xPct:3, yPct:3, wPct:6, hPct:8});
+      addLayoutElement(page, 'polygonTitle', {xPct:35, yPct:2, wPct:30, hPct:5});
+
+      if(showTB){
+        const a = f.attrs || {};
+        page.titleBlock.ownerName = a['صاحب الشأن'] || a['الاسم'] || a['اسم'] || '';
+        const sqm = polygonAreaMeters(f.coords);
+        const fq = areaToFeddan(sqm);
+        page.titleBlock.areaFeddan = String(fq.feddan);
+        page.titleBlock.areaQirat = String(fq.qirat);
+        page.titleBlock.areaSahm = String(fq.sahm);
+      }
+
+      const b = L.latLngBounds(f.coords);
+      const sz = map.getSize();
+      map.fitBounds(b, {paddingTopLeft:[sz.x*marginPct, sz.y*marginPct], paddingBottomRight:[sz.x*marginPct, sz.y*marginPct]});
+      await new Promise(r=>setTimeout(r, 200));
+      let dataURL, scaleInfo;
+      try{
+        const res = await new Promise((resolve,reject)=>{
+          captureCurrentMapView(page, mapFrame, (d,s)=>resolve([d,s]), reject);
+        });
+        dataURL = res[0]; scaleInfo = res[1];
+      }catch(e){ console.error('فشل التقاط صفحة', page.name, e); continue; }
+      layoutSnapshots[mapFrame.id] = dataURL;
+      mapFrame.scaleInfo = scaleInfo;
+      state.layoutPages.push(page);
+
+      const stage = document.createElement('div');
+      stage.style.cssText = `position:fixed; left:-99999px; top:0; width:${wMM}mm; height:${hMM}mm; background:#fff; overflow:hidden; direction:rtl; font-family:var(--sans);`;
+      const pageWidthPxApprox = wMM * 3.78;
+      page.elements.forEach(el=> stage.appendChild(renderElementDOM(el, page, {interactive:false, pageWidthPx:pageWidthPxApprox})));
+      document.body.appendChild(stage);
+      await new Promise(r=> requestAnimationFrame(()=>requestAnimationFrame(r)));
+      const finalCanvas = await html2canvas(stage, {useCORS:true, allowTaint:true, scale:2.2, backgroundColor:'#ffffff'});
+      stage.remove();
+      const imgData = finalCanvas.toDataURL('image/jpeg', 0.9);
+      if(!pdf){
+        pdf = new jsPDF({ orientation: orientation==='landscape'?'l':'p', unit:'mm', format:[wMM, hMM] });
+        pdf.addImage(imgData, 'JPEG', 0, 0, wMM, hMM);
+      } else {
+        pdf.addPage([wMM, hMM], orientation==='landscape'?'l':'p');
+        pdf.addImage(imgData, 'JPEG', 0, 0, wMM, hMM);
+      }
+    }
+
+    map.setView(savedCenter, savedZoom, {animate:false});
+    document.getElementById('msStartBtn').disabled = false;
+    renderLayoutPageList();
+    scheduleSave();
+
+    if(pdf){
+      pdf.save('سلسلة_صفحات.pdf');
+      progressEl.textContent = `✅ خلصت! اتصدرت ${polygons.length} صفحة في ملف PDF واحد، وبقوا كمان متاحين لوحة لوحة في القايمة.`;
+    } else {
+      progressEl.textContent = '⚠️ حصل خطأ ومقدرناش نصدّر أي صفحة.';
+    }
+    setTimeout(()=>{ document.getElementById('mapSeriesHud').style.display='none'; progressEl.style.display='none'; }, 3000);
+  }
+
+
   function penBrushStyle(brush, color, width, isFinal){
     if(brush === 'pencil'){
       return { color: color, weight: width, opacity: 0.72, lineCap:'round', lineJoin:'round', dashArray: null };
@@ -3236,6 +3215,29 @@
     // لو لقينا فيرتكس → أرجعه فوراً، ولا داعي لفحص الخطوط
     if(bestVertex) return { coord: bestVertex, type: 'vertex' };
 
+    // ── مرحلة 1.5: منتصف الضلع (لو مفعّل زر "منتصف الضلع") — عشان ترسم بداية من نص أي ضلع موجود ──
+    if(midSnapEnabled){
+      let bestMid = null, bestMidDist = VERTEX_R;
+      const checkMid = (f) => {
+        if(f.type === 'point' || f.type === 'circle') return;
+        featureSnapSegments(f).forEach(seg=>{
+          const midLL = [(seg[0][0]+seg[1][0])/2, (seg[0][1]+seg[1][1])/2];
+          const cp = map.latLngToContainerPoint(L.latLng(midLL[0], midLL[1]));
+          const d = Math.hypot(cp.x-pt.x, cp.y-pt.y);
+          if(d < bestMidDist){ bestMidDist=d; bestMid=midLL; }
+        });
+      };
+      state.layers.forEach(layer=>{
+        if(!layer.visible) return;
+        layer.features.forEach(f=>{ if(f.id!==excludeFeatureId) checkMid(f); });
+      });
+      friendLayers.forEach(layer=>{
+        if(layer.visible === false) return;
+        layer.features.forEach(f=> checkMid(f));
+      });
+      if(bestMid) return { coord: bestMid, type: 'midpoint' };
+    }
+
     // ── مرحلة 2: أقرب نقطة على الضلع (فقط لو ما فيش فيرتكس قريب) ────
     let bestEdge = null, bestEdgeDist = EDGE_R;
 
@@ -3274,6 +3276,8 @@
       // vertex → دائرة صفراء مملوءة جزئياً | edge → دائرة برتقالية فارغة
       const markerOpts = type === 'vertex'
         ? { radius:8, color:'#f5d000', weight:2.5, fillColor:'#f5d000', fillOpacity:0.35 }
+        : type === 'midpoint'
+        ? { radius:7, color:'#7B68EE', weight:2.5, fillColor:'#7B68EE', fillOpacity:0.5 }
         : { radius:7, color:'#00B4A6', weight:2,   fillColor:'#E8A432', fillOpacity:0 };
       if(!snapMarker){
         snapMarker = L.circleMarker(coord, markerOpts).addTo(map);
@@ -3694,9 +3698,9 @@
     if(!Array.isArray(state.friendFileIds)) state.friendFileIds = state.friendFileId ? [state.friendFileId] : [];
     if(!state.friendLastPulled) state.friendLastPulled = {};
     if(!Array.isArray(state.notebookSketches)) state.notebookSketches = [];
-    if(!Array.isArray(state.notebookPages)) state.notebookPages = [];
+    if(!Array.isArray(state.layoutPages)) state.layoutPages = [];
     if(!Array.isArray(state.rasters)) state.rasters = [];
-    renderLayerList(); renderFeatures(); renderPenStrokes(); renderNotebookPageList();
+    renderLayerList(); renderFeatures(); renderPenStrokes(); renderLayoutPageList();
     renderRasterList(); renderRasters();
     const all=[]; state.layers.forEach(l=>l.features.forEach(f=>f.coords.forEach(c=>all.push(c))));
     if(all.length) map.fitBounds(L.latLngBounds(all), {padding:[40,40]});
@@ -4155,6 +4159,9 @@
         let pt = snapped;
         if(drawStyle==='ortho'){
           pt = orthoSnapPoint(drawingCoords, pt);
+        } else if((drawStyle==='parallel' || drawStyle==='perpendicular') && refAngleDeg !== null){
+          const lastLL = {lat:drawingCoords[drawingCoords.length-1][0], lng:drawingCoords[drawingCoords.length-1][1]};
+          pt = refAngleSnapPoint(lastLL, pt, refAngleDeg, drawStyle==='perpendicular');
         } else if(drawStyle==='lengths' && lengthsPendingLen){
           const lastLL = {lat:drawingCoords[drawingCoords.length-1][0], lng:drawingCoords[drawingCoords.length-1][1]};
           pt = lengthsSnapPoint(lastLL, pt, lengthsPendingLen);
@@ -4261,8 +4268,25 @@
       } else {
         let pt = snapped;
         const wasEmpty = drawingCoords.length === 0;
+        if((drawStyle==='parallel' || drawStyle==='perpendicular') && wasEmpty && refAngleDeg === null){
+          const ang = findRefEdgeAngle(e.latlng);
+          if(ang === null){
+            document.getElementById('stHint').textContent = (drawStyle==='parallel' ? '⇗' : '⊥') + ' اضغط بالظبط على ضلع موجود عشان يتحدد كمرجع للاتجاه، وبعدين كمل رسم عادي...';
+            drawingCoords = null;
+            if(window.innerWidth <= 760) mobileFinishBtn.style.display = 'none';
+            updateHistoryButtons();
+            return;
+          }
+          refAngleDeg = ang;
+          document.getElementById('stHint').textContent = (drawStyle==='parallel'
+            ? '⇗ اتحدد الضلع المرجعي — كمل الرسم عادي وهيتقفل موازي له تلقائياً'
+            : '⊥ اتحدد الضلع المرجعي — كمل الرسم عادي وهيتقفل عمودي عليه تلقائياً');
+        }
         if(drawStyle==='ortho' && drawingCoords.length){
           pt = orthoSnapPoint(drawingCoords, snapped);
+        } else if((drawStyle==='parallel' || drawStyle==='perpendicular') && drawingCoords.length && refAngleDeg !== null){
+          const lastLL = {lat:drawingCoords[drawingCoords.length-1][0], lng:drawingCoords[drawingCoords.length-1][1]};
+          pt = refAngleSnapPoint(lastLL, snapped, refAngleDeg, drawStyle==='perpendicular');
         } else if(drawStyle==='lengths' && drawingCoords.length && lengthsPendingLen){
           const lastLL = {lat:drawingCoords[drawingCoords.length-1][0], lng:drawingCoords[drawingCoords.length-1][1]};
           pt = lengthsSnapPoint(lastLL, snapped, lengthsPendingLen);
@@ -4389,6 +4413,7 @@
     b.classList.add('active');
     arcState = { step: 0, start: null, end: null };
     lengthsPendingLen = null;
+    refAngleDeg = null;
     hideInlineValueHud();
     cancelLengthsClosing();
     if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
@@ -4396,7 +4421,9 @@
       straight: 'اضغط على الخريطة للرسم',
       ortho: '⊾ وضع الزوايا القائمة: حدد أول ضلع بحرية، والباقي هيتقفل قائم (90°) على اتجاهه تلقائياً',
       curve: '∿ وضع القوس (End Point Arc): انقر لتحديد نقطة البداية، بعدين نقطة النهاية، بعدين حرّك الماوس لتحديد الانحناء وانقر لتأكيد — أو اضغط R لإدخال نصف قطر بالمتر',
-      lengths: '📏 وضع الرسم بالأطوال: انقر لتحديد أول نقطة، اكتب طول كل ضلع وحدد اتجاهه بالماوس/الإصبع، وفي الآخر دوس زر "دول آخر ضلعين" (C) عشان تقفل المضلع بطولين'
+      lengths: '📏 وضع الرسم بالأطوال: انقر لتحديد أول نقطة، اكتب طول كل ضلع وحدد اتجاهه بالماوس/الإصبع، وفي الآخر دوس زر "دول آخر ضلعين" (C) عشان تقفل المضلع بطولين',
+      parallel: '⇗ وضع الرسم الموازي: انقر أول حاجة على ضلع موجود يتحدد كمرجع، وبعدين ارسم عادي وكل ضلع هيتقفل موازي لاتجاهه',
+      perpendicular: '⊥ وضع الرسم العمودي: انقر أول حاجة على ضلع موجود يتحدد كمرجع، وبعدين ارسم عادي وكل ضلع هيتقفل عمودي عليه'
     };
     document.getElementById('stHint').textContent = hints[drawStyle] || hints.straight;
     if(drawingCoords && drawingCoords.length) renderDrawAnchors();
@@ -4417,6 +4444,7 @@
     hideInlineValueHud();
     clearDrawAnchors();
     arcState = { step: 0, start: null, end: null };
+    refAngleDeg = null;
 
     if(tool==='line' && drawingCoords && drawingCoords.length>=2){
       pushStateToUndo();
@@ -4460,6 +4488,7 @@
     if(e.key==='Escape'){
       drawingCoords=null; rect3Point.step = 0; circlePending=null;
       arcState = { step: 0, start: null, end: null };
+      refAngleDeg = null;
       lengthsPendingLen = null; lengthsClosingActive = false; lengthsCandidateGroup.clearLayers();
       document.getElementById('lengthsCloseBtn').style.display = 'none';
       hideInlineValueHud();
@@ -4489,6 +4518,12 @@
     snapEnabled = !snapEnabled;
     document.getElementById('snapBtn').toggleAttribute('active', snapEnabled);
     if(!snapEnabled && snapMarker){ map.removeLayer(snapMarker); snapMarker=null; }
+  });
+
+  document.getElementById('midSnapBtn').addEventListener('click', ()=>{
+    midSnapEnabled = !midSnapEnabled;
+    document.getElementById('midSnapBtn').toggleAttribute('active', midSnapEnabled);
+    if(!midSnapEnabled && snapMarker){ map.removeLayer(snapMarker); snapMarker=null; }
   });
 
   /* ===== تبديل تبويبات الريبون (خريطة/إدراج/تحليل/عرض) — للابتوب والتابلت؛ في الموبايل كل الأدوات ظاهرة مع بعض ===== */
@@ -4548,6 +4583,7 @@
     tool = btn.dataset.tool;
     drawingCoords=null; rect3Point.step = 0; circlePending=null;
     arcState = { step: 0, start: null, end: null };
+    refAngleDeg = null;
     lengthsPendingLen = null; lengthsClosingActive = false; lengthsCandidateGroup.clearLayers();
     document.getElementById('lengthsCloseBtn').style.display = 'none';
     hideInlineValueHud();
