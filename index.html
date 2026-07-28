@@ -1487,7 +1487,7 @@
   const btnPadRotate = document.getElementById('btnPadRotate');
   const btnPadScale = document.getElementById('btnPadScale');
 
-  const map = L.map('map', {zoomControl:false, center:[29.9792, 31.1342], zoom:16, worldCopyJump:true});
+  const map = L.map('map', {zoomControl:false, center:[29.9792, 31.1342], zoom:16, worldCopyJump:true, preferCanvas:true});
   L.control.zoom({position:'topleft'}).addTo(map);
 
   const rasterPane = map.createPane('rasterPane');
