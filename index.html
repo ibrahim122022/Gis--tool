@@ -1110,8 +1110,9 @@
           <button class="btn-create" id="rasterAddConfirmBtn" style="width:100%;">➕ إضافة الخريطة</button>
         </div>
 
-        <div style="font-size:10.5px;color:var(--text-muted);margin:10px 0 3px;border-top:1px solid var(--border);padding-top:8px;">الخرائط المضافة:</div>
-        <div id="rasterList"></div>
+        <div style="font-size:10.5px;color:var(--text-muted);margin:10px 0 3px;border-top:1px solid var(--border);padding-top:8px;">
+          الخرائط المضافة بقت في لوحة "الطبقات" تحت مجموعة "راستر" — تقدر تتحكم فيها وترتبها من هناك حتى بعد ما تقفل الشاشة دي.
+        </div>
 
         <div class="row-btns">
           <button class="btn-create" id="rasterHudClose" style="width:100%;">تم</button>
@@ -1692,33 +1693,10 @@
   const map = L.map('map', {zoomControl:false, center:[29.9792, 31.1342], zoom:16, worldCopyJump:true, preferCanvas:true});
   L.control.zoom({position:'topleft'}).addTo(map);
 
-  // بنستخدم نفس الـ tilePane بتاع Leaflet (اللي فيه صور الخريطة/القمر الصناعي) بدل عمل باين منفصل للراستر،
-  // لأن أي باين ليه z-index خاص بيه بيكوّن "stacking context" منعزل بيمنع الـ blend mode
-  // من الوصول لطبقة التايلز اللي تحته (حتى لو الترتيب البصري شكله سليم، الدمج نفسه ما كانش بيشتغل)
-  const rasterPane = map.getPane('tilePane');
+  const rasterPane = map.createPane('rasterPane');
+  rasterPane.style.zIndex = 350; // فوق طبقة التايلز (200) وتحت طبقات الرسم (overlayPane ~400)
   rasterPane.style.pointerEvents = 'none';
   const rasterHandleGroup = L.layerGroup().addTo(map); // نقط سحب أركان الراستر وقت التصحيح اليدوي
-
-  // بما إن الراستر بقى مشارك نفس باين التايلز (عشان الـ blend mode يشتغل)، فـ Leaflet بيضيف
-  // بلاطات خريطة جديدة باستمرار في آخر الباين وهي بتتحمل، وده ممكن يخلي الراستر يظهر تحتها.
-  // فبنراقب أي إضافة جديدة للباين، ولو مش من عندنا، بنرجّع كل راستر ظاهر لآخر العناصر تاني فورًا.
-  let rasterReorderObserver = new MutationObserver(muts=>{
-    let tileAdded = false;
-    muts.forEach(m=>{
-      m.addedNodes.forEach(n=>{
-        if(!(n.getAttribute && n.getAttribute('data-raster-wrap'))) tileAdded = true;
-      });
-    });
-    if(!tileAdded) return;
-    rasterReorderObserver.disconnect();
-    state.rasters.forEach(r=>{
-      if(!r.show) return;
-      const wrap = rasterPane.querySelector('[data-raster-wrap="'+r.id+'"]');
-      if(wrap) rasterPane.appendChild(wrap);
-    });
-    rasterReorderObserver.observe(rasterPane, {childList:true});
-  });
-  rasterReorderObserver.observe(rasterPane, {childList:true});
 
   const satLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
     attribution: '© Google Maps', maxZoom: 20
@@ -3586,7 +3564,9 @@
       const r = getRaster(wrap.getAttribute('data-raster-wrap'));
       if(!r || !r.show) wrap.remove();
     });
-    state.rasters.forEach(r=>{
+    // بنمشي بالعكس عشان أول عنصر في state.rasters (فوق القايمة في لوحة الطبقات) يبقى آخر عنصر
+    // في الـ DOM فعليًا، يعني يترسم فوق الباقي — بالظبط زي ترتيب الطبقات في ArcGIS Pro
+    [...state.rasters].reverse().forEach(r=>{
       if(!r.show) return;
       let wrap = rasterPane.querySelector('[data-raster-wrap="'+r.id+'"]');
       let img;
@@ -3611,8 +3591,7 @@
       } else {
         img = wrap.querySelector('img[data-raster-id]');
       }
-      // بنرجعه لآخر عنصر في الـ tilePane في كل مرة، عشان يفضل فوق أي تايلز جديدة اتحملت لسه
-      // (وده كمان بيحافظ على إنه في نفس الـ stacking context بتاع التايلز عشان الـ blend mode يشتغل صح)
+      // بيفضل آخر عنصر في الباين بتاعه عشان يترسم فوق أي راستر تاني في نفس الباين
       rasterPane.appendChild(wrap);
       if(img.src !== r.dataURL) img.src = r.dataURL;
       img.style.width = r.naturalW + 'px';
@@ -3624,20 +3603,23 @@
       const h = computeHomography(src, dst);
       img.style.transform = homographyToCssMatrix3d(h);
     });
+    // الـ mix-blend-mode على عنصر جوه باين منفصل (zIndex خاص بيه) مش دايمًا بيوصل للطبقة اللي تحته
+    // في كل المتصفحات، فبنحط نفس وضع الدمج كمان على الباين نفسه كطبقة احتياطية أوثق في التطبيق —
+    // ده معناه لو أكتر من راستر ظاهر بأوضاع دمج مختلفة، هيتاخد وضع أول واحد ظاهر بينهم للباين كله
+    const firstVisible = state.rasters.find(r=>r.show);
+    rasterPane.style.mixBlendMode = (firstVisible && firstVisible.blendMode) || 'normal';
   }
 
-  function renderRasterList(){
-    const container = document.getElementById('rasterList');
-    if(!container) return;
-    container.innerHTML = '';
-    if(!state.rasters.length){
-      const empty = document.createElement('div');
-      empty.className = 'empty-state';
-      empty.textContent = 'لسه ملقيتش خرائط راستر مضافة';
-      container.appendChild(empty);
-      return;
-    }
-    state.rasters.forEach(r=>{
+  function moveRaster(idx, dir){
+    const j = idx + dir;
+    if(j < 0 || j >= state.rasters.length) return;
+    const tmp = state.rasters[idx];
+    state.rasters[idx] = state.rasters[j];
+    state.rasters[j] = tmp;
+    renderRasters(); renderLayerList(); scheduleSave();
+  }
+
+  function buildRasterRow(r, idx, total){
       const box = document.createElement('div');
       box.style.cssText = 'border:1px solid var(--border);border-radius:6px;padding:6px 8px;margin-bottom:6px;';
       box.innerHTML = `
@@ -3646,6 +3628,8 @@
             <input type="checkbox" class="rst-show" style="width:auto;" ${r.show?'checked':''}>
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;">${escapeHtml(r.name)}</span>
           </label>
+          <button class="btn-cancel rst-up" title="لفوق (فوق الطبقات التانية)" style="padding:3px 7px;" ${idx===0?'disabled':''}>▲</button>
+          <button class="btn-cancel rst-down" title="لتحت" style="padding:3px 7px;" ${idx===total-1?'disabled':''}>▼</button>
           <button class="btn-cancel rst-del" title="حذف" style="padding:3px 7px;">🗑️</button>
         </div>
         <label style="font-size:10px;margin-top:4px;">شفافية</label>
@@ -3686,30 +3670,36 @@
         </div>
       `;
       box.querySelector('.rst-blend').value = r.blendMode || 'normal';
+      box.querySelector('.rst-show').addEventListener('click', e=> L.DomEvent.stopPropagation(e));
       box.querySelector('.rst-show').addEventListener('change', e=>{ r.show = e.target.checked; renderRasters(); scheduleSave(); });
-      box.querySelector('.rst-del').addEventListener('click', ()=>{
+      box.querySelector('.rst-up').addEventListener('click', e=>{ L.DomEvent.stopPropagation(e); moveRaster(idx, -1); });
+      box.querySelector('.rst-down').addEventListener('click', e=>{ L.DomEvent.stopPropagation(e); moveRaster(idx, 1); });
+      box.querySelector('.rst-del').addEventListener('click', e=>{
+        L.DomEvent.stopPropagation(e);
         if(!confirm('تحذف خريطة "'+r.name+'"؟')) return;
         state.rasters = state.rasters.filter(x=>x.id!==r.id);
         if(rasterEditState && rasterEditState.rasterId===r.id) stopRasterCornerEdit();
-        renderRasters(); renderRasterList(); scheduleSave();
+        renderRasters(); renderLayerList(); scheduleSave();
       });
+      box.querySelector('.rst-opacity').addEventListener('click', e=> L.DomEvent.stopPropagation(e));
       box.querySelector('.rst-opacity').addEventListener('input', e=>{ r.opacity = parseFloat(e.target.value); renderRasters(); });
       box.querySelector('.rst-opacity').addEventListener('change', ()=> scheduleSave());
+      box.querySelector('.rst-blend').addEventListener('click', e=> L.DomEvent.stopPropagation(e));
       box.querySelector('.rst-blend').addEventListener('change', e=>{ r.blendMode = e.target.value; renderRasters(); scheduleSave(); });
-      box.querySelector('.rst-edit-free').addEventListener('click', ()=> startRasterCornerEdit(r.id, 'free'));
-      box.querySelector('.rst-edit-rigid').addEventListener('click', ()=> startRasterCornerEdit(r.id, 'rigid'));
-      box.querySelector('.rst-edit-gcp').addEventListener('click', ()=>{
+      box.querySelector('.rst-edit-free').addEventListener('click', e=>{ L.DomEvent.stopPropagation(e); startRasterCornerEdit(r.id, 'free'); });
+      box.querySelector('.rst-edit-rigid').addEventListener('click', e=>{ L.DomEvent.stopPropagation(e); startRasterCornerEdit(r.id, 'rigid'); });
+      box.querySelector('.rst-edit-gcp').addEventListener('click', e=>{
+        L.DomEvent.stopPropagation(e);
         document.getElementById('rasterHud').style.display = 'none';
         openGcpModal({dataURL:r.dataURL, naturalW:r.naturalW, naturalH:r.naturalH, existingRasterId:r.id, pendingName:r.name});
       });
-      container.appendChild(box);
-    });
+      return box;
   }
 
   function addRasterRecord(name, dataURL, w, h, corners){
     const r = { id:uid(), name, show:true, opacity:0.85, blendMode:'normal', dataURL, naturalW:w, naturalH:h, corners };
-    state.rasters.push(r);
-    renderRasters(); renderRasterList(); scheduleSave();
+    state.rasters.unshift(r); // بيتحط فوق كل الراستر التاني اللي أضيف قبله
+    renderRasters(); renderLayerList(); scheduleSave();
     return r;
   }
 
@@ -3771,7 +3761,7 @@
         const opt = document.createElement('option'); opt.value=o.code; opt.textContent=o.label; sel.appendChild(opt);
       });
     }
-    renderRasterList();
+    renderLayerList();
     document.getElementById('rasterHud').style.display = 'block';
   });
   document.getElementById('rasterHudClose').addEventListener('click', ()=>{
@@ -3981,7 +3971,7 @@
     if(!Array.isArray(state.layoutPages)) state.layoutPages = [];
     if(!Array.isArray(state.rasters)) state.rasters = [];
     renderLayerList(); renderFeatures(); renderPenStrokes(); renderLayoutPageList();
-    renderRasterList(); renderRasters();
+    renderRasters();
     const all=[]; state.layers.forEach(l=>l.features.forEach(f=>f.coords.forEach(c=>all.push(c))));
     if(all.length) map.fitBounds(L.latLngBounds(all), {padding:[40,40]});
   }
@@ -5168,6 +5158,53 @@
           container.appendChild(row);
         });
       });
+    }
+
+    // ---- مجموعة "راستر" — دايمة موجودة هنا وبترتب حسب اللي فوق واللي تحت زي ArcGIS Pro ----
+    if(state.rasters && state.rasters.length){
+      const rWrapper = document.createElement('div');
+      rWrapper.style.marginBottom = '6px';
+
+      const rHeader = document.createElement('div');
+      rHeader.className = 'layer-row';
+      rHeader.style.marginBottom = '0';
+      rHeader.style.cursor = 'pointer';
+      rHeader.addEventListener('click', ()=>{
+        layerExpandState['__rasters'] = !layerExpandState['__rasters'];
+        renderLayerList();
+      });
+
+      const rExpandBtn = document.createElement('button');
+      rExpandBtn.className = 'layer-expand-btn' + (layerExpandState['__rasters'] ? ' open' : '');
+      rExpandBtn.title = 'عرض/إخفاء طبقات الراستر';
+      rExpandBtn.innerHTML = `<svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>`;
+      rExpandBtn.addEventListener('click', e=>{
+        L.DomEvent.stopPropagation(e);
+        layerExpandState['__rasters'] = !layerExpandState['__rasters'];
+        renderLayerList();
+      });
+
+      const rIconSpan = document.createElement('span');
+      rIconSpan.textContent = '🗺️';
+      rIconSpan.style.cssText = 'margin-left:2px;margin-right:2px;flex-shrink:0;';
+
+      const rNameSpan = document.createElement('span');
+      rNameSpan.className = 'lname'; rNameSpan.textContent = 'راستر';
+
+      const rCountSpan = document.createElement('span');
+      rCountSpan.className = 'lcount'; rCountSpan.textContent = `(${state.rasters.length})`;
+
+      rHeader.appendChild(rExpandBtn); rHeader.appendChild(rIconSpan); rHeader.appendChild(rNameSpan); rHeader.appendChild(rCountSpan);
+      rWrapper.appendChild(rHeader);
+
+      const rList = document.createElement('div');
+      rList.className = 'feature-list' + (layerExpandState['__rasters'] ? ' open' : '');
+      // بنعرضهم بالترتيب العادي لمصفوفة state.rasters؛ أول واحد في القايمة = فوق الكل على الخريطة
+      state.rasters.forEach((r, idx)=>{
+        rList.appendChild(buildRasterRow(r, idx, state.rasters.length));
+      });
+      rWrapper.appendChild(rList);
+      container.appendChild(rWrapper);
     }
   }
 
