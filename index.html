@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -140,7 +139,12 @@
   .basemap-toggle button:hover:not(.active){color:var(--text);background:rgba(0,0,0,.05);}
 
   .drive-control{background:rgba(255,255,255,.95);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:9px;padding:8px 12px;box-shadow:0 4px 16px rgba(0,120,140,.15);display:flex;align-items:center;gap:8px;font-size:11.5px;}
-  #driveUpdateBanner{position:absolute;top:10px;right:10px;z-index:450;}
+  #driveUpdateBanner{position:static;}
+  #driveMenuToggleBtn.has-drive-update, #mobileDriveToggle.has-drive-update{position:relative;}
+  #driveMenuToggleBtn.has-drive-update::after, #mobileDriveToggle.has-drive-update::after{
+    content:'';position:absolute;top:4px;right:6px;width:9px;height:9px;
+    background:var(--accent);border-radius:50%;box-shadow:0 0 0 2px #fff;
+  }
   .drive-control svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;flex-shrink:0;}
   .drive-control.connected{color:var(--teal);}
   .drive-control.disconnected{color:var(--text-muted);}
@@ -873,11 +877,11 @@
           <button id="driveJoinBtn" title="ربط بـ ID صديقك لعرض رسمه على خريطتك (للقراءة فقط)">ربط بصديق</button>
           <button id="driveCopyIdBtn" title="نسخ الـ ID بتاعك لمشاركته">نسخ ID</button>
         </div>
-      </div>
-      <div class="drive-control" id="driveUpdateBanner" style="display:none;top:56px;border-color:var(--accent);">
-        <span class="drive-msg" style="color:var(--accent);">🔄 فيه نسخة تانية على Drive</span>
-        <button id="driveImportBtn">استيراد</button>
-        <button id="driveDismissBtn" style="background:var(--bg-panel-2);color:var(--text-muted);">تجاهل</button>
+        <div class="drive-control" id="driveUpdateBanner" style="display:none;margin-top:6px;border-color:var(--accent);">
+          <span class="drive-msg" style="color:var(--accent);">🔄 فيه نسخة تانية على Drive</span>
+          <button id="driveImportBtn">استيراد</button>
+          <button id="driveDismissBtn" style="background:var(--bg-panel-2);color:var(--text-muted);">تجاهل</button>
+        </div>
       </div>
       
       <div class="rect-hud" id="rectHud">
@@ -1688,8 +1692,10 @@
   const map = L.map('map', {zoomControl:false, center:[29.9792, 31.1342], zoom:16, worldCopyJump:true, preferCanvas:true});
   L.control.zoom({position:'topleft'}).addTo(map);
 
-  const rasterPane = map.createPane('rasterPane');
-  rasterPane.style.zIndex = 350; // فوق طبقة التايلز (200) وتحت طبقات الرسم (overlayPane ~400) عشان يترسم فوقه
+  // بنستخدم نفس الـ tilePane بتاع Leaflet (اللي فيه صور الخريطة/القمر الصناعي) بدل عمل باين منفصل للراستر،
+  // لأن أي باين ليه z-index خاص بيه بيكوّن "stacking context" منعزل بيمنع الـ blend mode
+  // من الوصول لطبقة التايلز اللي تحته (حتى لو الترتيب البصري شكله سليم، الدمج نفسه ما كانش بيشتغل)
+  const rasterPane = map.getPane('tilePane');
   rasterPane.style.pointerEvents = 'none';
   const rasterHandleGroup = L.layerGroup().addTo(map); // نقط سحب أركان الراستر وقت التصحيح اليدوي
 
@@ -3554,15 +3560,25 @@
 
   function renderRasters(){
     if(!rasterPane) return;
-    // امسح أي صور مش موجودة/متخفية دلوقتي
-    Array.from(rasterPane.querySelectorAll('img[data-raster-id]')).forEach(img=>{
-      const r = getRaster(img.getAttribute('data-raster-id'));
-      if(!r || !r.show) img.remove();
+    // امسح أي عناصر مش موجودة/متخفية دلوقتي
+    Array.from(rasterPane.querySelectorAll('[data-raster-wrap]')).forEach(wrap=>{
+      const r = getRaster(wrap.getAttribute('data-raster-wrap'));
+      if(!r || !r.show) wrap.remove();
     });
     state.rasters.forEach(r=>{
       if(!r.show) return;
-      let img = rasterPane.querySelector('img[data-raster-id="'+r.id+'"]');
-      if(!img){
+      let wrap = rasterPane.querySelector('[data-raster-wrap="'+r.id+'"]');
+      let img;
+      if(!wrap){
+        // بنلف الصورة في div غلاف: الـ blend mode بيتحط على الغلاف (مش عليه تحويل 3D)،
+        // لأن العناصر اللي عليها transform: matrix3d بتتحط في طبقة GPU منفصلة والمتصفح
+        // بيتجاهل mix-blend-mode عليها مباشرة — دي مشكلة معروفة في المتصفحات
+        wrap = document.createElement('div');
+        wrap.setAttribute('data-raster-wrap', r.id);
+        wrap.style.position = 'absolute';
+        wrap.style.left = '0'; wrap.style.top = '0';
+        wrap.style.width = '0'; wrap.style.height = '0';
+        wrap.style.overflow = 'visible';
         img = document.createElement('img');
         img.setAttribute('data-raster-id', r.id);
         img.style.position = 'absolute';
@@ -3570,12 +3586,18 @@
         img.style.transformOrigin = '0 0';
         img.style.willChange = 'transform';
         img.draggable = false;
-        rasterPane.appendChild(img);
+        wrap.appendChild(img);
+      } else {
+        img = wrap.querySelector('img[data-raster-id]');
       }
+      // بنرجعه لآخر عنصر في الـ tilePane في كل مرة، عشان يفضل فوق أي تايلز جديدة اتحملت لسه
+      // (وده كمان بيحافظ على إنه في نفس الـ stacking context بتاع التايلز عشان الـ blend mode يشتغل صح)
+      rasterPane.appendChild(wrap);
       if(img.src !== r.dataURL) img.src = r.dataURL;
       img.style.width = r.naturalW + 'px';
       img.style.height = r.naturalH + 'px';
-      img.style.opacity = (r.opacity != null ? r.opacity : 0.85);
+      wrap.style.opacity = (r.opacity != null ? r.opacity : 0.85);
+      wrap.style.mixBlendMode = r.blendMode || 'normal';
       const src = [[0,0],[r.naturalW,0],[r.naturalW,r.naturalH],[0,r.naturalH]];
       const dst = r.corners.map(c=>{ const p = map.latLngToLayerPoint([c.lat,c.lng]); return [p.x,p.y]; });
       const h = computeHomography(src, dst);
@@ -3607,12 +3629,42 @@
         </div>
         <label style="font-size:10px;margin-top:4px;">شفافية</label>
         <input type="range" class="rst-opacity" min="0.1" max="1" step="0.05" value="${r.opacity!=null?r.opacity:0.85}">
+        <label style="font-size:10px;margin-top:4px;">وضع الدمج (Blend Mode)</label>
+        <select class="rst-blend" style="width:100%;">
+          <option value="normal">Normal</option>
+          <optgroup label="Lightening modes">
+            <option value="screen">Screen</option>
+            <option value="color-dodge">Color Dodge</option>
+            <option value="lighten">Lighten</option>
+          </optgroup>
+          <optgroup label="Darkening modes">
+            <option value="multiply">Multiply</option>
+            <option value="color-burn">Color Burn</option>
+            <option value="darken">Darken</option>
+          </optgroup>
+          <optgroup label="Comparison modes">
+            <option value="difference">Difference</option>
+            <option value="exclusion">Exclusion</option>
+          </optgroup>
+          <optgroup label="Divergent modes">
+            <option value="overlay">Overlay</option>
+            <option value="hard-light">Hard Light</option>
+            <option value="soft-light">Soft Light</option>
+          </optgroup>
+          <optgroup label="Color combination modes">
+            <option value="luminosity">Luminosity</option>
+            <option value="saturation">Saturation</option>
+            <option value="hue">Hue</option>
+            <option value="color">Color</option>
+          </optgroup>
+        </select>
         <div class="row-btns" style="margin-top:4px;flex-wrap:wrap;">
           <button class="btn-cancel rst-edit-free" style="flex:1;font-size:10.5px;min-width:70px;">🔓 4 أركان</button>
           <button class="btn-cancel rst-edit-rigid" style="flex:1;font-size:10.5px;min-width:70px;">📐 نقطتين</button>
           <button class="btn-cancel rst-edit-gcp" style="flex:1;font-size:10.5px;min-width:70px;">🎯 نقط تحكم</button>
         </div>
       `;
+      box.querySelector('.rst-blend').value = r.blendMode || 'normal';
       box.querySelector('.rst-show').addEventListener('change', e=>{ r.show = e.target.checked; renderRasters(); scheduleSave(); });
       box.querySelector('.rst-del').addEventListener('click', ()=>{
         if(!confirm('تحذف خريطة "'+r.name+'"؟')) return;
@@ -3622,6 +3674,7 @@
       });
       box.querySelector('.rst-opacity').addEventListener('input', e=>{ r.opacity = parseFloat(e.target.value); renderRasters(); });
       box.querySelector('.rst-opacity').addEventListener('change', ()=> scheduleSave());
+      box.querySelector('.rst-blend').addEventListener('change', e=>{ r.blendMode = e.target.value; renderRasters(); scheduleSave(); });
       box.querySelector('.rst-edit-free').addEventListener('click', ()=> startRasterCornerEdit(r.id, 'free'));
       box.querySelector('.rst-edit-rigid').addEventListener('click', ()=> startRasterCornerEdit(r.id, 'rigid'));
       box.querySelector('.rst-edit-gcp').addEventListener('click', ()=>{
@@ -3633,7 +3686,7 @@
   }
 
   function addRasterRecord(name, dataURL, w, h, corners){
-    const r = { id:uid(), name, show:true, opacity:0.85, dataURL, naturalW:w, naturalH:h, corners };
+    const r = { id:uid(), name, show:true, opacity:0.85, blendMode:'normal', dataURL, naturalW:w, naturalH:h, corners };
     state.rasters.push(r);
     renderRasters(); renderRasterList(); scheduleSave();
     return r;
@@ -4850,7 +4903,12 @@
 
   function toggleDriveMenuPopup(){
     const el = document.getElementById('driveMenuPopup');
-    el.style.display = (el.style.display === 'block') ? 'none' : 'block';
+    const opening = el.style.display !== 'block';
+    el.style.display = opening ? 'block' : 'none';
+    if(opening){
+      // بيبان صف "فيه نسخة تانية" هنا بس لما المستخدم نفسه يفتح قائمة الدرايف — مفيش بانر تلقائي فوق الخريطة
+      driveUpdateBanner.style.display = pendingRemote ? 'flex' : 'none';
+    }
   }
   document.getElementById('driveMenuToggleBtn').addEventListener('click', (e)=>{ e.stopPropagation(); toggleDriveMenuPopup(); });
   document.getElementById('mobileDriveToggle').addEventListener('click', (e)=>{ e.stopPropagation(); toggleDriveMenuPopup(); });
@@ -6472,17 +6530,24 @@
       if(remoteTime <= lastPushTime + 3000) return; // صدى رفعتنا احنا — تجاهله
       if(remoteTime <= (state.lastPulledTime||0)) return;
       pendingRemote = {geojson: val.geojson, remoteTime};
-      driveUpdateBanner.style.display='flex';
+      // متبقاش تظهر رسالة/بانر تلقائي فوق الخريطة — بس نعلّم نقطة صغيرة على زر الدرايف،
+      // والاستيراد بيبقى فقط لما المستخدم يفتح قائمة الدرايف بنفسه ويضغط "استيراد"
+      document.getElementById('driveMenuToggleBtn').classList.add('has-drive-update');
+      document.getElementById('mobileDriveToggle').classList.add('has-drive-update');
     }, err=>{ console.error('my-data listen failed', err); });
   }
 
   driveImportBtn.addEventListener('click', ()=>{
     if(pendingRemote){ applyRemoteGeoJSON(pendingRemote.geojson, pendingRemote.remoteTime); }
     pendingRemote=null; driveUpdateBanner.style.display='none';
+    document.getElementById('driveMenuToggleBtn').classList.remove('has-drive-update');
+    document.getElementById('mobileDriveToggle').classList.remove('has-drive-update');
   });
   driveDismissBtn.addEventListener('click', ()=>{
     if(pendingRemote){ state.lastPulledTime = pendingRemote.remoteTime; doSave(); }
     pendingRemote=null; driveUpdateBanner.style.display='none';
+    document.getElementById('driveMenuToggleBtn').classList.remove('has-drive-update');
+    document.getElementById('mobileDriveToggle').classList.remove('has-drive-update');
   });
 
   /* ---------- Friend read-only data (Firebase realtime listener بدل الـ polling القديم) ---------- */
