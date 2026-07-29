@@ -1699,6 +1699,27 @@
   rasterPane.style.pointerEvents = 'none';
   const rasterHandleGroup = L.layerGroup().addTo(map); // نقط سحب أركان الراستر وقت التصحيح اليدوي
 
+  // بما إن الراستر بقى مشارك نفس باين التايلز (عشان الـ blend mode يشتغل)، فـ Leaflet بيضيف
+  // بلاطات خريطة جديدة باستمرار في آخر الباين وهي بتتحمل، وده ممكن يخلي الراستر يظهر تحتها.
+  // فبنراقب أي إضافة جديدة للباين، ولو مش من عندنا، بنرجّع كل راستر ظاهر لآخر العناصر تاني فورًا.
+  let rasterReorderObserver = new MutationObserver(muts=>{
+    let tileAdded = false;
+    muts.forEach(m=>{
+      m.addedNodes.forEach(n=>{
+        if(!(n.getAttribute && n.getAttribute('data-raster-wrap'))) tileAdded = true;
+      });
+    });
+    if(!tileAdded) return;
+    rasterReorderObserver.disconnect();
+    state.rasters.forEach(r=>{
+      if(!r.show) return;
+      const wrap = rasterPane.querySelector('[data-raster-wrap="'+r.id+'"]');
+      if(wrap) rasterPane.appendChild(wrap);
+    });
+    rasterReorderObserver.observe(rasterPane, {childList:true});
+  });
+  rasterReorderObserver.observe(rasterPane, {childList:true});
+
   const satLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
     attribution: '© Google Maps', maxZoom: 20
   });
