@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -14,6 +15,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.20.9/proj4.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
@@ -137,7 +139,8 @@
   .basemap-toggle button.active{background:var(--teal-soft);color:var(--teal);font-weight:700;}
   .basemap-toggle button:hover:not(.active){color:var(--text);background:rgba(0,0,0,.05);}
 
-  .drive-control{position:absolute;top:10px;right:10px;z-index:450;background:rgba(255,255,255,.95);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:9px;padding:8px 12px;box-shadow:0 4px 16px rgba(0,120,140,.15);display:flex;align-items:center;gap:8px;font-size:11.5px;}
+  .drive-control{background:rgba(255,255,255,.95);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:9px;padding:8px 12px;box-shadow:0 4px 16px rgba(0,120,140,.15);display:flex;align-items:center;gap:8px;font-size:11.5px;}
+  #driveUpdateBanner{position:absolute;top:10px;right:10px;z-index:450;}
   .drive-control svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;flex-shrink:0;}
   .drive-control.connected{color:var(--teal);}
   .drive-control.disconnected{color:var(--text-muted);}
@@ -261,7 +264,8 @@
   .rect-rotate-marker{background:var(--accent);border:2px solid var(--bg-panel);border-radius:50%;cursor:alias;}
   .rect-scale-marker{background:var(--teal);border:2px solid var(--bg-panel);border-radius:50%;cursor:se-resize;}
 
-  .mobile-sidebar-toggle{display:none;position:fixed;bottom:calc(76px + env(safe-area-inset-bottom, 0px) + 16px);left:12px;z-index:900;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;border:none;box-shadow:0 6px 16px rgba(232,69,122,.35);align-items:center;justify-content:center;}
+  .mobile-sidebar-toggle{display:none;position:fixed;bottom:calc(76px + env(safe-area-inset-bottom, 0px) + 52px);left:12px;z-index:900;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;border:none;box-shadow:0 6px 16px rgba(232,69,122,.35);align-items:center;justify-content:center;}
+  #mobileDriveToggle{left:auto;right:12px;box-shadow:0 6px 16px rgba(0,120,140,.35);}
   .mobile-sidebar-toggle svg{width:22px;height:22px;}
 
   .mobile-finish-btn {
@@ -343,9 +347,11 @@
     }
     .sidebar.open{transform:translateX(0);}
     .mobile-sidebar-toggle{display:flex;}
+    #driveMenuToggleBtn{display:none;}
+    .leaflet-control-zoom{display:none !important;}
     .basemap-toggle{top:8px;left:8px;padding:2px;}
     .basemap-toggle button{font-size:10px;padding:5px 7px;}
-    .drive-control{top:8px;right:8px;padding:6px 8px;gap:5px;flex-wrap:wrap;max-width:44vw;}
+    .drive-control{padding:6px 8px;gap:5px;flex-wrap:wrap;max-width:80vw;}
     .drive-control .drive-msg{font-size:9px;}
     .drive-control button{font-size:9.5px;padding:4px 6px;}
     .rect-hud{left:50% !important;top:50% !important;transform:translate(-50%,-50%);width:82vw;max-width:260px;max-height:calc(100vh - 190px) !important;overflow-y:auto !important;}
@@ -466,6 +472,9 @@
   <button class="mobile-sidebar-toggle" id="mobileSidebarToggle" title="الطبقات والخصائص">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
   </button>
+  <button class="mobile-sidebar-toggle" id="mobileDriveToggle" title="اسمي / ربط بصديق / نسخ ID" style="background:var(--teal);">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 15l-4-7 4-7h10l4 7-4 7z"/><path d="M3 8h18M9 15l3 5 3-5"/></svg>
+  </button>
 
   <div class="toolbar" id="toolbar">
 
@@ -554,12 +563,33 @@
 
         <div class="ribbon-group">
           <div class="ribbon-group-row">
+            <button class="tool-btn" id="driveMenuToggleBtn" title="اسمي / ربط بصديق / نسخ ID">
+              <svg viewBox="0 0 24 24">
+                <path d="M7 15l-4-7 4-7h10l4 7-4 7z" stroke-width="1.8"/>
+                <path d="M3 8h18M9 15l3 5 3-5" stroke-width="1.8"/>
+              </svg><span>مشاركة</span>
+            </button>
+          </div>
+          <div class="ribbon-group-caption">التخزين السحابي</div>
+        </div>
+
+        <div class="ribbon-group">
+          <div class="ribbon-group-row">
             <button class="tool-btn" id="exportBtn" title="حفظ كملف GeoJSON">
               <svg viewBox="0 0 24 24">
                 <path d="M12 4v13" stroke-width="2.3"/>
                 <path d="M7 12l5 5 5-5" stroke-width="2.3"/>
                 <rect x="3" y="18" width="18" height="3.5" rx="1.5" fill="currentColor" opacity=".22" stroke-width="1.4"/>
               </svg><span>تصدير</span>
+            </button>
+            <button class="tool-btn" id="exportKmzBtn" title="حفظ كملف KMZ (Google Earth)">
+              <svg viewBox="0 0 24 24">
+                <path d="M12 4v13" stroke-width="2.3"/>
+                <path d="M7 12l5 5 5-5" stroke-width="2.3"/>
+                <rect x="3" y="18" width="18" height="3.5" rx="1.5" fill="currentColor" opacity=".22" stroke-width="1.4"/>
+                <circle cx="17.5" cy="6.5" r="4" fill="#fff" stroke-width="1.6"/>
+                <text x="17.5" y="8.3" text-anchor="middle" font-size="5.5" font-weight="800" fill="currentColor" stroke="none" font-family="sans-serif">Z</text>
+              </svg><span>KMZ</span>
             </button>
             <input type="file" id="importFileInput" accept=".geojson,.json" style="display:none;">
             <button class="tool-btn" id="importBtn" title="استيراد ملف GeoJSON">
@@ -715,6 +745,12 @@
                 <circle cx="16.5" cy="16.5" r="1.15" fill="currentColor" stroke="none"/>
               </svg><span>حاسبة</span>
             </button>
+            <button class="tool-btn" id="coordConvBtn" title="محول الإحداثيات: درجات عشرية ↔ درجة/دقيقة/ثانية ↔ UTM ↔ الحزام الأحمر">
+              <svg viewBox="0 0 24 24">
+                <path d="M4 8h13M17 8l-3.5-3.5M17 8l-3.5 3.5" stroke-width="1.8" fill="none"/>
+                <path d="M20 16H7M7 16l3.5-3.5M7 16l3.5 3.5" stroke-width="1.8" fill="none"/>
+              </svg><span>محوّل</span>
+            </button>
           </div>
           <div class="ribbon-group-caption">أدوات التحليل</div>
         </div>
@@ -829,12 +865,14 @@
         <button id="btnSat" class="active">قمر صناعي</button>
         <button id="btnStreets">خريطة عادية</button>
       </div>
-      <div class="drive-control disconnected" id="driveControl">
-        <svg viewBox="0 0 24 24"><path d="M7 15l-4-7 4-7h10l4 7-4 7z"/><path d="M3 8h18M9 15l3 5 3-5"/></svg>
-        <span class="drive-msg" id="driveMsg">جاري الاتصال بالتخزين السحابي...</span>
-        <button id="driveNameBtn" title="حدد اسمك عشان يظهر لأصدقائك">اسمي</button>
-        <button id="driveJoinBtn" title="ربط بـ ID صديقك لعرض رسمه على خريطتك (للقراءة فقط)">ربط بصديق</button>
-        <button id="driveCopyIdBtn" title="نسخ الـ ID بتاعك لمشاركته">نسخ ID</button>
+      <div id="driveMenuPopup" style="display:none;position:fixed;top:56px;left:50%;transform:translateX(-50%);z-index:970;">
+        <div class="drive-control disconnected" id="driveControl">
+          <svg viewBox="0 0 24 24"><path d="M7 15l-4-7 4-7h10l4 7-4 7z"/><path d="M3 8h18M9 15l3 5 3-5"/></svg>
+          <span class="drive-msg" id="driveMsg">جاري الاتصال بالتخزين السحابي...</span>
+          <button id="driveNameBtn" title="حدد اسمك عشان يظهر لأصدقائك">اسمي</button>
+          <button id="driveJoinBtn" title="ربط بـ ID صديقك لعرض رسمه على خريطتك (للقراءة فقط)">ربط بصديق</button>
+          <button id="driveCopyIdBtn" title="نسخ الـ ID بتاعك لمشاركته">نسخ ID</button>
+        </div>
       </div>
       <div class="drive-control" id="driveUpdateBanner" style="display:none;top:56px;border-color:var(--accent);">
         <span class="drive-msg" style="color:var(--accent);">🔄 فيه نسخة تانية على Drive</span>
@@ -1209,6 +1247,57 @@
       </div>
 
       <!-- ── Point UTM HUD ── -->
+      <!-- ── محول الإحداثيات ── -->
+      <div class="rect-hud" id="coordConvHud" style="width:290px;border-color:#5B84AC;display:none;max-height:calc(100vh - 160px);overflow-y:auto;">
+        <h4 style="color:#5B84AC;">🔁 محول الإحداثيات</h4>
+        <button class="btn-cancel" id="ccPickMapBtn" style="width:100%;margin-bottom:8px;">📍 اختر نقطة من الخريطة</button>
+
+        <div style="font-size:10.5px;font-weight:700;color:#5B84AC;margin-top:6px;">درجات عشرية (Decimal Degrees)</div>
+        <div style="display:flex;gap:4px;margin-top:4px;">
+          <input type="text" id="ccDdLat" placeholder="Lat">
+          <input type="text" id="ccDdLng" placeholder="Lng">
+        </div>
+        <button class="btn-cancel cc-convert-btn" data-src="dd" style="width:100%;margin-top:4px;font-size:10.5px;">تحويل من هنا ⬇</button>
+
+        <div style="font-size:10.5px;font-weight:700;color:#5B84AC;margin-top:10px;">درجة / دقيقة / ثانية (DMS)</div>
+        <div style="display:flex;gap:3px;margin-top:4px;">
+          <input type="text" id="ccDmsLatD" placeholder="د" style="text-align:center;">
+          <input type="text" id="ccDmsLatM" placeholder="ق" style="text-align:center;">
+          <input type="text" id="ccDmsLatS" placeholder="ث" style="text-align:center;">
+          <select id="ccDmsLatDir" style="width:56px;"><option value="N">N</option><option value="S">S</option></select>
+        </div>
+        <div style="display:flex;gap:3px;margin-top:4px;">
+          <input type="text" id="ccDmsLngD" placeholder="د" style="text-align:center;">
+          <input type="text" id="ccDmsLngM" placeholder="ق" style="text-align:center;">
+          <input type="text" id="ccDmsLngS" placeholder="ث" style="text-align:center;">
+          <select id="ccDmsLngDir" style="width:56px;"><option value="E">E</option><option value="W">W</option></select>
+        </div>
+        <button class="btn-cancel cc-convert-btn" data-src="dms" style="width:100%;margin-top:4px;font-size:10.5px;">تحويل من هنا ⬇</button>
+
+        <div style="font-size:10.5px;font-weight:700;color:#5B84AC;margin-top:10px;">مترى UTM</div>
+        <select id="ccUtmZone" style="margin-top:4px;">
+          <option value="auto">تلقائي (حسب خط الطول)</option>
+          <option value="35">زون 35 N</option>
+          <option value="36">زون 36 N</option>
+        </select>
+        <div style="display:flex;gap:4px;margin-top:4px;">
+          <input type="text" id="ccUtmE" placeholder="Easting">
+          <input type="text" id="ccUtmN" placeholder="Northing">
+        </div>
+        <button class="btn-cancel cc-convert-btn" data-src="utm" style="width:100%;margin-top:4px;font-size:10.5px;">تحويل من هنا ⬇</button>
+
+        <div style="font-size:10.5px;font-weight:700;color:#5B84AC;margin-top:10px;">مترى الحزام الأحمر (Red Belt)</div>
+        <div style="display:flex;gap:4px;margin-top:4px;">
+          <input type="text" id="ccRedX" placeholder="X">
+          <input type="text" id="ccRedY" placeholder="Y">
+        </div>
+        <button class="btn-cancel cc-convert-btn" data-src="red" style="width:100%;margin-top:4px;font-size:10.5px;">تحويل من هنا ⬇</button>
+
+        <div class="row-btns" style="margin-top:10px;">
+          <button class="btn-create" id="ccCloseBtn" style="width:100%;">تم</button>
+        </div>
+      </div>
+
       <div class="rect-hud" id="pointUtmHud" style="width:270px;border-color:#2a9d5c;display:none;">
         <h4 style="color:#2a9d5c;margin:0 0 8px;">📍 إضافة نقطة بإحداثي UTM</h4>
         <label style="font-size:10px;">رقم المنطقة (Zone)</label>
@@ -1353,6 +1442,115 @@
       return {lat, lng};
     }catch(e){ console.error('proj4 transform failed', e); return {lat:y, lng:x}; }
   }
+  function latLngToProjected(lat, lng, epsgCode){
+    if(!epsgCode || epsgCode === 'EPSG:4326') return {x:lng, y:lat};
+    try{
+      const [x, y] = proj4('EPSG:4326', epsgCode, [lng, lat]);
+      return {x, y};
+    }catch(e){ console.error('proj4 transform failed', e); return {x:lng, y:lat}; }
+  }
+
+  /* ===== محول الإحداثيات: درجات عشرية ↔ درجة/دقيقة/ثانية ↔ UTM ↔ الحزام الأحمر ===== */
+  let ccLatLng = null; // {lat, lng} — المصدر الموحّد اللي كل الصور بتتحسب منه
+  let ccPickingFromMap = false;
+
+  function decimalToDMS(deg){
+    const abs = Math.abs(deg);
+    const d = Math.floor(abs);
+    const mFull = (abs-d)*60;
+    const m = Math.floor(mFull);
+    const s = (mFull-m)*60;
+    return {d, m, s};
+  }
+  function dmsToDecimal(d, m, s, dir){
+    const val = (parseFloat(d)||0) + (parseFloat(m)||0)/60 + (parseFloat(s)||0)/3600;
+    return (dir==='S' || dir==='W') ? -val : val;
+  }
+  function utmZoneForLng(lng){ return Math.floor((lng+180)/6)+1; }
+
+  function ccUpdateAllFrom(latlng){
+    ccLatLng = latlng;
+    document.getElementById('ccDdLat').value = latlng.lat.toFixed(6);
+    document.getElementById('ccDdLng').value = latlng.lng.toFixed(6);
+
+    const dmsLat = decimalToDMS(latlng.lat), dmsLng = decimalToDMS(latlng.lng);
+    document.getElementById('ccDmsLatD').value = dmsLat.d;
+    document.getElementById('ccDmsLatM').value = dmsLat.m;
+    document.getElementById('ccDmsLatS').value = dmsLat.s.toFixed(2);
+    document.getElementById('ccDmsLatDir').value = latlng.lat >= 0 ? 'N' : 'S';
+    document.getElementById('ccDmsLngD').value = dmsLng.d;
+    document.getElementById('ccDmsLngM').value = dmsLng.m;
+    document.getElementById('ccDmsLngS').value = dmsLng.s.toFixed(2);
+    document.getElementById('ccDmsLngDir').value = latlng.lng >= 0 ? 'E' : 'W';
+
+    const zoneSel = document.getElementById('ccUtmZone').value;
+    const zone = zoneSel === 'auto' ? utmZoneForLng(latlng.lng) : parseInt(zoneSel);
+    if(zoneSel === 'auto'){
+      const opt = Array.from(document.getElementById('ccUtmZone').options).find(o=>o.value==String(zone));
+      // لو الزون المكتشف مش في القائمة (نادر لمصر)، منعرضش تحديد غلط، بنسيب auto
+    }
+    const utmEpsg = 'EPSG:326'+String(zone).padStart(2,'0');
+    try{
+      const utm = latLngToProjected(latlng.lat, latlng.lng, utmEpsg);
+      document.getElementById('ccUtmE').value = utm.x.toFixed(2);
+      document.getElementById('ccUtmN').value = utm.y.toFixed(2);
+    }catch(e){}
+
+    const red = latLngToProjected(latlng.lat, latlng.lng, 'EPSG:22992');
+    document.getElementById('ccRedX').value = red.x.toFixed(2);
+    document.getElementById('ccRedY').value = red.y.toFixed(2);
+  }
+
+  document.getElementById('coordConvBtn').addEventListener('click', ()=>{
+    document.getElementById('coordConvHud').style.display = 'block';
+    if(!ccLatLng){
+      const c = map.getCenter();
+      ccUpdateAllFrom({lat:c.lat, lng:c.lng});
+    }
+  });
+  document.getElementById('ccCloseBtn').addEventListener('click', ()=>{
+    document.getElementById('coordConvHud').style.display = 'none';
+    ccPickingFromMap = false;
+  });
+  document.getElementById('ccPickMapBtn').addEventListener('click', ()=>{
+    ccPickingFromMap = true;
+    document.getElementById('stHint').textContent = '📍 دوسي على أي نقطة على الخريطة عشان تتحول إحداثياتها';
+  });
+
+  document.querySelectorAll('.cc-convert-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const src = btn.dataset.src;
+      try{
+        if(src === 'dd'){
+          const lat = parseFloat(document.getElementById('ccDdLat').value);
+          const lng = parseFloat(document.getElementById('ccDdLng').value);
+          if(isNaN(lat) || isNaN(lng)) throw new Error('قيم ناقصة');
+          ccUpdateAllFrom({lat, lng});
+        } else if(src === 'dms'){
+          const lat = dmsToDecimal(document.getElementById('ccDmsLatD').value, document.getElementById('ccDmsLatM').value, document.getElementById('ccDmsLatS').value, document.getElementById('ccDmsLatDir').value);
+          const lng = dmsToDecimal(document.getElementById('ccDmsLngD').value, document.getElementById('ccDmsLngM').value, document.getElementById('ccDmsLngS').value, document.getElementById('ccDmsLngDir').value);
+          ccUpdateAllFrom({lat, lng});
+        } else if(src === 'utm'){
+          const e = parseFloat(document.getElementById('ccUtmE').value);
+          const n = parseFloat(document.getElementById('ccUtmN').value);
+          if(isNaN(e) || isNaN(n)) throw new Error('قيم ناقصة');
+          const zoneSel = document.getElementById('ccUtmZone').value;
+          const zone = zoneSel === 'auto' ? 36 : parseInt(zoneSel); // لو تلقائي ومحدش مركز معروف، نفترض 36 (وسط وشرق مصر) كبداية معقولة
+          const utmEpsg = 'EPSG:326'+String(zone).padStart(2,'0');
+          const ll = projectedToLatLng(e, n, utmEpsg);
+          ccUpdateAllFrom(ll);
+        } else if(src === 'red'){
+          const x = parseFloat(document.getElementById('ccRedX').value);
+          const y = parseFloat(document.getElementById('ccRedY').value);
+          if(isNaN(x) || isNaN(y)) throw new Error('قيم ناقصة');
+          const ll = projectedToLatLng(x, y, 'EPSG:22992');
+          ccUpdateAllFrom(ll);
+        }
+      }catch(e){
+        alert('اتأكدي إن كل الخانات في القسم ده متملية بأرقام صحيحة.');
+      }
+    });
+  });
 
   // ===== World File (.jgw/.pgw/.wld/.tfw) =====
   function parseWorldFile(text){
@@ -1721,10 +1919,12 @@
   function toDeg(r){ return r*180/Math.PI; }
   
   function haversine(lat1,lng1,lat2,lng2){
-    const R=6371000;
-    const dLat=toRad(lat2-lat1), dLng=toRad(lng2-lng1);
-    const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
-    return 2*R*Math.asin(Math.sqrt(a));
+    // بيحسب المسافة بإسقاط UTM (نفس الزون لأي نقطتين، بيتحدد تلقائي حسب موقعهم)
+    // بدل الحساب الكروي القديم، عشان الطول يطابق اللي بيطلع في ArcGIS Pro لما يكون شغال بنظام UTM
+    const zone = utmZoneForLng((lng1+lng2)/2);
+    const p1 = latLngToUTM(lat1, lng1, zone);
+    const p2 = latLngToUTM(lat2, lng2, zone);
+    return Math.hypot(p2.easting-p1.easting, p2.northing-p1.northing);
   }
   
   function destPoint(lat,lng,dEast,dNorth){
@@ -1745,13 +1945,13 @@
   }
 
   // تحويل إحداثي WGS84 (خط عرض/طول) إلى UTM (شرقي/شمالي بالمتر + رقم المنطقة)
-  function latLngToUTM(lat, lng){
+  function latLngToUTM(lat, lng, forceZone){
     const a = 6378137.0; // نصف المحور الأكبر WGS84
     const eccSq = 0.00669438;
     const k0 = 0.9996;
     const latRad = toRad(lat);
     const lngRad = toRad(lng);
-    const zoneNumber = Math.floor((lng+180)/6)+1;
+    const zoneNumber = forceZone || (Math.floor((lng+180)/6)+1);
     const lngOrigin = (zoneNumber-1)*6-180+3;
     const lngOriginRad = toRad(lngOrigin);
     const eccPrimeSq = eccSq/(1-eccSq);
@@ -3009,15 +3209,21 @@
   }
   
   function polygonAreaMeters(coords){
-    // حساب المساحة الكروية الحقيقية عبر Turf.js (بدل الإسقاط المسطّح التقريبي القديم)
-    // ده بيقرّب النتيجة من حسابات الأنظمة الجيوديسية زي ArcGIS Pro أكتر من التقريب المسطح
+    // حساب المساحة بإسقاط UTM (نفس الزون لكل نقط المضلع، بيتحدد تلقائي حسب موقعه)
+    // ده بيطابق اللي بيطلع في ArcGIS Pro لما يكون الشغل بنظام UTM (بدل الحساب الكروي القديم عبر Turf.js)
     if(!coords || coords.length < 3) return 0;
     try{
-      const ring = coords.map(c=>[c[1], c[0]]);
-      ring.push(ring[0]);
-      return turf.area(turf.polygon([ring]));
+      const avgLng = coords.reduce((s,c)=>s+c[1],0)/coords.length;
+      const zone = utmZoneForLng(avgLng);
+      const pts = coords.map(c=> latLngToUTM(c[0], c[1], zone));
+      let a=0;
+      for(let i=0;i<pts.length;i++){
+        const p1=pts[i], p2=pts[(i+1)%pts.length];
+        a += p1.easting*p2.northing - p2.easting*p1.northing;
+      }
+      return Math.abs(a)/2;
     } catch(e){
-      // حساب احتياطي (الطريقة المسطحة القديمة) لو المضلع غير صالح لتورف لأي سبب
+      // حساب احتياطي (الطريقة المسطحة التقريبية القديمة) لو حصل أي خطأ في إسقاط UTM
       const refLat = coords[0][0], refLng = coords[0][1];
       const pts = coords.map(c=>{
         const north = (c[0]-refLat)*111320;
@@ -4226,6 +4432,13 @@
 
   /* ---------- Map click ---------- */
   map.on('click', e=>{
+    if(ccPickingFromMap){
+      ccPickingFromMap = false;
+      ccUpdateAllFrom({lat:e.latlng.lat, lng:e.latlng.lng});
+      document.getElementById('coordConvHud').style.display = 'block';
+      document.getElementById('stHint').textContent = '✅ اتحولت إحداثيات النقطة اللي اخترتيها';
+      return;
+    }
     if((tool==='line'||tool==='polygon') && drawStyle==='lengths' && lengthsClosingActive){
       return; // مستنيين اختيار نقطة الغلق من الاحتمالات المعروضة على الخريطة
     }
@@ -4633,6 +4846,19 @@
   const sidebarEl = document.querySelector('.sidebar');
   document.getElementById('mobileSidebarToggle').addEventListener('click', ()=>{
     sidebarEl.classList.toggle('open');
+  });
+
+  function toggleDriveMenuPopup(){
+    const el = document.getElementById('driveMenuPopup');
+    el.style.display = (el.style.display === 'block') ? 'none' : 'block';
+  }
+  document.getElementById('driveMenuToggleBtn').addEventListener('click', (e)=>{ e.stopPropagation(); toggleDriveMenuPopup(); });
+  document.getElementById('mobileDriveToggle').addEventListener('click', (e)=>{ e.stopPropagation(); toggleDriveMenuPopup(); });
+  document.addEventListener('click', (e)=>{
+    const popup = document.getElementById('driveMenuPopup');
+    if(popup.style.display === 'block' && !popup.contains(e.target) && e.target.id !== 'driveMenuToggleBtn' && e.target.id !== 'mobileDriveToggle'){
+      popup.style.display = 'none';
+    }
   });
 
   /* ---------- Layers UI ---------- */
@@ -6056,6 +6282,86 @@
     });
     return {type:'FeatureCollection', features};
   }
+
+  /* ===== تصدير KMZ (KML مضغوط) لفتحه في Google Earth وبرامج GIS التانية ===== */
+  function hexToKmlColor(hex, alpha){
+    hex = (hex||'#3388ff').replace('#','');
+    if(hex.length===3) hex = hex.split('').map(c=>c+c).join('');
+    const r = hex.slice(0,2), g = hex.slice(2,4), b = hex.slice(4,6);
+    const a = Math.round((alpha!=null?alpha:1)*255).toString(16).padStart(2,'0');
+    return (a+b+g+r).toLowerCase();
+  }
+  function escapeXml(s){
+    return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+  }
+  function featureKmlName(f, idx){
+    const a = f.attrs || {};
+    if(a['الاسم']) return a['الاسم'];
+    if(a['اسم']) return a['اسم'];
+    if(a['name']) return a['name'];
+    const typeAr = {point:'نقطة', line:'خط', polygon:'مضلع', rectangle:'مستطيل', circle:'دائرة'};
+    return (typeAr[f.type] || f.type) + ' ' + (idx+1);
+  }
+
+  function buildKML(){
+    let styles = '';
+    let placemarks = '';
+    const usedStyles = new Set();
+    state.layers.forEach(layer=>{
+      layer.features.forEach((f, idx)=>{
+        const color = f.color || layer.color || '#3388ff';
+        const styleId = 'style_' + color.replace('#','');
+        if(!usedStyles.has(styleId)){
+          usedStyles.add(styleId);
+          const lineColor = hexToKmlColor(color, 1);
+          const fillColor = hexToKmlColor(color, 0.35);
+          styles += `<Style id="${styleId}"><LineStyle><color>${lineColor}</color><width>2</width></LineStyle><PolyStyle><color>${fillColor}</color></PolyStyle><IconStyle><color>${lineColor}</color><scale>1</scale></IconStyle></Style>\n`;
+        }
+        const name = featureKmlName(f, idx);
+        let geomXml = '';
+        if(f.type === 'point'){
+          const c = f.coords[0];
+          geomXml = `<Point><coordinates>${c[1]},${c[0]},0</coordinates></Point>`;
+        } else if(f.type === 'line'){
+          const coordStr = f.coords.map(c=>`${c[1]},${c[0]},0`).join(' ');
+          geomXml = `<LineString><tessellate>1</tessellate><coordinates>${coordStr}</coordinates></LineString>`;
+        } else {
+          const ring = f.coords.slice();
+          if(ring.length) ring.push(ring[0]);
+          const coordStr = ring.map(c=>`${c[1]},${c[0]},0`).join(' ');
+          geomXml = `<Polygon><tessellate>1</tessellate><outerBoundaryIs><LinearRing><coordinates>${coordStr}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
+        }
+        const attrs = f.attrs || {};
+        const keys = Object.keys(attrs).filter(k=>attrs[k]!=null && attrs[k]!=='');
+        const extData = keys.length ? ('<ExtendedData>' + keys.map(k=>`<Data name="${escapeXml(k)}"><value>${escapeXml(attrs[k])}</value></Data>`).join('') + '</ExtendedData>') : '';
+        placemarks += `<Placemark><name>${escapeXml(name)}</name><styleUrl>#${styleId}</styleUrl>${extData}${geomXml}</Placemark>\n`;
+      });
+    });
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${escapeXml(state.userName || 'GIS Export')}</name>\n${styles}${placemarks}</Document></kml>`;
+  }
+
+  async function exportAsKMZ(){
+    if(typeof JSZip === 'undefined'){
+      alert('مكتبة ضغط KMZ لسه بتتحمل — استنى شوية وحاول تاني (لازم اتصال إنترنت أول مرة تفتح الأداة).');
+      return;
+    }
+    try{
+      const kml = buildKML();
+      const zip = new JSZip();
+      zip.file('doc.kml', kml);
+      const blob = await zip.generateAsync({type:'blob', mimeType:'application/vnd.google-earth.kmz'});
+      const url = URL.createObjectURL(blob);
+      const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+      const a = document.createElement('a');
+      a.href = url; a.download = 'gis-drawing-' + stamp + '.kmz';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=> URL.revokeObjectURL(url), 3000);
+    }catch(e){
+      console.error(e);
+      alert('حصل خطأ أثناء تصدير KMZ — جرب تاني.');
+    }
+  }
+  document.getElementById('exportKmzBtn').addEventListener('click', exportAsKMZ);
 
   let drivePushInFlight=false;
   function pushToDrive(){
