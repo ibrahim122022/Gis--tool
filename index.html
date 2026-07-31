@@ -1263,8 +1263,11 @@
           <option value="">اختر طبقة...</option>
         </select>
         <div class="row-btns" style="margin-top:6px;">
-          <button class="btn-cancel" id="bulkClearBtn">إلغاء التحديد</button>
+          <button class="btn-cancel" id="bulkMergeBtn">🔗 دمج المحدد</button>
           <button class="btn-cancel" id="bulkDeleteBtn" style="color:var(--danger);border-color:var(--danger);">🗑️ حذف الكل</button>
+        </div>
+        <div class="row-btns" style="margin-top:6px;">
+          <button class="btn-cancel" id="bulkClearBtn" style="width:100%;">إلغاء التحديد</button>
         </div>
       </div>
 
@@ -5370,6 +5373,68 @@
     this.value = '';
     renderBulkSelectPanel(); renderLayerList(); renderFeatures(); scheduleSave(); updateHistoryButtons();
   });
+
+  document.getElementById('bulkMergeBtn').addEventListener('click', mergeSelectedPolygons);
+
+  function mergeSelectedPolygons(){
+    const polyItems = multiSelect
+      .map(c => ({ layerId: c.layerId, f: getFeature(c.layerId, c.featureId) }))
+      .filter(x => x.f && (x.f.type === 'polygon' || x.f.type === 'rectangle'));
+
+    if(polyItems.length < 2){
+      alert('لازم تحدد مضلعين على الأقل عشان تقدر تدمجهم');
+      return;
+    }
+
+    const turfPolys = polyItems.map(x => {
+      const ring = x.f.coords.map(c => [c[1], c[0]]);
+      ring.push(ring[0]);
+      return turf.polygon([ring]);
+    });
+
+    let merged;
+    try{ merged = turfPolys.reduce((acc, cur) => turf.union(acc, cur)); }
+    catch(e){ alert('حصل خطأ أثناء الدمج — تأكد إن المضلعات المحددة سليمة هندسيًا'); return; }
+    if(!merged){ alert('تعذر دمج المضلعات المحددة'); return; }
+
+    pushStateToUndo();
+
+    // بناخد أول مضلع محدد كمرجع للطبقة/اللون/الخصائص، ونحذف باقي المضلعات القديمة
+    const primary = polyItems[0];
+    const geom = merged.geometry;
+    const ringsList = geom.type === 'MultiPolygon'
+      ? geom.coordinates.map(mp => mp[0])
+      : [geom.coordinates[0]];
+
+    const newFeatures = [];
+    ringsList.forEach(r => {
+      let pts = r.map(c => [c[1], c[0]]);
+      if(pts.length > 1){
+        const a = pts[0], b = pts[pts.length-1];
+        if(Math.abs(a[0]-b[0]) < 1e-10 && Math.abs(a[1]-b[1]) < 1e-10) pts.pop();
+      }
+      if(pts.length < 3) return;
+      newFeatures.push({
+        id: uid(), type:'polygon',
+        coords: pts,
+        attrs: Object.assign({}, primary.f.attrs),
+        color: primary.f.color
+      });
+    });
+
+    polyItems.forEach(x=>{
+      const layer = getLayer(x.layerId);
+      if(layer) layer.features = layer.features.filter(ft => ft.id !== x.f.id);
+    });
+
+    const targetLayer = getLayer(primary.layerId);
+    if(targetLayer) targetLayer.features.push(...newFeatures);
+
+    multiSelect = newFeatures.map(nf => ({layerId: primary.layerId, featureId: nf.id}));
+    selection = multiSelect[0] || null;
+
+    renderBulkSelectPanel(); renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave(); updateHistoryButtons();
+  }
 
   function renderBulkSelectPanel(){
     const hud = document.getElementById('bulkSelectHud');
