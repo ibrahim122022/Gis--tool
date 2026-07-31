@@ -1178,15 +1178,39 @@
         <label>طريقة التقسيم</label>
         <select id="divMode">
           <option value="count">عدد الأجزاء</option>
-          <option value="area">مساحة محددة لكل قطعة (م²)</option>
+          <option value="area">مساحة محددة لكل قطعة</option>
         </select>
         <div id="divCountRow">
           <label>عدد الأجزاء</label>
           <input type="number" id="divN" value="2" min="2" max="100" step="1">
         </div>
         <div id="divAreaRow" style="display:none;">
-          <label>مساحة كل قطعة (م²)</label>
-          <input type="number" id="divAreaValue" value="100" min="0.01" step="0.01">
+          <label>وحدة المساحة</label>
+          <select id="divAreaUnit">
+            <option value="m2">متر مربع (م²)</option>
+            <option value="feddan">فدان / قيراط / سهم</option>
+          </select>
+          <div id="divAreaM2Row">
+            <label>مساحة كل قطعة (م²)</label>
+            <input type="number" id="divAreaValue" value="100" min="0.01" step="0.01">
+          </div>
+          <div id="divAreaFeddanRow" style="display:none;">
+            <label>مساحة كل قطعة</label>
+            <div style="display:flex;gap:5px;">
+              <div style="flex:1;">
+                <input type="number" id="divAreaFeddan" value="0" min="0" step="1" placeholder="فدان">
+                <label style="font-size:9.5px;text-align:center;margin:2px 0 0;">فدان</label>
+              </div>
+              <div style="flex:1;">
+                <input type="number" id="divAreaQirat" value="0" min="0" max="23" step="1" placeholder="قيراط">
+                <label style="font-size:9.5px;text-align:center;margin:2px 0 0;">قيراط</label>
+              </div>
+              <div style="flex:1;">
+                <input type="number" id="divAreaSahm" value="0" min="0" max="23" step="1" placeholder="سهم">
+                <label style="font-size:9.5px;text-align:center;margin:2px 0 0;">سهم</label>
+              </div>
+            </div>
+          </div>
           <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;font-weight:400;">
             <input type="checkbox" id="divAreaReverse" style="width:14px;height:14px;accent-color:#2a9d5c;cursor:pointer;">
             <span>ابدأ من الجهة المقابلة (تجعل القطعة المتبقية في البداية بدل النهاية)</span>
@@ -5613,6 +5637,11 @@
     document.getElementById('divAreaRow').style.display = isArea ? 'block' : 'none';
     document.getElementById('divEqualAreaRow').style.display = isArea ? 'none' : 'flex';
   });
+  document.getElementById('divAreaUnit').addEventListener('change', function(){
+    const isFeddan = this.value==='feddan';
+    document.getElementById('divAreaM2Row').style.display = isFeddan ? 'none' : 'block';
+    document.getElementById('divAreaFeddanRow').style.display = isFeddan ? 'block' : 'none';
+  });
   document.getElementById('divideCancel').addEventListener('click', ()=>{
     document.getElementById('divideHud').style.display='none';
     dividePendingLayerId=null; dividePendingFeatureId=null;
@@ -5637,7 +5666,14 @@
     document.getElementById('divideHud').style.display='none';
     document.getElementById('stHint').textContent='⏳ جاري التقسيم...';
     if(divMode==='area'){
-      const areaPerPart = parseFloat(document.getElementById('divAreaValue').value)||0;
+      const areaUnit = document.getElementById('divAreaUnit').value;
+      const areaPerPart = areaUnit==='feddan'
+        ? feddanToArea(
+            parseFloat(document.getElementById('divAreaFeddan').value)||0,
+            parseFloat(document.getElementById('divAreaQirat').value)||0,
+            parseFloat(document.getElementById('divAreaSahm').value)||0
+          )
+        : (parseFloat(document.getElementById('divAreaValue').value)||0);
       const reverseStart = document.getElementById('divAreaReverse').checked;
       // نستخدم setTimeout لإتاحة الفرصة للـ UI أن يُحدَّث
       setTimeout(async ()=>{
