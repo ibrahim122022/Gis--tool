@@ -19,11 +19,11 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
   :root{
-    --bg:#D6EEF2;
-    --bg-panel:#FFFFFF; --bg-panel-2:#EAF7F5;
-    --accent:#E8457A; --accent-soft:rgba(232,69,122,.16);
-    --teal:#00B4A6; --teal-soft:rgba(0,180,166,.15);
-    --text:#1B3968; --text-muted:#6E92A8; --danger:#E2665B; --border:#A8D8DC;
+    --bg:#F1E9DB;
+    --bg-panel:#FCFAF4; --bg-panel-2:#EDE4D0;
+    --accent:#C9973F; --accent-soft:rgba(201,151,63,.16);
+    --teal:#1F4A44; --teal-soft:rgba(31,74,68,.15);
+    --text:#243E39; --text-muted:#8B9686; --danger:#B5533F; --border:#DDD2BA;
     --mono:'JetBrains Mono', ui-monospace, Consolas, monospace;
     --sans:'Inter', system-ui, -apple-system, sans-serif;
   }
@@ -34,7 +34,7 @@
 
   .toolbar{
     width:100%;
-    background:linear-gradient(180deg,#E0F6F8 0%,#C4E8EE 100%);
+    background:linear-gradient(180deg,#FCFAF4 0%,#EDE4D0 100%);
     border-bottom:1px solid var(--border);
     box-shadow:0 2px 18px rgba(0,120,140,.18);
     display:flex;flex-direction:column;align-items:stretch;
@@ -77,24 +77,24 @@
   .ribbon-group-row .tool-btn span{font-size:6.8px;}
 
   /* ── Per-tool accent colors — Mediterranean palette ── */
-  .tool-btn[data-tool="select"]  {--tc:#00B4A6;}
-  .tool-btn[data-tool="point"]   {--tc:#E8457A;}
+  .tool-btn[data-tool="select"]  {--tc:#1F4A44;}
+  .tool-btn[data-tool="point"]   {--tc:#C9973F;}
   .tool-btn[data-tool="line"]    {--tc:#0090A8;}
   .tool-btn[data-tool="polygon"] {--tc:#E8A432;}
   .tool-btn[data-tool="rectangle"]{--tc:#D4852A;}
   .tool-btn[data-tool="circle"]  {--tc:#5070C8;}
   .tool-btn[data-tool="measure"] {--tc:#D4A020;}
-  #goToCoordsBtn {--tc:#00B4A6;}
-  #undoBtn,#redoBtn{--tc:#7A9AAA;}
+  #goToCoordsBtn {--tc:#1F4A44;}
+  #undoBtn,#redoBtn{--tc:#6B7F72;}
   #snapBtn   {--tc:#D4A020;}
   #midSnapBtn{--tc:#7B68EE;}
-  #locateBtn {--tc:#E8457A;}
-  #fitBtn    {--tc:#00B4A6;}
-  #exportBtn {--tc:#00B4A6;}
+  #locateBtn {--tc:#C9973F;}
+  #fitBtn    {--tc:#1F4A44;}
+  #exportBtn {--tc:#1F4A44;}
   #importBtn {--tc:#D4A020;}
   #labelsBtn {--tc:#5070C8;}
-  #dimensionsBtn {--tc:#00B4A6;}
-  #screenshotBtn{--tc:#7A9AAA;}
+  #dimensionsBtn {--tc:#1F4A44;}
+  #screenshotBtn{--tc:#6B7F72;}
   #searchPlaceBtn{--tc:#E8A432;}
   #polygonDmsBtn {--tc:#7B68EE;}
   #pointUtmBtn {--tc:#2a9d5c;}
@@ -129,7 +129,7 @@
 
   .main{flex:1;position:relative;display:flex;flex-direction:column;min-width:0;}
   .canvas-wrap{flex:1;position:relative;overflow:hidden;}
-  #map{width:100%;height:100%;background:#A8D4DC;}
+  #map{width:100%;height:100%;background:#F1E9DB;}
   #map.tool-select{cursor:default;}
   #map.tool-draw{cursor:crosshair;}
 
@@ -153,7 +153,7 @@
 
   .statusbar{
     height:32px;
-    background:linear-gradient(90deg,#C4E8EE 0%,#D6EEF2 100%);
+    background:linear-gradient(90deg,#EDE4D0 0%,#F1E9DB 100%);
     border-top:1px solid var(--border);
     display:flex;align-items:center;padding:0 16px;gap:16px;
     font-family:var(--mono);font-size:11px;color:var(--text-muted);flex-shrink:0;
@@ -182,8 +182,8 @@
   .dms-row .dms-dir{width:44px;background:var(--bg-panel-2);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 3px;font-family:var(--mono);font-size:11px;}
   .dms-row .dms-sym{font-size:11px;color:var(--text-muted);flex-shrink:0;}
 
-  .sidebar{width:280px;background:linear-gradient(180deg,#FFFFFF 0%,#EAF7F5 100%);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
-  .tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;background:#EAF7F5;}
+  .sidebar{width:280px;background:linear-gradient(180deg,#FFFFFF 0%,#EDE4D0 100%);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
+  .tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;background:#EDE4D0;}
   .tab{flex:1;text-align:center;padding:12px 0;font-size:12px;color:var(--text-muted);cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;}
   .tab.active{color:var(--teal);border-bottom-color:var(--teal);}
   .tab:hover:not(.active){color:var(--text);border-bottom-color:rgba(0,0,0,.12);}
@@ -328,7 +328,7 @@
       flex-direction:row;border-left:none;border-top:1px solid var(--border);
       order:3;overflow-x:auto;padding-right:6px;padding-left:6px;padding-top:6px;
       -webkit-overflow-scrolling:touch;justify-content:flex-start;box-sizing:border-box;
-      background:linear-gradient(90deg,#E0F6F8 0%,#C4E8EE 100%);
+      background:linear-gradient(90deg,#FCFAF4 0%,#EDE4D0 100%);
     }
     .toolbar-sep{width:1px;height:36px;margin:0 4px;flex-shrink:0;}
     .tool-btn{width:48px;height:48px;flex-shrink:0;}
@@ -413,7 +413,7 @@
   .ly-el-table{ background:#fff; border:1px solid #333 !important; font-size:9px; }
   .ly-el-table .ly-table-head{ background:#FCF3D9; color:#111; padding:2px 6px; font-weight:700; border-bottom:1px solid #333; }
   .ly-el-table .ly-table-body{ padding:3px 5px; overflow:auto; }
-  .nb-table td,.nb-table th{border:1px solid #ccd6e0;padding:2px 5px;text-align:center;white-space:nowrap;}
+  .nb-table td,.nb-table th{border:1px solid #DDD2BA;padding:2px 5px;text-align:center;white-space:nowrap;}
   .nb-table th{background:#eef3f8;font-weight:700;}
 
   /* ---- هالة بيضاء شفافة تُستخدم لمقابض سحب أركان الراستر فوق الخريطة ---- */
@@ -434,7 +434,7 @@
   .tb-value{background:#fff;text-align:right;}
   .tb-empty{color:#aaa;}
   .tb-area-type{background:#FCF3D9;text-align:center;font-weight:700;}
-  .tb-area-h{background:#DCE6ED;text-align:center;font-weight:700;width:26%;}
+  .tb-area-h{background:#EDE4D0;text-align:center;font-weight:700;width:26%;}
   .tb-area-v{text-align:center;font-weight:800;}
   .tb-bh{background:#FCF3D9;text-align:center;font-weight:700;}
   .tb-sign-row{display:flex;border:1px solid #7A5A1E;border-top:none;}
@@ -505,8 +505,8 @@
             </button>
             <button class="tool-btn" id="undoBtn" title="تراجع (Ctrl+Z)" disabled>
               <svg viewBox="0 0 24 24">
-                <path d="M3 9.5V15h5.5" stroke-width="2.2"/>
-                <path d="M3 15A9 9 0 1012 3c-2.6 0-4.9 1-6.6 2.7L3 8" stroke-width="2"/>
+                <path d="M9 6L4 11l5 5" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M4 11h10.5A5.5 5.5 0 0120 16.5V18" stroke-width="2.3" stroke-linecap="round"/>
               </svg><span>تراجع</span>
             </button>
             <button class="tool-btn" id="redoBtn" title="إعادة (Ctrl+Y)" disabled>
@@ -1005,7 +1005,7 @@
         <!-- لوحة خصائص العنصر المحدد حاليًا على اللوحة -->
         <div id="lyElementProps" style="display:none;position:fixed;left:12px;top:64px;width:260px;background:var(--bg-panel);border:1px solid var(--accent);border-radius:10px;padding:10px;max-height:calc(100vh - 90px);overflow-y:auto;z-index:860;box-shadow:0 8px 24px rgba(0,0,0,.4);">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-            <b id="lyPropsTitle" style="font-size:12.5px;color:#5B84AC;">خصائص العنصر</b>
+            <b id="lyPropsTitle" style="font-size:12.5px;color:#6B7F72;">خصائص العنصر</b>
             <button class="icon-btn" id="lyDeleteElBtn" title="حذف العنصر">🗑️</button>
           </div>
           <div id="lyPropsMapFrame" style="display:none;">
@@ -1036,8 +1036,8 @@
 
 
       <!-- ── سلسلة صفحات تلقائية (Map Series) — صفحة لكل مضلع في طبقة مختارة ── -->
-      <div class="rect-hud" id="mapSeriesHud" style="width:270px;display:none;top:110px;left:10px;border-color:#5B84AC;max-height:calc(100vh - 160px);overflow-y:auto;">
-        <h4 style="color:#5B84AC;">🧩 سلسلة صفحات تلقائية (Map Series)</h4>
+      <div class="rect-hud" id="mapSeriesHud" style="width:270px;display:none;top:110px;left:10px;border-color:#6B7F72;max-height:calc(100vh - 160px);overflow-y:auto;">
+        <h4 style="color:#6B7F72;">🧩 سلسلة صفحات تلقائية (Map Series)</h4>
         <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:6px;">هتتعمل صفحة مستقلة لكل مضلع في الطبقة دي، بمقياس ومركز يتظبطوا تلقائيًا على كل مضلع، وتترص كلها في ملف PDF واحد.</div>
         <label>الطبقة</label>
         <select id="msLayer"></select>
@@ -1088,8 +1088,8 @@
       </div>
 
       <!-- ── لوحة خرائط الراستر: رفع + تصحيح جغرافي + إدارة ── -->
-      <div class="rect-hud" id="rasterHud" style="width:255px;display:none;top:110px;left:10px;border-color:#5B84AC;max-height:calc(100vh - 160px);overflow-y:auto;">
-        <h4 style="color:#5B84AC;">🗺️ خرائط الراستر</h4>
+      <div class="rect-hud" id="rasterHud" style="width:255px;display:none;top:110px;left:10px;border-color:#6B7F72;max-height:calc(100vh - 160px);overflow-y:auto;">
+        <h4 style="color:#6B7F72;">🗺️ خرائط الراستر</h4>
 
         <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:4px;">١) اختار صورة الخريطة (JPG/PNG)</div>
         <input type="file" id="rasterImgFile" accept="image/*">
@@ -1120,16 +1120,16 @@
       </div>
 
       <!-- ── شريط تأكيد أثناء سحب أركان الراستر ── -->
-      <div id="rasterEditBar" style="display:none;position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:900;background:var(--bg-panel);border:1.5px solid #5B84AC;border-radius:10px;padding:10px 16px;box-shadow:0 8px 24px rgba(0,0,0,.4);display:flex;align-items:center;gap:10px;font-size:12px;">
+      <div id="rasterEditBar" style="display:none;position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:900;background:var(--bg-panel);border:1.5px solid #6B7F72;border-radius:10px;padding:10px 16px;box-shadow:0 8px 24px rgba(0,0,0,.4);display:flex;align-items:center;gap:10px;font-size:12px;">
         <span id="rasterEditBarText">🖐️ اسحب النقط الزرقا لتظبيط مكان الخريطة فوق القمر الصناعي</span>
         <button class="btn-create" id="rasterEditBarDone" style="padding:6px 14px;">✅ تم التصحيح</button>
       </div>
 
       <!-- ── نافذة نقط التحكم (Georeferencing بإحداثيات مدخلة يدويًا) ── -->
       <div id="rasterGcpModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:950;align-items:center;justify-content:center;">
-        <div style="background:var(--bg-panel);border:1.5px solid #5B84AC;border-radius:10px;padding:16px;max-width:92vw;max-height:92vh;overflow:auto;display:flex;gap:16px;flex-wrap:wrap;">
+        <div style="background:var(--bg-panel);border:1.5px solid #6B7F72;border-radius:10px;padding:16px;max-width:92vw;max-height:92vh;overflow:auto;display:flex;gap:16px;flex-wrap:wrap;">
           <div>
-            <h4 style="color:#5B84AC;margin-top:0;">🎯 نقط تحكم بإحداثيات مدخلة</h4>
+            <h4 style="color:#6B7F72;margin-top:0;">🎯 نقط تحكم بإحداثيات مدخلة</h4>
             <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;max-width:60vw;">دوس على أي نقطة معروفة في الصورة (زاوية مبنى، تقاطع طرق...)، وبعدين اكتب إحداثياتها الحقيقية على اليمين. لازم نقطتين على الأقل — 3 نقط بتظبط الميل والتمدد، و4 نقط بتظبط أي تحريف/منظور كمان.</div>
             <div id="rasterGcpImgWrap" style="position:relative;display:inline-block;cursor:crosshair;line-height:0;">
               <img id="rasterGcpImg" style="display:block;max-width:60vw;max-height:70vh;user-select:none;">
@@ -1206,7 +1206,7 @@
           <input type="number" id="divAngle" value="0" min="0" max="179" step="1">
         </div>
         <div id="divPickRow" style="display:none;">
-          <div id="divAngleReadout" style="font-size:12px;color:#9db3c8;margin:4px 0 8px;">لم يتم تحديد الاتجاه بعد</div>
+          <div id="divAngleReadout" style="font-size:12px;color:#8B9686;margin:4px 0 8px;">لم يتم تحديد الاتجاه بعد</div>
           <button type="button" class="btn-cancel" id="divPickBtn" style="width:100%;">تحديد على الخريطة</button>
         </div>
         <label id="divEqualAreaRow" style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;">
@@ -1253,18 +1253,18 @@
 
       <!-- ── Point UTM HUD ── -->
       <!-- ── محول الإحداثيات ── -->
-      <div class="rect-hud" id="coordConvHud" style="width:290px;border-color:#5B84AC;display:none;max-height:calc(100vh - 160px);overflow-y:auto;">
-        <h4 style="color:#5B84AC;">🔁 محول الإحداثيات</h4>
+      <div class="rect-hud" id="coordConvHud" style="width:290px;border-color:#6B7F72;display:none;max-height:calc(100vh - 160px);overflow-y:auto;">
+        <h4 style="color:#6B7F72;">🔁 محول الإحداثيات</h4>
         <button class="btn-cancel" id="ccPickMapBtn" style="width:100%;margin-bottom:8px;">📍 اختر نقطة من الخريطة</button>
 
-        <div style="font-size:10.5px;font-weight:700;color:#5B84AC;margin-top:6px;">درجات عشرية (Decimal Degrees)</div>
+        <div style="font-size:10.5px;font-weight:700;color:#6B7F72;margin-top:6px;">درجات عشرية (Decimal Degrees)</div>
         <div style="display:flex;gap:4px;margin-top:4px;">
           <input type="text" id="ccDdLat" placeholder="Lat">
           <input type="text" id="ccDdLng" placeholder="Lng">
         </div>
         <button class="btn-cancel cc-convert-btn" data-src="dd" style="width:100%;margin-top:4px;font-size:10.5px;">تحويل من هنا ⬇</button>
 
-        <div style="font-size:10.5px;font-weight:700;color:#5B84AC;margin-top:10px;">درجة / دقيقة / ثانية (DMS)</div>
+        <div style="font-size:10.5px;font-weight:700;color:#6B7F72;margin-top:10px;">درجة / دقيقة / ثانية (DMS)</div>
         <div style="display:flex;gap:3px;margin-top:4px;">
           <input type="text" id="ccDmsLatD" placeholder="د" style="text-align:center;">
           <input type="text" id="ccDmsLatM" placeholder="ق" style="text-align:center;">
@@ -1279,7 +1279,7 @@
         </div>
         <button class="btn-cancel cc-convert-btn" data-src="dms" style="width:100%;margin-top:4px;font-size:10.5px;">تحويل من هنا ⬇</button>
 
-        <div style="font-size:10.5px;font-weight:700;color:#5B84AC;margin-top:10px;">مترى UTM</div>
+        <div style="font-size:10.5px;font-weight:700;color:#6B7F72;margin-top:10px;">مترى UTM</div>
         <select id="ccUtmZone" style="margin-top:4px;">
           <option value="auto">تلقائي (حسب خط الطول)</option>
           <option value="35">زون 35 N</option>
@@ -1291,7 +1291,7 @@
         </div>
         <button class="btn-cancel cc-convert-btn" data-src="utm" style="width:100%;margin-top:4px;font-size:10.5px;">تحويل من هنا ⬇</button>
 
-        <div style="font-size:10.5px;font-weight:700;color:#5B84AC;margin-top:10px;">مترى الحزام الأحمر (Red Belt)</div>
+        <div style="font-size:10.5px;font-weight:700;color:#6B7F72;margin-top:10px;">مترى الحزام الأحمر (Red Belt)</div>
         <div style="display:flex;gap:4px;margin-top:4px;">
           <input type="text" id="ccRedX" placeholder="X">
           <input type="text" id="ccRedY" placeholder="Y">
@@ -1393,7 +1393,7 @@
 <script>
 (function(){
   "use strict";
-  const palette = ['#E8A432','#00B4A6','#E8457A','#8fbf5e','#5070C8','#0090A8','#D4A020','#7fd6b0'];
+  const palette = ['#E8A432','#1F4A44','#C9973F','#8fbf5e','#5070C8','#0090A8','#D4A020','#7fd6b0'];
   const SUBTYPE_USAGE_DOMAINS = {
     'زراعات': ['منزرع','مهمل','سبق زراعتها ومهملة','بور','شبكة رئيسية'],
     'مبانى': ['سكن عمال','سكن خاص','حظيرة','حوض تجميع']
@@ -1721,8 +1721,8 @@
       drawingCoords.forEach((c, i) => {
         const isLast = i === drawingCoords.length - 1;
         L.circleMarker(c, {
-          radius: isLast ? 6 : 5, color: isLast ? '#E8A432' : '#00B4A6', weight: 2,
-          fillColor: isLast ? '#E8A432' : '#00B4A6', fillOpacity: 0.95
+          radius: isLast ? 6 : 5, color: isLast ? '#E8A432' : '#1F4A44', weight: 2,
+          fillColor: isLast ? '#E8A432' : '#1F4A44', fillOpacity: 0.95
         }).addTo(drawAnchorGroup);
       });
       if(drawStyle === 'lengths') updateLengthsCloseBtnVisibility();
@@ -1730,7 +1730,7 @@
       // في وضع القوس بنعلّم بس أول نقطة (بداية السلسلة) وآخر نقطة قوس تم تأكيدها (بداية القوس الحالي)
       const first = drawingCoords[0];
       const cur = arcState.start || drawingCoords[drawingCoords.length-1];
-      L.circleMarker(first, {radius:6, color:'#00B4A6', weight:2, fillColor:'#00B4A6', fillOpacity:0.95}).addTo(drawAnchorGroup);
+      L.circleMarker(first, {radius:6, color:'#1F4A44', weight:2, fillColor:'#1F4A44', fillOpacity:0.95}).addTo(drawAnchorGroup);
       if(cur && (cur[0]!==first[0] || cur[1]!==first[1])){
         L.circleMarker(cur, {radius:6, color:'#E8A432', weight:2, fillColor:'#E8A432', fillOpacity:0.95}).addTo(drawAnchorGroup);
       }
@@ -1800,7 +1800,7 @@
         clearDrawAnchors();
       } else {
         if (tempLine) { map.removeLayer(tempLine); }
-        tempLine = L.polyline(drawingCoords, {color:'#00B4A6', weight:2, dashArray:'6 5'}).addTo(map);
+        tempLine = L.polyline(drawingCoords, {color:'#1F4A44', weight:2, dashArray:'6 5'}).addTo(map);
         renderDrawAnchors();
       }
       updateHistoryButtons();
@@ -2483,7 +2483,7 @@
       const keys = Object.keys(cf.attrs || {}).filter(k => cf.attrs[k] !== '' && cf.attrs[k] != null);
       const label = (cf.attrs && (cf.attrs['الاسم'] || cf.attrs['اسم'] || cf.attrs['رقم القطعة'])) || ('مضلع ' + (idx+1));
       const areaM2 = polygonAreaMeters(cf.coords);
-      html += `<div style="font-weight:700;margin-top:${idx>0?'7px':'0'};font-size:10px;color:#5B84AC;border-top:${idx>0?'1px solid #ddd':'none'};padding-top:${idx>0?'4px':'0'};">${escapeHtml(String(label))}</div>`;
+      html += `<div style="font-weight:700;margin-top:${idx>0?'7px':'0'};font-size:10px;color:#6B7F72;border-top:${idx>0?'1px solid #ddd':'none'};padding-top:${idx>0?'4px':'0'};">${escapeHtml(String(label))}</div>`;
       const areaRow = `<tr><td>المساحة</td><td><b>${areaM2.toFixed(2)} م²</b></td></tr>`;
       if(!keys.length){
         html += `<table class="nb-table">${areaRow}</table>`;
@@ -2578,7 +2578,7 @@
       box.style.fontSize = Math.max(7, pxW*0.012) + 'px';
       box.innerHTML = `<div class="ly-table-head">${titles[el.tableKey]||''}</div><div class="ly-table-body">${html}</div>`;
     } else if(el.type === 'northArrow'){
-      box.innerHTML = '<svg viewBox="0 0 34 44" style="width:100%;height:100%;display:block;"><path d="M17 2 L27 30 L17 23 L7 30 Z" fill="#3A5068" stroke="#fff" stroke-width="1.2"/><text x="17" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#3A5068" font-family="sans-serif">N</text></svg>';
+      box.innerHTML = '<svg viewBox="0 0 34 44" style="width:100%;height:100%;display:block;"><path d="M17 2 L27 30 L17 23 L7 30 Z" fill="#243E39" stroke="#fff" stroke-width="1.2"/><text x="17" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#243E39" font-family="sans-serif">N</text></svg>';
     } else if(el.type === 'scaleBar'){
       const si = getMapFrameScaleInfo(page);
       box.style.display = 'flex'; box.style.alignItems='center'; box.style.justifyContent='center';
@@ -2589,7 +2589,7 @@
     } else if(el.type === 'polygonTitle'){
       box.style.display='flex'; box.style.alignItems='center'; box.style.justifyContent='center';
       box.style.background='rgba(255,255,255,.9)'; box.style.border = opts.interactive?'':'1px solid #bbb'; box.style.borderRadius='5px';
-      box.style.fontWeight='800'; box.style.color='#1B3968';
+      box.style.fontWeight='800'; box.style.color='#243E39';
       box.style.fontSize = Math.max(8, pxW*0.02) + 'px';
       box.textContent = f ? featureLabel(f) : 'مفيش مضلع مرتبط';
     }
@@ -3241,6 +3241,21 @@
     }
   }
 
+  function turfPolyAreaUTM(turfPoly){
+    // بتحسب مساحة أي عنصر turf (Polygon) بنفس طريقة UTM اللي بيستخدمها polygonAreaMeters بالظبط —
+    // مهم إن أدوات التقسيم تستخدم نفس مقياس المساحة اللي المستخدم شايفه في الواجهة، وإلا القطع
+    // هتتحسب بمقياس (turf الكروي) والمساحة المعروضة بعدين تتحسب بمقياس تاني (UTM)، فتفرق عن بعض
+    if(!turfPoly || !turfPoly.geometry) return 0;
+    const geom = turfPoly.geometry;
+    const rings = geom.type === 'MultiPolygon' ? geom.coordinates.map(mp=>mp[0]) : [geom.coordinates[0]];
+    let total = 0;
+    rings.forEach(ring=>{
+      const coords = ring.slice(0, -1).map(c=>[c[1], c[0]]); // [lng,lat] -> [lat,lng]
+      total += polygonAreaMeters(coords);
+    });
+    return total;
+  }
+
   function areaToFeddan(areaM2){
     // النظام المصري لمساحة الأرض: 1 فدان = 24 قيراط = 576 سهم = 4200.833 م²
     const M2_PER_FEDDAN = 4200.833;
@@ -3489,7 +3504,7 @@
         ? { radius:8, color:'#f5d000', weight:2.5, fillColor:'#f5d000', fillOpacity:0.35 }
         : type === 'midpoint'
         ? { radius:7, color:'#7B68EE', weight:2.5, fillColor:'#7B68EE', fillOpacity:0.5 }
-        : { radius:7, color:'#00B4A6', weight:2,   fillColor:'#E8A432', fillOpacity:0 };
+        : { radius:7, color:'#1F4A44', weight:2,   fillColor:'#E8A432', fillOpacity:0 };
       if(!snapMarker){
         snapMarker = L.circleMarker(coord, markerOpts).addTo(map);
       } else {
@@ -4153,11 +4168,11 @@
         const color = f.color || layer.color;
         let shape;
         if(f.type==='point'){
-          shape = L.circleMarker(f.coords[0], {radius:7, color: isSel?'#00B4A6':'#1B3968', weight:isSel?2.5:1.4, fillColor:color, fillOpacity:0.95});
+          shape = L.circleMarker(f.coords[0], {radius:7, color: isSel?'#1F4A44':'#243E39', weight:isSel?2.5:1.4, fillColor:color, fillOpacity:0.95});
         } else if(f.type==='line'){
-          shape = L.polyline(f.coords, {color: isSel?'#00B4A6':color, weight: isSel?3.2:2.4});
+          shape = L.polyline(f.coords, {color: isSel?'#1F4A44':color, weight: isSel?3.2:2.4});
         } else {
-          shape = L.polygon(f.coords, {color: isSel?'#00B4A6':color, weight: isSel?3:2, fillColor:color, fillOpacity: isSel?0.3:0.18});
+          shape = L.polygon(f.coords, {color: isSel?'#1F4A44':color, weight: isSel?3:2, fillColor:color, fillOpacity: isSel?0.3:0.18});
         }
         
         shape.on('click', (e) => {
@@ -4218,14 +4233,14 @@
             const uxN = Math.sin(th), uxE = Math.cos(th);
             const rotatePt = destPoint(centerLat, centerLng, uxE * 0, uxN * 0 + (f.rect.length / 2) + 5);
             
-            const rotMarker = L.circleMarker(rotatePt, {radius:9, className:'rect-rotate-marker', color:'#1B3968', weight:1.5, fillColor:'#E8A432', fillOpacity:1});
+            const rotMarker = L.circleMarker(rotatePt, {radius:9, className:'rect-rotate-marker', color:'#243E39', weight:1.5, fillColor:'#E8A432', fillOpacity:1});
             rotMarker.on('mousedown', (se)=>{
               L.DomEvent.stopPropagation(se); map.dragging.disable(); pushStateToUndo();
               dragCtx = { mode:'rect-rotate', feature:f, center:[centerLat, centerLng], origRotation: f.rect.rotation, startAngle: metricAngleRad({lat:centerLat,lng:centerLng}, se.latlng) };
             });
             rotMarker.addTo(lg);
 
-            const scaleMarker = L.circleMarker(corners[2], {radius:9, className:'rect-scale-marker', color:'#1B3968', weight:1.5, fillColor:'#00B4A6', fillOpacity:1});
+            const scaleMarker = L.circleMarker(corners[2], {radius:9, className:'rect-scale-marker', color:'#243E39', weight:1.5, fillColor:'#1F4A44', fillOpacity:1});
             scaleMarker.on('mousedown', (se)=>{
               L.DomEvent.stopPropagation(se); map.dragging.disable(); pushStateToUndo();
               dragCtx = { mode:'rect-scale', feature:f, anchor: corners[0], origWidth: f.rect.width, origLength: f.rect.length, startLatLng: se.latlng };
@@ -4235,7 +4250,7 @@
 
           if(f.type!=='rectangle' && f.type!=='circle'){
             f.coords.forEach((c,idx)=>{
-              const h = L.circleMarker(c, {radius:7, className:'vertex-marker', color:'#00B4A6', weight:2, fillColor:'#1B3968', fillOpacity:1});
+              const h = L.circleMarker(c, {radius:7, className:'vertex-marker', color:'#1F4A44', weight:2, fillColor:'#243E39', fillOpacity:1});
               
               h.on('mousedown', (se)=>{
                 L.DomEvent.stopPropagation(se); map.dragging.disable(); pushStateToUndo();
@@ -4259,7 +4274,7 @@
               const midLng = (pA[1] + pB[1]) / 2;
               const midPoint = L.latLng(midLat, midLng);
 
-              const ghost = L.circleMarker(midPoint, {radius:5, className:'vertex-ghost-marker', color:'#00B4A6', weight:1.5, fillColor:'rgba(27,57,104,0.85)', fillOpacity:1});
+              const ghost = L.circleMarker(midPoint, {radius:5, className:'vertex-ghost-marker', color:'#1F4A44', weight:1.5, fillColor:'rgba(27,57,104,0.85)', fillOpacity:1});
               
               ghost.on('mousedown', (se) => {
                 L.DomEvent.stopPropagation(se); map.dragging.disable(); pushStateToUndo();
@@ -4365,7 +4380,7 @@
       
       if(rect3Point.step === 1) {
         const pts = [[rect3Point.pt1.lat, rect3Point.pt1.lng], [snapped.lat, snapped.lng]];
-        tempLine = L.polyline(pts, {color:'#00B4A6', weight:2, dashArray:'4 4'}).addTo(map);
+        tempLine = L.polyline(pts, {color:'#1F4A44', weight:2, dashArray:'4 4'}).addTo(map);
         const width = haversine(rect3Point.pt1.lat, rect3Point.pt1.lng, snapped.lat, snapped.lng);
         const angle = metricAngleRad(rect3Point.pt1, snapped);
         let deg = Math.round(toDeg(angle) % 360); if(deg < 0) deg += 360;
@@ -4402,7 +4417,7 @@
         const c3 = destPoint(p2.lat, p2.lng, uyE * signedLength, uyN * signedLength);
         const c4 = destPoint(p1.lat, p1.lng, uyE * signedLength, uyN * signedLength);
         
-        tempLine = L.polygon([c1, c2, c3, c4], {color:'#00B4A6', weight:1.5, fillOpacity:0.12, dashArray:'3 3'}).addTo(map);
+        tempLine = L.polygon([c1, c2, c3, c4], {color:'#1F4A44', weight:1.5, fillOpacity:0.12, dashArray:'3 3'}).addTo(map);
         document.getElementById('stTemp').textContent = `العرض: ${width.toFixed(1)} م | الطول: ${length.toFixed(1)} م`;
       }
     }
@@ -4412,7 +4427,7 @@
       const E = {lat:arcState.end[0], lng:arcState.end[1]};
       const arcPts = computeArcBy3Points(S, E, snapped);
       if(tempLine){ map.removeLayer(tempLine); }
-      tempLine = L.polyline(arcPts, {color:'#00B4A6', weight:2, dashArray:'6 5'}).addTo(map);
+      tempLine = L.polyline(arcPts, {color:'#1F4A44', weight:2, dashArray:'6 5'}).addTo(map);
       const refLat=(S.lat+E.lat)/2;
       const chordLen = haversine(S.lat,S.lng,E.lat,E.lng);
       document.getElementById('stTemp').textContent = 'طول الوتر: ' + chordLen.toFixed(2) + ' م — اضغط R لإدخال نصف قطر محدد';
@@ -4422,7 +4437,7 @@
       if(drawStyle==='curve' && arcState.step===1){
         // معاينة الوتر (خط مستقيم) لحد ما يتحدد نصف القطر
         if(tempLine){ map.removeLayer(tempLine); }
-        tempLine = L.polyline([arcState.start, [snapped.lat, snapped.lng]], {color:'#00B4A6', weight:2, dashArray:'6 5'}).addTo(map);
+        tempLine = L.polyline([arcState.start, [snapped.lat, snapped.lng]], {color:'#1F4A44', weight:2, dashArray:'6 5'}).addTo(map);
         const segLen = haversine(arcState.start[0],arcState.start[1], snapped.lat, snapped.lng);
         document.getElementById('stTemp').textContent = 'طول الوتر: ' + segLen.toFixed(2) + ' م';
       } else if(drawStyle !== 'curve' && !(drawStyle==='lengths' && lengthsClosingActive)) {
@@ -4438,7 +4453,7 @@
         }
         if(tempLine){ map.removeLayer(tempLine); }
         const pts = drawingCoords.concat([[pt.lat, pt.lng]]);
-        tempLine = L.polyline(pts, {color:'#00B4A6', weight:2, dashArray:'6 5'}).addTo(map);
+        tempLine = L.polyline(pts, {color:'#1F4A44', weight:2, dashArray:'6 5'}).addTo(map);
         
         const last = drawingCoords[drawingCoords.length-1];
         const segLen = haversine(last[0],last[1], pt.lat, pt.lng);
@@ -4450,7 +4465,7 @@
       if(measureLine){ map.removeLayer(measureLine); measureLine=null; }
       measureLine = L.polyline(
         [[measurePt1.lat,measurePt1.lng],[snM.lat,snM.lng]],
-        {color:'#00B4A6',weight:2,dashArray:'5 5'}
+        {color:'#1F4A44',weight:2,dashArray:'5 5'}
       ).addTo(map);
       const d = haversine(measurePt1.lat,measurePt1.lng,snM.lat,snM.lng);
       document.getElementById('stTemp').textContent =
@@ -4652,7 +4667,7 @@
         measurePt1 = snapped;
         if(measureMarker) map.removeLayer(measureMarker);
         measureMarker = L.circleMarker([snapped.lat,snapped.lng],
-          {radius:7,color:'#00B4A6',weight:2,fillColor:'#E8A432',fillOpacity:.85}).addTo(map);
+          {radius:7,color:'#1F4A44',weight:2,fillColor:'#E8A432',fillOpacity:.85}).addTo(map);
         document.getElementById('stHint').textContent = '📏 انقر على النقطة الثانية لإتمام القياس...';
       } else {
         const dist = haversine(measurePt1.lat,measurePt1.lng,snapped.lat,snapped.lng);
@@ -4663,7 +4678,7 @@
         if(measureLine){ map.removeLayer(measureLine); measureLine=null; }
         measureLine = L.polyline(
           [[measurePt1.lat,measurePt1.lng],[snapped.lat,snapped.lng]],
-          {color:'#00B4A6',weight:2.5}
+          {color:'#1F4A44',weight:2.5}
         ).addTo(map);
         document.getElementById('stTemp').textContent = `📏 ${distStr} | اتجاه: ${bearing.toFixed(1)}°`;
         document.getElementById('stHint').textContent = 'انقر نقطة جديدة لقياس مسافة أخرى';
@@ -5856,7 +5871,7 @@
                   Lat: ${ll.lat.toFixed(6)}<br>
                   Lng: ${ll.lng.toFixed(6)}
                 </span><br>
-                <span style="font-size:10px;color:#84a0b6;">دقة: ±${acc.toFixed(0)} م</span><br>
+                <span style="font-size:10px;color:#8B9686;">دقة: ±${acc.toFixed(0)} م</span><br>
                 <button onclick="window._stopLoc()"
                   style="margin-top:7px;background:#e2665b;color:#fff;border:none;
                          padding:5px 12px;border-radius:5px;cursor:pointer;font-size:11.5px;">
@@ -5946,14 +5961,14 @@
       ]]);
       try{
         const inter = turf.intersect(rotated, strip);
-        return inter ? turf.area(inter) : 0;
+        return inter ? turfPolyAreaUTM(inter) : 0;
       } catch(e){ return 0; }
     }
 
     // حساب مواضع القطع
     let cutYs = [minY - eps];
     if(equalArea){
-      const totalArea = turf.area(rotated);      // ← إصلاح: كان targetArea غير معرَّف
+      const totalArea = turfPolyAreaUTM(rotated);      // ← إصلاح: كان targetArea غير معرَّف
       const targetPerSlice = totalArea / nParts;
       let prevY = minY - eps;
       for(let i = 1; i < nParts; i++){
@@ -6074,12 +6089,12 @@
       ]]);
       try{
         const inter = turf.intersect(rotated, strip);
-        return inter ? turf.area(inter) : 0;
+        return inter ? turfPolyAreaUTM(inter) : 0;
       } catch(e){ return 0; }
     }
 
     // المساحة الكلية للمضلع (بالمتر المربع)
-    const totalArea = turf.area(rotated);
+    const totalArea = turfPolyAreaUTM(rotated);
     if(areaPerPart >= totalArea){
       alert('المساحة المحددة أكبر من (أو تساوي) مساحة المضلع الكلية — لا يمكن التقسيم بهذه القيمة');
       return;
