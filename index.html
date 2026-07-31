@@ -5961,14 +5961,21 @@
       ]]);
       try{
         const inter = turf.intersect(rotated, strip);
-        return inter ? turfPolyAreaUTM(inter) : 0;
+        if(!inter) return 0;
+        // بنرجّع نلف القطعة لوضعها الحقيقي (غير المدوَّر) قبل ما نقيس مساحتها بـ UTM —
+        // لأن تدوير الشكل بيغيّر امتداده شرق-غرب، وده بيغيّر مقدار تشوه إسقاط UTM
+        // حتى لو المساحة الجغرافية الحقيقية ما اتغيرتش، فلازم نقيس على الإحداثيات الحقيقية دايمًا
+        let interReal;
+        try{ interReal = turf.transformRotate(inter, angleDeg, {pivot: centroid}); }
+        catch(e){ interReal = inter; }
+        return turfPolyAreaUTM(interReal);
       } catch(e){ return 0; }
     }
 
     // حساب مواضع القطع
     let cutYs = [minY - eps];
     if(equalArea){
-      const totalArea = turfPolyAreaUTM(rotated);      // ← إصلاح: كان targetArea غير معرَّف
+      const totalArea = turfPolyAreaUTM(turfPoly);      // ← إصلاح: كان targetArea غير معرَّف
       const targetPerSlice = totalArea / nParts;
       let prevY = minY - eps;
       for(let i = 1; i < nParts; i++){
@@ -6089,12 +6096,19 @@
       ]]);
       try{
         const inter = turf.intersect(rotated, strip);
-        return inter ? turfPolyAreaUTM(inter) : 0;
+        if(!inter) return 0;
+        // بنرجّع نلف القطعة لوضعها الحقيقي (غير المدوَّر) قبل ما نقيس مساحتها بـ UTM —
+        // لأن تدوير الشكل بيغيّر امتداده شرق-غرب، وده بيغيّر مقدار تشوه إسقاط UTM
+        // حتى لو المساحة الجغرافية الحقيقية ما اتغيرتش، فلازم نقيس على الإحداثيات الحقيقية دايمًا
+        let interReal;
+        try{ interReal = turf.transformRotate(inter, angleDeg, {pivot: centroid}); }
+        catch(e){ interReal = inter; }
+        return turfPolyAreaUTM(interReal);
       } catch(e){ return 0; }
     }
 
     // المساحة الكلية للمضلع (بالمتر المربع)
-    const totalArea = turfPolyAreaUTM(rotated);
+    const totalArea = turfPolyAreaUTM(turfPoly);
     if(areaPerPart >= totalArea){
       alert('المساحة المحددة أكبر من (أو تساوي) مساحة المضلع الكلية — لا يمكن التقسيم بهذه القيمة');
       return;
