@@ -78,6 +78,7 @@
 
   /* ── Per-tool accent colors — Mediterranean palette ── */
   .tool-btn[data-tool="select"]  {--tc:#1F4A44;}
+  #multiSelectBtn {--tc:#C9973F;}
   .tool-btn[data-tool="point"]   {--tc:#C9973F;}
   .tool-btn[data-tool="line"]    {--tc:#0090A8;}
   .tool-btn[data-tool="polygon"] {--tc:#E8A432;}
@@ -502,6 +503,13 @@
                 <path d="M5 2l13.5 9.5-7.5 1.3-2.8 7.7z" stroke-width="1.8"/>
                 <circle cx="5" cy="2" r="1.8" fill="currentColor" stroke="none"/>
               </svg><span>تحديد</span>
+            </button>
+            <button class="tool-btn" id="multiSelectBtn" title="تحديد متعدد — اضغط على كذا مضلع مع بعض">
+              <svg viewBox="0 0 24 24">
+                <rect x="3" y="3" width="8" height="8" rx="1.5" stroke-width="2"/>
+                <rect x="13" y="13" width="8" height="8" rx="1.5" stroke-width="2"/>
+                <path d="M11 7h2M7 11v2" stroke-width="2" stroke-linecap="round" opacity=".5"/>
+              </svg><span>تحديد متعدد</span>
             </button>
             <button class="tool-btn" id="undoBtn" title="تراجع (Ctrl+Z)" disabled>
               <svg viewBox="0 0 24 24">
@@ -1243,6 +1251,23 @@
         </div>
       </div>
 
+      <!-- ── لوحة التحديد المتعدد ── -->
+      <div class="rect-hud" id="bulkSelectHud" style="width:250px;border-color:#C9973F;display:none;position:fixed;top:56px;left:50%;transform:translateX(-50%);z-index:965;">
+        <h4 style="color:#C9973F;">🔲 تحديد متعدد</h4>
+        <div id="bulkSelectCount" style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">0 عنصر محدد</div>
+        <div id="bulkSelectArea" style="font-size:12px;margin-bottom:10px;"></div>
+        <label>لون موحد</label>
+        <input type="color" id="bulkColorInput" value="#1F4A44" style="width:100%;height:32px;border:1px solid var(--border);border-radius:6px;cursor:pointer;margin-bottom:8px;">
+        <label>نقل لطبقة</label>
+        <select id="bulkMoveLayerSelect" style="margin-bottom:8px;">
+          <option value="">اختر طبقة...</option>
+        </select>
+        <div class="row-btns" style="margin-top:6px;">
+          <button class="btn-cancel" id="bulkClearBtn">إلغاء التحديد</button>
+          <button class="btn-cancel" id="bulkDeleteBtn" style="color:var(--danger);border-color:var(--danger);">🗑️ حذف الكل</button>
+        </div>
+      </div>
+
       <!-- ── Polygon DMS HUD ── -->
       <div class="rect-hud" id="polygonDmsHud" style="width:320px;border-color:#7B68EE;display:none;">
         <h4 style="color:#7B68EE;margin:0 0 8px;">🔺 رسم مضلع بالإحداثيات (DMS)</h4>
@@ -1444,6 +1469,8 @@
   let lengthsClosingActive = false; // true وإحنا مستنيين المستخدم يختار نقطة الغلق من الاحتمالين المعروضين
   let lastCursorLatLng = null;
   let selection = null;
+  let multiSelect = []; // array of {layerId, featureId} — التحديد المتعدد (لعمليات جماعية: حذف/لون/نقل طبقة/جمع مساحة)
+  let multiSelectMode = false; // لما تكون مفعّلة، الكليك بيضيف/يشيل من التحديد بدل ما يستبدله
 
   /* ===== وضع الكشكول (Notebook Mode) + القلم الحر ===== */
   let notebookSelectedIds = new Set(); // 'layerId::featureId' — تُستخدم لتحديد عناصر لسلسلة الصفحات التلقائية (Map Series)
@@ -3387,7 +3414,20 @@
     _lastClickTs = ts;
 
     const candidates = featuresAtPoint(latlng);
-    if(!candidates.length){ selection=null; renderAttrPanel(); renderFeatures(); return; }
+
+    if(multiSelectMode){
+      if(!candidates.length) return; // في وضع التحديد المتعدد، كليك على فاضي ما بيمسحش التحديد
+      const top = candidates[0];
+      const idx = multiSelect.findIndex(c=>c.layerId===top.layerId && c.featureId===top.featureId);
+      if(idx >= 0){ multiSelect.splice(idx, 1); } // كان متحدد → شيله
+      else { multiSelect.push(top); } // مش متحدد → ضيفه
+      selection = multiSelect.length ? multiSelect[multiSelect.length-1] : null;
+      renderBulkSelectPanel();
+      renderFeatures();
+      return;
+    }
+
+    if(!candidates.length){ selection=null; multiSelect=[]; renderAttrPanel(); renderBulkSelectPanel(); renderFeatures(); return; }
 
     // إيجاد index العنصر الحالي، ثم الانتقال للتالي
     const curIdx = selection
@@ -3395,6 +3435,7 @@
       : -1;
     const nextIdx = (curIdx + 1) % candidates.length;
     selection = candidates[nextIdx];
+    multiSelect = [selection];
 
     // تلميح في شريط الحالة إذا في تداخل
     if(candidates.length > 1){
@@ -4188,7 +4229,9 @@
       lg.clearLayers();
       if(layer.visible){ if(!map.hasLayer(lg)) lg.addTo(map); } else { if(map.hasLayer(lg)) map.removeLayer(lg); }
       layer.features.forEach(f=>{
-        const isSel = selection && selection.layerId===layer.id && selection.featureId===f.id;
+        const isSel = multiSelectMode
+          ? multiSelect.some(c=>c.layerId===layer.id && c.featureId===f.id)
+          : (selection && selection.layerId===layer.id && selection.featureId===f.id);
         const color = f.color || layer.color;
         let shape;
         if(f.type==='point'){
@@ -4247,7 +4290,7 @@
         shape.addTo(lg);
 
         // إضافة نقاط التحكم والعقد الوصفية التفاعلية
-        if(isSel && window.innerWidth > 760) {
+        if(isSel && window.innerWidth > 760 && !multiSelectMode) {
           if(f.type==='rectangle') {
             const corners = f.coords;
             const centerLat = (corners[0][0] + corners[2][0]) / 2;
@@ -5076,7 +5119,9 @@
           const typeAr = {point:'نقطة', line:'خط', polygon:'مضلع', rectangle:'مستطيل', circle:'دائرة'};
           const item = document.createElement('div');
           item.className = 'feature-item';
-          const isSel = selection && selection.layerId===layer.id && selection.featureId===f.id;
+          const isSel = multiSelectMode
+            ? multiSelect.some(c=>c.layerId===layer.id && c.featureId===f.id)
+            : (selection && selection.layerId===layer.id && selection.featureId===f.id);
           if(isSel) item.style.cssText = 'background:var(--teal-soft);color:var(--teal);';
 
           const nbCheck = document.createElement('input');
@@ -5257,6 +5302,106 @@
     state.activeLayerId = id;
     renderLayerList(); renderFeatures(); scheduleSave();
   });
+
+  /* ---------- تحديد متعدد ---------- */
+  document.getElementById('multiSelectBtn').addEventListener('click', function(){
+    multiSelectMode = !multiSelectMode;
+    this.classList.toggle('active', multiSelectMode);
+    if(tool !== 'select'){
+      tool = 'select';
+      document.querySelectorAll('.tool-btn[data-tool]').forEach(b=>b.classList.remove('active'));
+      document.querySelector('.tool-btn[data-tool="select"]').classList.add('active');
+    }
+    if(!multiSelectMode){
+      multiSelect = [];
+      renderBulkSelectPanel();
+      renderAttrPanel();
+    }
+    document.getElementById('stHint').textContent = multiSelectMode
+      ? '🔲 وضع التحديد المتعدد: اضغط على أي عدد من العناصر لتحديدها مع بعض'
+      : '';
+    renderFeatures();
+  });
+
+  document.getElementById('bulkClearBtn').addEventListener('click', ()=>{
+    multiSelect = []; selection = null;
+    renderBulkSelectPanel(); renderFeatures();
+  });
+
+  document.getElementById('bulkDeleteBtn').addEventListener('click', ()=>{
+    if(!multiSelect.length) return;
+    if(!confirm('تحذف ' + multiSelect.length + ' عنصر؟')) return;
+    pushStateToUndo();
+    multiSelect.forEach(c=>{
+      const layer = getLayer(c.layerId);
+      if(layer) layer.features = layer.features.filter(f=>f.id !== c.featureId);
+    });
+    multiSelect = []; selection = null;
+    renderBulkSelectPanel(); renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave(); updateHistoryButtons();
+  });
+
+  document.getElementById('bulkColorInput').addEventListener('change', function(){
+    if(!multiSelect.length) return;
+    pushStateToUndo();
+    multiSelect.forEach(c=>{
+      const f = getFeature(c.layerId, c.featureId);
+      if(f) f.color = this.value;
+    });
+    renderFeatures(); scheduleSave();
+  });
+
+  document.getElementById('bulkMoveLayerSelect').addEventListener('change', function(){
+    const targetLayerId = this.value;
+    if(!targetLayerId || !multiSelect.length) return;
+    const targetLayer = getLayer(targetLayerId);
+    if(!targetLayer) return;
+    pushStateToUndo();
+    const movedRefs = [];
+    multiSelect.forEach(c=>{
+      const srcLayer = getLayer(c.layerId);
+      if(!srcLayer || srcLayer.id === targetLayerId) { movedRefs.push(c); return; }
+      const idx = srcLayer.features.findIndex(f=>f.id === c.featureId);
+      if(idx === -1) return;
+      const [f] = srcLayer.features.splice(idx, 1);
+      targetLayer.features.push(f);
+      movedRefs.push({layerId: targetLayerId, featureId: f.id});
+    });
+    multiSelect = movedRefs;
+    this.value = '';
+    renderBulkSelectPanel(); renderLayerList(); renderFeatures(); scheduleSave(); updateHistoryButtons();
+  });
+
+  function renderBulkSelectPanel(){
+    const hud = document.getElementById('bulkSelectHud');
+    if(!multiSelectMode || multiSelect.length === 0){
+      hud.style.display = 'none';
+      return;
+    }
+    hud.style.display = 'block';
+    document.getElementById('bulkSelectCount').textContent = multiSelect.length + ' عنصر محدد';
+
+    let totalArea = 0, polyCount = 0;
+    multiSelect.forEach(c=>{
+      const f = getFeature(c.layerId, c.featureId);
+      if(f && (f.type==='polygon' || f.type==='rectangle')){
+        totalArea += polygonAreaMeters(f.coords);
+        polyCount++;
+      }
+    });
+    const areaEl = document.getElementById('bulkSelectArea');
+    if(polyCount > 0){
+      const fq = areaToFeddan(totalArea);
+      areaEl.innerHTML = `المساحة الإجمالية (${polyCount} مضلع):<br><b>${totalArea.toFixed(1)} م²</b> — ${fq.feddan} ف ${fq.qirat} ط ${fq.sahm} س`;
+    } else {
+      areaEl.textContent = '';
+    }
+
+    const sel = document.getElementById('bulkMoveLayerSelect');
+    const curVal = sel.value;
+    sel.innerHTML = '<option value="">اختر طبقة...</option>' +
+      state.layers.map(l=>`<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
+    sel.value = curVal;
+  }
 
   /* ---------- Attributes UI & Editing ---------- */
   function renderAttrPanel(){
