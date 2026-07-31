@@ -90,6 +90,7 @@
   #snapBtn   {--tc:#D4A020;}
   #midSnapBtn{--tc:#7B68EE;}
   #locateBtn {--tc:#C9973F;}
+  #preciseLocateBtn {--tc:#2a9d5c;}
   #fitBtn    {--tc:#1F4A44;}
   #exportBtn {--tc:#1F4A44;}
   #importBtn {--tc:#D4A020;}
@@ -549,6 +550,17 @@
                 <circle cx="12" cy="9.5" r="3.2" stroke-width="2"/>
                 <circle cx="12" cy="9.5" r="1.4" fill="currentColor" stroke="none"/>
               </svg><span>موقعي</span>
+            </button>
+            <button class="tool-btn" id="preciseLocateBtn" title="تحديد دقيق — تجميع عدة قراءات GPS وحساب متوسط مرجّح للحصول على أعلى دقة ممكنة">
+              <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="9" stroke-width="1.6" opacity=".35"/>
+                <circle cx="12" cy="12" r="5.2" stroke-width="1.8" opacity=".7"/>
+                <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/>
+                <line x1="12" y1="1.5" x2="12" y2="4.2" stroke-width="1.8"/>
+                <line x1="12" y1="19.8" x2="12" y2="22.5" stroke-width="1.8"/>
+                <line x1="1.5" y1="12" x2="4.2" y2="12" stroke-width="1.8"/>
+                <line x1="19.8" y1="12" x2="22.5" y2="12" stroke-width="1.8"/>
+              </svg><span>دقة عالية</span>
             </button>
             <button class="tool-btn" id="fitBtn" title="ملائمة العرض">
               <svg viewBox="0 0 24 24">
@@ -6165,6 +6177,129 @@
       startLocationTracking();
     }
   });
+
+  /* ---------- Precise Locate (High-Accuracy Averaged Fix) ---------- */
+  (function(){
+    const preciseBtn   = document.getElementById('preciseLocateBtn');
+    const PRECISE_DURATION_MS = 20000;   // مدة جمع القراءات
+    const ACC_THRESHOLD_M     = 12;      // تجاهل أي قراءة أسوأ من كده
+    const MIN_SAMPLES         = 4;       // أقل عدد قراءات مقبولة
+
+    let preciseWatchId = null;
+    let preciseSamples  = [];
+    let preciseTimer    = null;
+    let preciseMarker   = null;
+    let preciseCircle   = null;
+    let preciseActive   = false;
+
+    function clearPreciseVisuals(){
+      if(preciseMarker){ map.removeLayer(preciseMarker); preciseMarker=null; }
+      if(preciseCircle){ map.removeLayer(preciseCircle); preciseCircle=null; }
+    }
+
+    function weightedAverage(samples){
+      // وزن كل قراءة = 1 / (الدقة المُبلّغ عنها)^2 — القراءات الأدق تأثيرها أكبر
+      let wSum=0, latSum=0, lngSum=0;
+      samples.forEach(s=>{
+        const w = 1/(s.acc*s.acc);
+        wSum   += w;
+        latSum += s.lat*w;
+        lngSum += s.lng*w;
+      });
+      const lat = latSum/wSum, lng = lngSum/wSum;
+      // تقدير الدقة النهائية: أفضل دقة مُسجّلة بين القراءات، كحد أدنى واقعي
+      const bestAcc = Math.min(...samples.map(s=>s.acc));
+      return {lat, lng, acc: bestAcc};
+    }
+
+    function finishPrecise(){
+      if(preciseWatchId!==null){ navigator.geolocation.clearWatch(preciseWatchId); preciseWatchId=null; }
+      if(preciseTimer){ clearTimeout(preciseTimer); preciseTimer=null; }
+      preciseActive = false;
+      preciseBtn.classList.remove('active');
+      clearPreciseVisuals();
+
+      if(preciseSamples.length < MIN_SAMPLES){
+        document.getElementById('stHint').textContent =
+          '⚠️ لم يتم جمع قراءات كافية — حاول في مكان مفتوح بعيد عن المباني';
+        preciseSamples = [];
+        return;
+      }
+
+      const result = weightedAverage(preciseSamples);
+      const usedCount = preciseSamples.length;
+      preciseSamples = [];
+
+      pushStateToUndo();
+      const f = addFeature('point', [[result.lat, result.lng]]);
+      selection = {layerId: activeLayer().id, featureId: f.id};
+      renderFeatures(); renderAttrPanel(); renderLayerList(); scheduleSave();
+      map.setView([result.lat, result.lng], Math.max(map.getZoom(), 18), {animate:true});
+      showFeatureInfoHud(f, 'point');
+      updateHistoryButtons();
+
+      document.getElementById('stHint').textContent =
+        `✅ تم تحديد نقطة مُحسّنة — دقة تقريبية ±${result.acc.toFixed(1)} م (من ${usedCount} قراءة)`;
+    }
+
+    function startPrecise(){
+      if(!navigator.geolocation){
+        document.getElementById('stHint').textContent = '❌ المتصفح لا يدعم تحديد الموقع';
+        return;
+      }
+      // لو تتبع الموقع العادي شغال، وقفه الأول
+      if(typeof stopLocationTracking === 'function' && locationWatchId !== null){
+        stopLocationTracking();
+      }
+      preciseSamples = [];
+      preciseActive  = true;
+      preciseBtn.classList.add('active');
+      document.getElementById('stHint').textContent =
+        '⏳ قف ثابتًا في مكان مفتوح... جاري تحسين الدقة (0 قراءة)';
+
+      preciseWatchId = navigator.geolocation.watchPosition(
+        (pos)=>{
+          const acc = pos.coords.accuracy;
+          if(acc <= ACC_THRESHOLD_M){
+            preciseSamples.push({lat:pos.coords.latitude, lng:pos.coords.longitude, acc});
+          }
+          document.getElementById('stHint').textContent =
+            `⏳ جاري تحسين الدقة... (${preciseSamples.length} قراءة مقبولة، آخر دقة ±${acc.toFixed(0)} م)`;
+
+          // عرض مؤقت لآخر قراءة أثناء الجمع
+          const latlng = L.latLng(pos.coords.latitude, pos.coords.longitude);
+          if(preciseMarker){
+            preciseMarker.setLatLng(latlng);
+            preciseCircle.setLatLng(latlng).setRadius(acc);
+          } else {
+            preciseMarker = L.circleMarker(latlng, {radius:5, color:'#2a9d5c', fillColor:'#2a9d5c', fillOpacity:0.9}).addTo(map);
+            preciseCircle = L.circle(latlng, {radius:acc, color:'#2a9d5c', weight:1.2, fillColor:'#2a9d5c', fillOpacity:0.08, interactive:false}).addTo(map);
+            map.setView(latlng, Math.max(map.getZoom(),17), {animate:true});
+          }
+        },
+        (err)=>{
+          const msgs = {
+            1: 'رُفض إذن الوصول للموقع — فعّل الأذونات من المتصفح',
+            2: 'تعذّر الحصول على الموقع — تحقق من الاتصال',
+            3: 'انتهت مهلة التحديد — حاول مرة أخرى'
+          };
+          document.getElementById('stHint').textContent = '❌ ' + (msgs[err.code] || 'خطأ في الموقع');
+        },
+        { enableHighAccuracy:true, maximumAge:0, timeout:20000 }
+      );
+
+      preciseTimer = setTimeout(finishPrecise, PRECISE_DURATION_MS);
+    }
+
+    preciseBtn.addEventListener('click', ()=>{
+      if(preciseActive){
+        finishPrecise();   // ضغطة تانية = إنهاء مبكر واحتساب المتاح من القراءات
+      } else {
+        startPrecise();
+      }
+    });
+  })();
+  /* ---------- نهاية Precise Locate ---------- */
 
   /* ---------- Divide Polygon ---------- */
   async function dividePolygonFeature(layerId, featureId, nParts, angleDeg, equalArea){
