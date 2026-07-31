@@ -5984,7 +5984,7 @@
         for(let iter = 0; iter < 64; iter++){
           const mid = (lo + hi) / 2;
           const a = areaUpTo(mid);
-          if(Math.abs(a - targetCum) / totalArea < 0.0005) break; // ← إصلاح: نسبي لـ totalArea
+          if(Math.abs(a - targetCum) / totalArea < 0.00001) break; // ← إصلاح: نسبي لـ totalArea
           if(a < targetCum) lo = mid; else hi = mid;
         }
         prevY = (lo + hi) / 2;
@@ -6129,7 +6129,7 @@
       for(let iter = 0; iter < 64; iter++){
         const mid = (lo + hi) / 2;
         const a = areaUpTo(mid);
-        if(Math.abs(a - targetCum) / totalArea < 0.0005) break;
+        if(Math.abs(a - targetCum) / totalArea < 0.00001) break;
         if(a < targetCum) lo = mid; else hi = mid;
       }
       prevY = (lo + hi) / 2;
