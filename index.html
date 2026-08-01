@@ -449,6 +449,13 @@
   .tb-sign-cell{flex:1;background:#FCF3D9;text-align:center;font-size:.9em;padding:.5em .3em;border-right:1px solid #7A5A1E;}
   .tb-sign-cell:last-child{border-right:none;}
   .tb-footnote{text-align:center;font-size:.72em;color:#555;padding:.4em 0;}
+  .plan-label-icon{ background:transparent; border:none; }
+  .plan-vertex-label, .plan-edge-label{
+    display:inline-block; font-family:var(--sans); font-weight:800; font-size:11px;
+    padding:1px 4px; border-radius:4px; white-space:nowrap; box-shadow:0 1px 3px rgba(0,0,0,.5);
+  }
+  .plan-vertex-label{ background:#fff; color:#1F4A44; border:1.3px solid #1F4A44; }
+  .plan-edge-label{ background:#fff; color:#C9973F; border:1.3px solid #C9973F; }
 
   /* ---- Print: map only ---- */
   @media print{
@@ -3192,12 +3199,42 @@
   });
 
   // بتاخد لقطة من المنظور الحالي للخريطة الحية بالظبط زي ما هو، وبتحسب مقياس الرسم (1:N) تلقائيًا خصيصًا لعرض إطار الخريطة (el) ده على الورقة
+  // بيبني طبقة مؤقتة فيها تسميات (Vi) على رؤوس المضلع و(ضi) على منتصف كل ضلع — بتتحط على الخريطة وقت التقاط اللقطة بس،
+  // وبتظهر فقط لو جدول إحداثيات القطاعات و/أو جدول أطوال الأضلاع مضافين فعلاً على اللوحة، عشان تطابق أرقام الجداول
+  function buildPlanLabelsLayer(page, f){
+    const group = L.layerGroup();
+    if(!f || f.type !== 'polygon' || !Array.isArray(f.coords)) return group;
+    const n = f.coords.length;
+    const hasVerticesTable = page.elements.some(el=>el.type==='table' && el.tableKey==='vertices');
+    const hasLengthsTable  = page.elements.some(el=>el.type==='table' && el.tableKey==='lengths');
+
+    if(hasVerticesTable){
+      f.coords.forEach((c,i)=>{
+        const icon = L.divIcon({className:'plan-label-icon', html:`<div class="plan-vertex-label">V${i+1}</div>`, iconSize:[26,16], iconAnchor:[13,20]});
+        L.marker([c[0], c[1]], {icon, interactive:false, keyboard:false}).addTo(group);
+      });
+    }
+    if(hasLengthsTable){
+      for(let i=0;i<n;i++){
+        const a = f.coords[i], b = f.coords[(i+1)%n];
+        const midLat = (a[0]+b[0])/2, midLng = (a[1]+b[1])/2;
+        const icon = L.divIcon({className:'plan-label-icon', html:`<div class="plan-edge-label">ض${i+1}</div>`, iconSize:[30,16], iconAnchor:[15,8]});
+        L.marker([midLat, midLng], {icon, interactive:false, keyboard:false}).addTo(group);
+      }
+    }
+    return group;
+  }
+
   function captureCurrentMapView(page, el, onDone, onError){
     document.getElementById('stHint').textContent = '📸 بيلتقط لقطة من منظور الخريطة الحالي...';
     setTimeout(async ()=>{
+      let labelsLayer = null;
       try{
         document.body.classList.add('notebook-print-mode');
         map.invalidateSize({pan:false});
+        const linkedFeature = getFeatureByRef(page.featureRef);
+        labelsLayer = buildPlanLabelsLayer(page, linkedFeature);
+        labelsLayer.addTo(map);
         await new Promise(r=>setTimeout(r, 400));
         const b = map.getBounds();
         const groundWidthM = map.distance(L.latLng(b.getCenter().lat, b.getWest()), L.latLng(b.getCenter().lat, b.getEast()));
@@ -3211,11 +3248,13 @@
         const canvas = await html2canvas(document.getElementById('map'), {useCORS:true, allowTaint:true, scale:2, backgroundColor:'#ffffff'});
         document.body.classList.remove('notebook-print-mode');
         map.invalidateSize({pan:false});
+        map.removeLayer(labelsLayer);
         onDone(canvas.toDataURL('image/jpeg', 0.93), {scaleDenom, label});
       }catch(e){
         console.error(e);
         document.body.classList.remove('notebook-print-mode');
         map.invalidateSize({pan:false});
+        if(labelsLayer) map.removeLayer(labelsLayer);
         if(onError) onError(e);
       }
     }, 80);
