@@ -136,6 +136,11 @@
   #map.tool-draw{cursor:crosshair;}
 
   .basemap-toggle{position:absolute;top:10px;left:10px;z-index:450;background:rgba(255,255,255,.95);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:10px;display:flex;padding:3px;gap:3px;box-shadow:0 4px 18px rgba(0,120,140,.18);}
+  .scale-input-ctrl{margin-top:5px !important;}
+  .scale-input-wrap{display:flex;align-items:center;background:#fff;border-radius:4px;padding:3px 6px;gap:3px;box-shadow:0 1px 5px rgba(0,0,0,.4);}
+  .scale-input-prefix{font-size:12px;font-weight:800;color:#243E39;font-family:var(--sans);white-space:nowrap;}
+  .scale-input-box{width:58px;border:1px solid var(--border);border-radius:4px;font-size:12px;text-align:center;padding:2px 3px;direction:ltr;font-family:var(--mono);color:#243E39;background:#fdfdfb;}
+  .scale-input-box:focus{outline:2px solid var(--teal);border-color:var(--teal);}
   .basemap-toggle button{border:none;background:transparent;color:var(--text-muted);font-size:11px;padding:6px 11px;border-radius:7px;cursor:pointer;font-family:var(--sans);transition:all .15s;}
   .basemap-toggle button.active{background:var(--teal-soft);color:var(--teal);font-weight:700;}
   .basemap-toggle button:hover:not(.active){color:var(--text);background:rgba(0,0,0,.05);}
@@ -360,7 +365,7 @@
     #driveMenuToggleBtn{display:none;}
     .leaflet-control-zoom{display:none !important;}
     .basemap-toggle{top:8px;left:8px;padding:2px;}
-    .basemap-toggle button{font-size:10px;padding:5px 7px;}
+    .basemap-toggle button{font-size:9.5px;padding:5px 6px;}
     .drive-control{padding:6px 8px;gap:5px;flex-wrap:wrap;max-width:80vw;}
     .drive-control .drive-msg{font-size:9px;}
     .drive-control button{font-size:9.5px;padding:4px 6px;}
@@ -450,12 +455,18 @@
   .tb-sign-cell:last-child{border-right:none;}
   .tb-footnote{text-align:center;font-size:.72em;color:#555;padding:.4em 0;}
   .plan-label-icon{ background:transparent; border:none; }
-  .plan-vertex-label, .plan-edge-label{
+  .plan-vertex-label, .plan-edge-label, .plan-building-label{
     display:inline-block; font-family:var(--sans); font-weight:800; font-size:16px;
     padding:3px 7px; border-radius:5px; white-space:nowrap; box-shadow:0 1px 4px rgba(0,0,0,.55);
   }
   .plan-vertex-label{ background:#fff; color:#1F4A44; border:2px solid #1F4A44; }
   .plan-edge-label{ background:#fff; color:#C9973F; border:2px solid #C9973F; }
+  .plan-building-label{ background:#fff; color:#4a7fb5; border:2px solid #4a7fb5; }
+  .plan-neighbor-label{
+    display:inline-block; white-space:nowrap; font-weight:700; font-family:var(--sans);
+    background:rgba(255,255,255,.9); padding:1px 6px; border-radius:3px;
+    box-shadow:0 1px 3px rgba(0,0,0,.35);
+  }
 
   /* ---- Print: map only ---- */
   @media print{
@@ -913,6 +924,7 @@
       <div class="basemap-toggle">
         <button id="btnSat" class="active">قمر صناعي</button>
         <button id="btnStreets">خريطة عادية</button>
+        <button id="btnBlank">خلفية بيضاء</button>
       </div>
       <div id="driveMenuPopup" style="display:none;position:fixed;top:56px;left:50%;transform:translateX(-50%);z-index:970;">
         <div class="drive-control disconnected" id="driveControl">
@@ -1063,14 +1075,19 @@
           <div id="lyPropsTitleBlock" style="display:none;">
             <textarea id="nbTbDecision" placeholder="نص القرار" rows="2"></textarea>
             <input type="text" id="nbTbOwner" placeholder="صاحب الشأن" style="margin-top:6px;">
+            <div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:5px;background:rgba(0,0,0,.15);border-radius:6px;">👤 لو فيه مضلع مرتبط وله اسم، الاسم بيتحط هنا أوتوماتيك بدل ما تكتبه — الخانة دي بتفضل شغالة كـ احتياطي بس لو المضلع من غير اسم.</div>
             <input type="text" id="nbTbDistrict" placeholder="الناحية" style="margin-top:6px;">
             <input type="text" id="nbTbGovernorate" placeholder="المحافظة" style="margin-top:6px;">
+            <button class="btn-cancel" id="lyGeocodeBtn" style="width:100%;margin-top:4px;font-size:10.5px;padding:5px;">📍 اقترح الناحية والمحافظة من موقع المضلع</button>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:5px;background:rgba(0,0,0,.15);border-radius:6px;">بيقترحها من بيانات خرائط OpenStreetMap المفتوحة حسب موقع المضلع — راجعها كويس قبل الاعتماد عليها، لأنها مش دايمًا مطابقة بالظبط للتقسيم الإداري الرسمي.</div>
             <input type="text" id="nbTbLandUse" placeholder="نوع الأرض (مثال: اشجار فاكهه)" style="margin-top:6px;">
+            <div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:5px;background:rgba(0,0,0,.15);border-radius:6px;">🌾 بيتحط أوتوماتيك من حقل "الاستخدام" بتاع المضلع المرتبط لو موجود.</div>
             <div style="display:flex;gap:4px;margin-top:6px;">
               <input type="text" id="nbTbFeddan" placeholder="فدان" style="text-align:center;">
               <input type="text" id="nbTbQirat" placeholder="قيراط" style="text-align:center;">
               <input type="text" id="nbTbSahm" placeholder="سهم" style="text-align:center;">
             </div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:5px;background:rgba(0,0,0,.15);border-radius:6px;">📐 بتتحسب أوتوماتيك (تفدين) من مساحة المضلع المرتبط نفسه — مفيش داعي تكتبها يدوي.</div>
             <div style="font-size:10px;color:var(--text-muted);margin-top:6px;padding:6px;background:rgba(0,0,0,.15);border-radius:6px;">🏗️ جدول المبانى بيتحسب أوتوماتيك من المضلعات اللي جوه المضلع المرتبط بالصفحة دي (نفس بيانات "المضلعات الداخلية") — وصف المبنى = قيمة حقل "الاستخدام"، والمساحة بالمتر المربع محسوبة من شكل المضلع نفسه.</div>
             <textarea id="nbTbCultivations" placeholder="الزراعات — سطر لكل نوع: الوصف, فدان, قيراط, سهم" rows="3" style="margin-top:6px;"></textarea>
             <input type="text" id="nbTbNotes" placeholder="ملاحظات" style="margin-top:6px;">
@@ -1879,8 +1896,64 @@
   const btnPadRotate = document.getElementById('btnPadRotate');
   const btnPadScale = document.getElementById('btnPadScale');
 
-  const map = L.map('map', {zoomControl:false, center:[29.9792, 31.1342], zoom:16, worldCopyJump:true, preferCanvas:true});
+  const map = L.map('map', {zoomControl:false, zoomSnap:0, zoomDelta:1, wheelPxPerZoomLevel:100, center:[29.9792, 31.1342], zoom:16, worldCopyJump:true, preferCanvas:true});
   L.control.zoom({position:'topleft'}).addTo(map);
+
+  /* ---------- أداة إدخال المقياس بالظبط (زي شريط المقياس في ArcGIS Pro) ---------- */
+  const ScaleInputControl = L.Control.extend({
+    options: {position:'topleft'},
+    onAdd: function(){
+      const div = L.DomUtil.create('div', 'leaflet-bar scale-input-ctrl');
+      div.innerHTML =
+        '<div class="scale-input-wrap" title="اكتب مقياس الرسم اللي عايزه (مثلاً 5000) واضغط Enter">' +
+          '<span class="scale-input-prefix">1 :</span>' +
+          '<input type="text" id="mapScaleInput" class="scale-input-box" inputmode="numeric">' +
+        '</div>';
+      L.DomEvent.disableClickPropagation(div);
+      L.DomEvent.disableScrollPropagation(div);
+      return div;
+    }
+  });
+  map.addControl(new ScaleInputControl());
+
+  // مقياس 1:N بافتراض دقة شاشة قياسية 96 DPI — نفس الطريقة اللي بتحسب بيها برامج الـ GIS مقياس العرض الحي
+  const SCREEN_DPI = 96;
+  function getCurrentMapScaleDenom(){
+    const zoom = map.getZoom();
+    const lat = map.getCenter().lat;
+    const metersPerPixel = 156543.03392 * Math.cos(lat*Math.PI/180) / Math.pow(2, zoom);
+    return Math.round(metersPerPixel * SCREEN_DPI / 0.0254);
+  }
+  function setMapScale(scaleDenom){
+    const lat = map.getCenter().lat;
+    const metersPerPixel = scaleDenom * 0.0254 / SCREEN_DPI;
+    const zoom = Math.log2(156543.03392 * Math.cos(lat*Math.PI/180) / metersPerPixel);
+    map.setZoom(zoom);
+  }
+  function refreshScaleInputBox(){
+    const box = document.getElementById('mapScaleInput');
+    if(!box || document.activeElement === box) return; // ميغيّرش القيمة وانت لسه بتكتب فيها
+    box.value = getCurrentMapScaleDenom().toLocaleString('en-US');
+  }
+  map.on('zoomend moveend', refreshScaleInputBox);
+  map.whenReady(refreshScaleInputBox);
+  {
+    const box = document.getElementById('mapScaleInput');
+    refreshScaleInputBox();
+    box.addEventListener('focus', ()=> box.select());
+    box.addEventListener('keydown', e=>{
+      if(e.key === 'Enter'){
+        const val = parseFloat(String(box.value).replace(/[^\d.]/g,''));
+        if(val && val > 0) setMapScale(val);
+        else refreshScaleInputBox();
+        box.blur();
+      } else if(e.key === 'Escape'){
+        refreshScaleInputBox();
+        box.blur();
+      }
+    });
+    box.addEventListener('blur', refreshScaleInputBox);
+  }
 
   const rasterPane = map.createPane('rasterPane');
   rasterPane.style.zIndex = 350; // فوق طبقة التايلز (200) وتحت طبقات الرسم (overlayPane ~400)
@@ -1926,16 +1999,18 @@
     }
   }
 
-  document.getElementById('btnSat').addEventListener('click', ()=>{
-    map.removeLayer(streetsLayer); map.addLayer(satLayer);
-    document.getElementById('btnSat').classList.add('active');
-    document.getElementById('btnStreets').classList.remove('active');
-  });
-  document.getElementById('btnStreets').addEventListener('click', ()=>{
-    map.removeLayer(satLayer); map.addLayer(streetsLayer);
-    document.getElementById('btnStreets').classList.add('active');
-    document.getElementById('btnSat').classList.remove('active');
-  });
+  function setBasemap(mode){
+    map.removeLayer(satLayer); map.removeLayer(streetsLayer);
+    if(mode === 'sat') map.addLayer(satLayer);
+    else if(mode === 'streets') map.addLayer(streetsLayer);
+    // mode === 'blank' → مفيش أي طبقة تايلز، والخلفية بتتحط بيضاء فعليًا
+    document.getElementById('map').style.background = (mode === 'blank') ? '#ffffff' : '#F1E9DB';
+    ['btnSat','btnStreets','btnBlank'].forEach(id=> document.getElementById(id).classList.remove('active'));
+    document.getElementById({sat:'btnSat', streets:'btnStreets', blank:'btnBlank'}[mode]).classList.add('active');
+  }
+  document.getElementById('btnSat').addEventListener('click', ()=> setBasemap('sat'));
+  document.getElementById('btnStreets').addEventListener('click', ()=> setBasemap('streets'));
+  document.getElementById('btnBlank').addEventListener('click', ()=> setBasemap('blank'));
 
   const layerGroups = {}; 
   function ensureLayerGroup(layer){
@@ -2561,6 +2636,16 @@
   function buildOfficialTitleBlockHTML(tb, linkedFeature){
     const esc = escapeHtml;
 
+    // صاحب الشأن / نوع الأرض / المساحة (فدان-قيراط-سهم) — أوتوماتيك بالكامل من المضلع المرتبط لما يكون موجود
+    let ownerName = tb.ownerName, landUseType = tb.landUseType,
+        areaFeddan = tb.areaFeddan, areaQirat = tb.areaQirat, areaSahm = tb.areaSahm;
+    if(linkedFeature){
+      if(linkedFeature.attrs && String(linkedFeature.attrs.name||'').trim()) ownerName = String(linkedFeature.attrs.name).trim();
+      if(linkedFeature.attrs && String(linkedFeature.attrs['الاستخدام']||'').trim()) landUseType = String(linkedFeature.attrs['الاستخدام']).trim();
+      const fq = areaToFeddan(polygonAreaMeters(linkedFeature.coords));
+      areaFeddan = String(fq.feddan); areaQirat = String(fq.qirat); areaSahm = String(fq.sahm);
+    }
+
     // جدول المبانى: نفس آلية "جدول المضلعات الداخلية" — مضلعات جوه المضلع المرتبط بالصفحة
     const containedPolys = linkedFeature ? getPolygonsContainedIn(linkedFeature) : [];
     const buildingsRows = containedPolys.map((cf, idx)=>{
@@ -2579,14 +2664,14 @@
     return `
       <table class="tb-grid">
         <tr><td class="tb-label" rowspan="1">القرار</td><td class="tb-value">${esc(tb.decisionText)||'<span class="tb-empty">—</span>'}</td></tr>
-        <tr><td class="tb-label" rowspan="3">توصيف قطعة الأرض</td><td class="tb-value"><b>صاحب الشأن</b> &nbsp; ${esc(tb.ownerName)||'<span class="tb-empty">—</span>'}</td></tr>
+        <tr><td class="tb-label" rowspan="3">توصيف قطعة الأرض</td><td class="tb-value"><b>صاحب الشأن</b> &nbsp; ${esc(ownerName)||'<span class="tb-empty">—</span>'}</td></tr>
         <tr><td class="tb-value"><b>الناحية</b> &nbsp; ${esc(tb.district)||'<span class="tb-empty">—</span>'}</td></tr>
         <tr><td class="tb-value"><b>المحافظة</b> &nbsp; ${esc(tb.governorate)||'<span class="tb-empty">—</span>'}</td></tr>
       </table>
       <table class="tb-grid">
-        <tr><td class="tb-label" rowspan="2">المساحة الاجمالية</td><td class="tb-area-type" colspan="3">${esc(tb.landUseType)||'&nbsp;'}</td></tr>
+        <tr><td class="tb-label" rowspan="2">المساحة الاجمالية</td><td class="tb-area-type" colspan="3">${esc(landUseType)||'&nbsp;'}</td></tr>
         <tr><td class="tb-area-h">فدان</td><td class="tb-area-h">قيراط</td><td class="tb-area-h">سهم</td></tr>
-        <tr><td></td><td class="tb-area-v">${esc(tb.areaFeddan)||'0'}</td><td class="tb-area-v">${esc(tb.areaQirat)||'0'}</td><td class="tb-area-v">${esc(tb.areaSahm)||'0'}</td></tr>
+        <tr><td></td><td class="tb-area-v">${esc(areaFeddan)||'0'}</td><td class="tb-area-v">${esc(areaQirat)||'0'}</td><td class="tb-area-v">${esc(areaSahm)||'0'}</td></tr>
       </table>
       ${containedPolys.length ? `
       <table class="tb-grid">
@@ -3190,6 +3275,46 @@
     scheduleSave();
   });
 
+  /* ---------- اقتراح الناحية والمحافظة أوتوماتيك من موقع المضلع (Nominatim/OpenStreetMap) ---------- */
+  async function reverseGeocodeDistrictGov(lat, lng){
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&accept-language=ar&zoom=14`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('network');
+    const data = await res.json();
+    const addr = data.address || {};
+    const governorate = addr.state || addr.region || '';
+    const district = addr.county || addr.city || addr.town || addr.village || addr.suburb || addr.municipality || '';
+    return {governorate, district};
+  }
+  document.getElementById('lyGeocodeBtn').addEventListener('click', async ()=>{
+    const btn = document.getElementById('lyGeocodeBtn');
+    const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+    const f = page ? getFeatureByRef(page.featureRef) : null;
+    if(!f || !Array.isArray(f.coords) || !f.coords.length){
+      alert('لازم تربط اللوحة بمضلع الأول (زرار "اربط بالمضلع المحدد").');
+      return;
+    }
+    btn.disabled = true; const origText = btn.textContent; btn.textContent = '⏳ بيدور...';
+    try{
+      const lat = f.coords.reduce((s,c)=>s+c[0],0) / f.coords.length;
+      const lng = f.coords.reduce((s,c)=>s+c[1],0) / f.coords.length;
+      const {governorate, district} = await reverseGeocodeDistrictGov(lat, lng);
+      if(district) document.getElementById('nbTbDistrict').value = district;
+      if(governorate) document.getElementById('nbTbGovernorate').value = governorate;
+      page.titleBlock.district = document.getElementById('nbTbDistrict').value;
+      page.titleBlock.governorate = document.getElementById('nbTbGovernorate').value;
+      renderLayoutCanvas(page);
+      scheduleSave();
+      document.getElementById('stHint').textContent = (district || governorate)
+        ? '✅ اتملت الناحية والمحافظة كاقتراح — راجعهم قبل الاعتماد عليهم'
+        : '⚠️ OpenStreetMap مقدرش يحدد الناحية أو المحافظة للموقع ده، اكتبهم يدوي';
+    }catch(e){
+      alert('حصل خطأ أثناء الاتصال بخدمة تحديد الموقع — تأكد من الإنترنت وجرب تاني.');
+    }finally{
+      btn.disabled = false; btn.textContent = origText;
+    }
+  });
+
 
   window.addEventListener('resize', ()=>{
     if(document.getElementById('layoutView').style.display === 'flex' && currentLayoutEditPageId){
@@ -3221,6 +3346,53 @@
         const icon = L.divIcon({className:'plan-label-icon', html:`<div class="plan-edge-label">ض${i+1}</div>`, iconSize:[44,26], iconAnchor:[22,13]});
         L.marker([midLat, midLng], {icon, interactive:false, keyboard:false}).addTo(group);
       }
+    }
+    // ترقيم المبانى (م) — نفس ترقيم جدول المبانى جوه الكرتوش، بيتحط في منتصف كل مبنى داخلي
+    const hasTitleBlock = page.elements.some(el=>el.type==='titleBlock');
+    if(hasTitleBlock){
+      const containedPolys = getPolygonsContainedIn(f);
+      containedPolys.forEach((cf, idx)=>{
+        const latSum = cf.coords.reduce((s,c)=>s+c[0],0), lngSum = cf.coords.reduce((s,c)=>s+c[1],0);
+        const cLat = latSum/cf.coords.length, cLng = lngSum/cf.coords.length;
+        const icon = L.divIcon({className:'plan-label-icon', html:`<div class="plan-building-label">م${idx+1}</div>`, iconSize:[40,26], iconAnchor:[20,13]});
+        L.marker([cLat, cLng], {icon, interactive:false, keyboard:false}).addTo(group);
+      });
+    }
+    // اسم الجار — بيتحط عند كل نقطة فيها حقل "الجار"، وباتجاه أقرب ضلع في المضلع المرتبط، وبنفس فونت عنصر النص المشترك
+    const neighborPoints = [];
+    state.layers.forEach(layer=>{
+      layer.features.forEach(pf=>{
+        if(pf.type === 'point' && pf.attrs && String(pf.attrs['الجار']||'').trim()) neighborPoints.push(pf);
+      });
+    });
+    if(neighborPoints.length){
+      const sampleTextEl = state.sharedLayoutElements.find(e=>e.type==='text');
+      const nFontSize = sampleTextEl ? (sampleTextEl.fontSize||16) : 16;
+      const nColor = sampleTextEl ? (sampleTextEl.color||'#243E39') : '#243E39';
+      neighborPoints.forEach(pf=>{
+        const plat = pf.coords[0][0], plng = pf.coords[0][1];
+        const p = map.latLngToContainerPoint(L.latLng(plat, plng));
+        let bestA=null, bestB=null, bestDist=Infinity;
+        for(let i=0;i<n;i++){
+          const a = map.latLngToContainerPoint(L.latLng(f.coords[i][0], f.coords[i][1]));
+          const b = map.latLngToContainerPoint(L.latLng(f.coords[(i+1)%n][0], f.coords[(i+1)%n][1]));
+          const cp = closestPointOnSegmentPx(p, a, b);
+          const dx = p.x-cp.x, dy = p.y-cp.y, dist = dx*dx+dy*dy;
+          if(dist < bestDist){ bestDist = dist; bestA = a; bestB = b; }
+        }
+        let angle = 0;
+        if(bestA && bestB){
+          angle = Math.atan2(bestB.y-bestA.y, bestB.x-bestA.x) * 180/Math.PI;
+          if(angle > 90) angle -= 180;
+          if(angle < -90) angle += 180;
+        }
+        const icon = L.divIcon({
+          className: 'plan-label-icon',
+          html: `<div class="plan-neighbor-label" style="font-size:${nFontSize}px;color:${nColor};transform:rotate(${angle}deg);">${escapeHtml(pf.attrs['الجار'])}</div>`,
+          iconSize: [120, 24], iconAnchor: [60, 12]
+        });
+        L.marker([plat, plng], {icon, interactive:false, keyboard:false}).addTo(group);
+      });
     }
     return group;
   }
