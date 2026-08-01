@@ -1046,7 +1046,7 @@
           </div>
           <div id="lyPropsMapFrame" style="display:none;">
             <button class="btn-create" id="lyCaptureBtn" style="width:100%;margin-bottom:6px;">📸 التقط لقطة من موضع الخريطة الحالي</button>
-            <div style="font-size:10px;color:var(--text-muted);">زوّمي/حرّكي الخريطة العادية (بعد الرجوع لها أو من غير ما تسيبي شاشة اللوحة) لحد ما توصلي للمنظر اللي عايزاه، وبعدين دوسي الزرار</div>
+            <div style="font-size:10px;color:var(--text-muted);">زوّم/حرّك الخريطة العادية (بعد الرجوع لها أو من غير ما تسيب شاشة اللوحة) لحد ما توصل للمنظر اللي عايزه، وبعدين دوس الزرار</div>
             <div id="lyMapFrameScaleReadout" style="font-size:11px;color:var(--teal);margin-top:6px;"></div>
           </div>
           <div id="lyPropsTitleBlock" style="display:none;">
@@ -1332,7 +1332,7 @@
       <!-- ── لوحة إعدادات السناب — كل أنواع الإسناب في مكان واحد زي الاوتوكاد ── -->
       <div class="rect-hud" id="snapSettingsHud" style="width:250px;border-color:#D4A020;display:none;">
         <h4 style="color:#D4A020;">🧲 إعدادات السناب</h4>
-        <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:8px;">فعّلي أو اطفي أي نوع إسناب مستقل عن التاني، وكلهم شغالين وقت الرسم زي OSNAP في الاوتوكاد.</div>
+        <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:8px;">فعّل أو اطفي أي نوع إسناب مستقل عن التاني، وكلهم شغالين وقت الرسم زي OSNAP في الاوتوكاد.</div>
 
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;padding:6px 0;">
           <input type="checkbox" id="snapOptVertex" style="width:15px;height:15px;accent-color:#D4A020;cursor:pointer;">
@@ -1671,7 +1671,7 @@
   });
   document.getElementById('ccPickMapBtn').addEventListener('click', ()=>{
     ccPickingFromMap = true;
-    document.getElementById('stHint').textContent = '📍 دوسي على أي نقطة على الخريطة عشان تتحول إحداثياتها';
+    document.getElementById('stHint').textContent = '📍 دوس على أي نقطة على الخريطة عشان تتحول إحداثياتها';
   });
 
   document.querySelectorAll('.cc-convert-btn').forEach(btn=>{
@@ -1704,7 +1704,7 @@
           ccUpdateAllFrom(ll);
         }
       }catch(e){
-        alert('اتأكدي إن كل الخانات في القسم ده متملية بأرقام صحيحة.');
+        alert('اتأكد إن كل الخانات في القسم ده متملية بأرقام صحيحة.');
       }
     });
   });
@@ -1799,7 +1799,7 @@
   let saveTimer = null;
   let tempLine = null;
   let snapEnabled = true;
-  let edgeSnapEnabled = true;   // إسناب "أقرب نقطة على الضلع" (عمودي) — منفصل عن snapEnabled عشان تقدري تتحكمي فيه لوحده من لوحة السناب
+  let edgeSnapEnabled = true;   // إسناب "أقرب نقطة على الضلع" (عمودي) — منفصل عن snapEnabled عشان تقدر تتحكم فيه لوحده من لوحة السناب
   let liveOrthoEnabled = false; // إسناب الزوايا القائمة الحي أثناء الرسم الحر (زي Ortho/F8 في الاوتوكاد) — شغال مع أي أداة رسم عادية
   let lastSnapResult = null;    // آخر نتيجة إسناب فعلية (vertex/midpoint/edge) رجعتها effectiveLatLng، عشان الأورثو الحي ميدخلش لو فيه إسناب دقيق أقرب
   let snapMarker = null;
@@ -2719,7 +2719,7 @@
         const img = document.createElement('img'); img.src = snap; box.appendChild(img);
       } else {
         const ph = document.createElement('div'); ph.className = 'ly-el-placeholder';
-        ph.textContent = 'إطار خريطة فاضي — حددّيه من هنا ودوسي "📸 التقط لقطة" على اليسار';
+        ph.textContent = 'إطار خريطة فاضي — حدده من هنا ودوس "📸 التقط لقطة" على اليسار';
         box.appendChild(ph);
       }
     } else if(el.type === 'titleBlock'){
@@ -2855,7 +2855,7 @@
     if(!state.layoutPages.length){
       const empty = document.createElement('div');
       empty.className = 'empty-state';
-      empty.textContent = 'لسه معملتيش أي لوحة إخراج — دوسي "+ لوحة جديدة"';
+      empty.textContent = 'لسه معملتش أي لوحة إخراج — دوس "+ لوحة جديدة"';
       container.appendChild(empty);
       return;
     }
@@ -2877,7 +2877,7 @@
       row.appendChild(mk('🖼️', 'تصدير JPG', ()=> exportPageAsFile(page.id, 'jpg')));
       row.appendChild(mk('📕', 'تصدير PDF', ()=> exportPageAsFile(page.id, 'pdf')));
       row.appendChild(mk('🗑️', 'حذف اللوحة', ()=>{
-        if(!confirm('تحذفي لوحة "'+page.name+'"؟')) return;
+        if(!confirm('تحذف لوحة "'+page.name+'"؟')) return;
         page.elements.forEach(el=> delete layoutSnapshots[el.id]);
         state.layoutPages = state.layoutPages.filter(p=>p.id!==page.id);
         renderLayoutPageList(); scheduleSave();
@@ -2975,7 +2975,7 @@
       if(!page) return;
       const type = btn.dataset.type;
       if(type === 'titleBlock' && page.elements.some(el=>el.type==='titleBlock')){
-        alert('في كرتوش واحد بالفعل على اللوحة دي — احذفيه الأول لو عايزة تضيفي واحد جديد.');
+        alert('في كرتوش واحد بالفعل على اللوحة دي — احذفه الأول لو عايز تضيف واحد جديد.');
         document.getElementById('lyAddElMenu').style.display = 'none';
         return;
       }
@@ -3001,9 +3001,9 @@
   document.getElementById('lyLinkFeatureBtn').addEventListener('click', ()=>{
     const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
     if(!page) return;
-    if(!selection){ alert('حددي مضلع من الخريطة الأول (ارجعي للخريطة ودوسي عليه)، وبعدين افتحي اللوحة تاني ودوسي الزرار ده.'); return; }
+    if(!selection){ alert('حدد مضلع من الخريطة الأول (ارجع للخريطة ودوس عليه)، وبعدين افتح اللوحة تاني ودوس الزرار ده.'); return; }
     const f = getFeature(selection.layerId, selection.featureId);
-    if(!f || f.type !== 'polygon'){ alert('لازم تحددي مضلع (Polygon) مش نقطة أو خط.'); return; }
+    if(!f || f.type !== 'polygon'){ alert('لازم تحدد مضلع (Polygon) مش نقطة أو خط.'); return; }
     page.featureRef = {layerId:selection.layerId, featureId:selection.featureId};
     document.getElementById('lyLinkedFeatureName').textContent = '✓ ' + featureLabel(f);
     renderLayoutCanvas(page);
@@ -3074,7 +3074,7 @@
     }
     const mapFrames = page.elements.filter(el=>el.type==='mapFrame');
     if(mapFrames.length && mapFrames.some(el=>!layoutSnapshots[el.id])){
-      alert('في إطار خريطة على اللوحة دي لسه ملتقطش لقطة — افتحي اللوحة، حددي الإطار، ودوسي "📸 التقط لقطة" الأول.');
+      alert('في إطار خريطة على اللوحة دي لسه ملتقطش لقطة — افتح اللوحة، حدد الإطار، ودوس "📸 التقط لقطة" الأول.');
       return;
     }
     document.getElementById('stHint').textContent = '🖼️ بيجهز الملف النهائي...';
@@ -3128,7 +3128,7 @@
 
   async function startMapSeries(){
     const layer = state.layers.find(l=>l.id===document.getElementById('msLayer').value);
-    if(!layer){ alert('اختاري طبقة.'); return; }
+    if(!layer){ alert('اختار طبقة.'); return; }
     const polygons = layer.features.filter(f=>f.type==='polygon');
     if(!polygons.length){ alert('الطبقة دي مفيهاش مضلعات.'); return; }
     if(typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined'){ alert('مكتبات التصدير لسه بتتحمل — استنى شوية وحاول تاني.'); return; }
@@ -7263,16 +7263,16 @@
     lines.push('# -*- coding: utf-8 -*-');
     lines.push('"""');
     lines.push('سكريبت ArcPy مولّد تلقائيًا من أداة الويب GIS');
-    lines.push('بيبني في الجيوداتا بيز: Feature Classes بحقولها + الدومينز (Coded Value Domains) بنفس التسمية اللي عملتيها.');
+    lines.push('بيبني في الجيوداتا بيز: Feature Classes بحقولها + الدومينز (Coded Value Domains) بنفس التسمية اللي عملتها.');
     lines.push('بعد التشغيل: استوردي بيانات كل طبقة (GeoJSON المُصدَّر) داخل الـ Feature Class المناسب باستخدام Append أو JSON To Features.');
     lines.push(`تاريخ التوليد: ${new Date().toISOString().slice(0,19).replace('T',' ')}`);
     lines.push('"""');
     lines.push('import arcpy, os');
     lines.push('');
-    lines.push('# ====== إعدادات — عدّلي المسارات دي حسب مشروعك ======');
+    lines.push('# ====== إعدادات — عدّل المسارات دي حسب مشروعك ======');
     lines.push('out_folder = r"C:\\GIS"          # المجلد اللي هيتحط فيه الجيوداتا بيز');
     lines.push('gdb_name   = "Project.gdb"      # اسم الجيوداتا بيز');
-    lines.push('sr = arcpy.SpatialReference(4326)   # WGS84 — غيّريها لو محتاجة نظام إحداثيات تاني (مثلاً UTM)');
+    lines.push('sr = arcpy.SpatialReference(4326)   # WGS84 — غيّره لو محتاج نظام إحداثيات تاني (مثلاً UTM)');
     lines.push('');
     lines.push('output_gdb = os.path.join(out_folder, gdb_name)');
     lines.push('if not arcpy.Exists(output_gdb):');
@@ -7318,7 +7318,7 @@
     lines.push('# ====== الطبقات (Feature Classes) ======');
     state.layers.forEach(layer=>{
       const geomTypesPresent = new Set(layer.features.map(f=>ARCPY_GEOM_MAP[f.type] || 'POLYGON'));
-      if(!geomTypesPresent.size) geomTypesPresent.add('POINT'); // طبقة فاضية — POINT كافتراضي، عدّليه لو محتاجة نوع تاني
+      if(!geomTypesPresent.size) geomTypesPresent.add('POINT'); // طبقة فاضية — POINT كافتراضي، عدّله لو محتاج نوع تاني
       const layerBase = gdbSafeName(layer.name, 'Layer');
       const fieldDefs = (layer.fields||[]).filter(fld=>fld.name).map(fld=>{
         const fieldName = gdbSafeName(fld.name, 'field');
@@ -7381,7 +7381,7 @@
     a.click();
     document.body.removeChild(a);
     setTimeout(()=>URL.revokeObjectURL(url), 1000);
-    document.getElementById('stHint').textContent = '✅ اتحمّل سكريبت الـ ArcPy — شغّليه من ArcGIS Pro Python Window أو IDLE بعد تعديل مسار الجيوداتا بيز';
+    document.getElementById('stHint').textContent = '✅ اتحمّل سكريبت الـ ArcPy — شغّله من ArcGIS Pro Python Window أو IDLE بعد تعديل مسار الجيوداتا بيز';
   });
 
   document.getElementById('driveNameBtn').addEventListener('click', ()=>{
