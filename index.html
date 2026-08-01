@@ -615,6 +615,14 @@
                 <text x="17.5" y="8.3" text-anchor="middle" font-size="5.5" font-weight="800" fill="currentColor" stroke="none" font-family="sans-serif">Z</text>
               </svg><span>KMZ</span>
             </button>
+            <button class="tool-btn" id="exportArcpyBtn" title="توليد سكريبت ArcPy لبناء السكيمة والدومينز في الاركبرو" style="--tc:#4a7fb5;">
+              <svg viewBox="0 0 24 24">
+                <path d="M12 4v13" stroke-width="2.3"/>
+                <path d="M7 12l5 5 5-5" stroke-width="2.3"/>
+                <rect x="3" y="18" width="18" height="3.5" rx="1.5" fill="currentColor" opacity=".22" stroke-width="1.4"/>
+                <path d="M16 3.5l4.5 4.5-4.5 4.5" stroke-width="1.6" fill="none" opacity=".85"/>
+              </svg><span>سكريبت GDB</span>
+            </button>
             <input type="file" id="importFileInput" accept=".geojson,.json" style="display:none;">
             <button class="tool-btn" id="importBtn" title="استيراد ملف GeoJSON">
               <svg viewBox="0 0 24 24">
@@ -1168,6 +1176,36 @@
         </div>
       </div>
 
+      <!-- ── إدارة الدومينز (قوائم القيم المعتمدة — Coded Value Domains) ── -->
+      <div id="domainsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:955;align-items:center;justify-content:center;">
+        <div style="background:var(--bg-panel);border:1.5px solid #4a7fb5;border-radius:10px;padding:16px;width:360px;max-width:92vw;max-height:88vh;overflow:auto;">
+          <h4 style="color:#4a7fb5;margin-top:0;">🗄️ إدارة الدومينز</h4>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">الدومين قائمة قيم ثابتة تقدر تربطها بأي حقل في أي طبقة — زي Coded Value Domain في الجيوداتا بيز. اكتب كل قيمة في سطر.</div>
+          <div id="domainsList"></div>
+          <div class="row-btns" style="margin-top:8px;">
+            <input type="text" id="newDomainName" placeholder="اسم دومين جديد" style="flex:1;">
+            <button class="btn-create" id="addDomainBtn" style="background:#4a7fb5;">+ إضافة</button>
+          </div>
+          <div class="row-btns" style="margin-top:14px;">
+            <button class="btn-cancel" id="closeDomainsModal" style="flex:1;">إغلاق</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── سكيمة الطبقة (حقول Feature Class) ── -->
+      <div id="schemaModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:955;align-items:center;justify-content:center;">
+        <div style="background:var(--bg-panel);border:1.5px solid #4a7fb5;border-radius:10px;padding:16px;width:380px;max-width:92vw;max-height:88vh;overflow:auto;">
+          <h4 id="schemaModalTitle" style="color:#4a7fb5;margin-top:0;">سكيمة الطبقة</h4>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">عرّف الحقول الثابتة لهذه الطبقة (زي حقول Feature Class). لما تدوس "تطبيق"، كل عناصر الطبقة هتاخد الحقول دي.</div>
+          <div id="schemaFieldsList"></div>
+          <button class="add-btn" id="addSchemaFieldBtn" style="padding:5px;font-size:11px;">+ إضافة حقل</button>
+          <div class="row-btns" style="margin-top:14px;">
+            <button class="btn-cancel" id="closeSchemaModal" style="flex:1;">إغلاق</button>
+            <button class="btn-create" id="applySchemaBtn" style="flex:1;background:#4a7fb5;">✅ تطبيق على العناصر</button>
+          </div>
+        </div>
+      </div>
+
 
       <!-- ── حاسبة المساحة: فدان/قيراط/سهم ↔ متر مربع ── -->
       <div class="rect-hud" id="areaCalcHud" style="width:270px;display:none;">
@@ -1438,6 +1476,7 @@
       <div class="section-title">الطبقات</div>
       <div id="layerList"></div>
       <button class="add-btn" id="addLayerBtn">+ طبقة جديدة</button>
+      <button class="add-btn" id="manageDomainsBtn" style="background:transparent;border:1px solid #4a7fb5;color:#4a7fb5;margin-top:6px;">🗄️ إدارة الدومينز</button>
     </div>
     <div class="panel" id="attrPanel">
       <div id="attrContent"><div class="empty-state">اختر عنصر من الخريطة<br>لعرض وتعديل خصائصه</div></div>
@@ -1462,9 +1501,20 @@
     'زراعات': ['منزرع','مهمل','سبق زراعتها ومهملة','بور','شبكة رئيسية'],
     'مبانى': ['سكن عمال','سكن خاص','حظيرة','حوض تجميع']
   };
+  const USAGE_DOMAIN_PREFIX = 'الاستخدام - ';
+  // ترحيل دومين "النوع/الاستخدام" القديم (كان متكوّد في الصفحة) لنظام الدومينز العام،
+  // عشان يبان ويتعدل من "إدارة الدومينز". بيتنفذ مرة واحدة فقط لو الدومينز دي لسه مش موجودة.
+  function seedLegacyDomains(){
+    if(!state.domains['النوع']) state.domains['النوع'] = Object.keys(SUBTYPE_USAGE_DOMAINS);
+    Object.keys(SUBTYPE_USAGE_DOMAINS).forEach(subtype=>{
+      const key = USAGE_DOMAIN_PREFIX + subtype;
+      if(!state.domains[key]) state.domains[key] = SUBTYPE_USAGE_DOMAINS[subtype].slice();
+    });
+  }
   let state = {
-    layers: [{id:'L1', name:'طبقة 1', color: palette[0], visible:true, features:[]}],
+    layers: [{id:'L1', name:'طبقة 1', color: palette[0], visible:true, features:[], fields:[]}],
     activeLayerId:'L1', nextColorIdx:1,
+    domains: {},   // {domainName: ['قيمة1','قيمة2', ...]} — قوائم قيم معتمدة قابلة لإعادة الاستخدام بين الطبقات (Coded Value Domains)
     friendFileIds: [], friendLastPulled: {},   // friendLastPulled: {fileId: timestamp}
     userName: null,
     notebookSketches: [], // ضربات القلم الحر المحفوظة: {id, points:[[lat,lng]...], color, brush, width, smoothness}
@@ -4065,6 +4115,9 @@
     if(!Array.isArray(state.notebookSketches)) state.notebookSketches = [];
     if(!Array.isArray(state.layoutPages)) state.layoutPages = [];
     if(!Array.isArray(state.rasters)) state.rasters = [];
+    if(!state.domains || typeof state.domains !== 'object') state.domains = {};
+    state.layers.forEach(l=>{ if(!Array.isArray(l.fields)) l.fields = []; });
+    seedLegacyDomains();
     renderLayerList(); renderFeatures(); renderPenStrokes(); renderLayoutPageList();
     renderRasters();
     const all=[]; state.layers.forEach(l=>l.features.forEach(f=>f.coords.forEach(c=>all.push(c))));
@@ -5100,7 +5153,16 @@
         renderLayerList(); renderFeatures(); scheduleSave();
       });
 
-      row.appendChild(expandBtn); row.appendChild(swatch); row.appendChild(nameSpan); row.appendChild(countSpan); row.appendChild(visBtn);
+      const schemaBtn = document.createElement('button');
+      schemaBtn.className = 'icon-btn'; schemaBtn.title = 'سكيمة الطبقة (تعريف الحقول)';
+      schemaBtn.innerHTML = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;"><rect x="3" y="4" width="18" height="16" rx="2" stroke-width="1.8" fill="none"/><line x1="3" y1="10" x2="21" y2="10" stroke-width="1.6"/><line x1="9" y1="10" x2="9" y2="20" stroke-width="1.6"/></svg>`;
+      schemaBtn.style.color = layer.fields && layer.fields.length ? '#4a7fb5' : '';
+      schemaBtn.addEventListener('click', e=>{
+        L.DomEvent.stopPropagation(e);
+        openSchemaModal(layer.id);
+      });
+
+      row.appendChild(expandBtn); row.appendChild(swatch); row.appendChild(nameSpan); row.appendChild(countSpan); row.appendChild(visBtn); row.appendChild(schemaBtn);
       if(state.layers.length > 1){
         const delBtn = document.createElement('button');
         delBtn.className = 'icon-btn'; delBtn.innerHTML = trashIcon();
@@ -5313,12 +5375,154 @@
     pushStateToUndo();
     const id = 'L' + uid();
     const color = palette[state.nextColorIdx++ % palette.length];
-    state.layers.push({id, name, color, visible:true, features:[]});
+    state.layers.push({id, name, color, visible:true, features:[], fields:[]});
     state.activeLayerId = id;
     renderLayerList(); renderFeatures(); scheduleSave();
   });
 
+  /* ---------- إدارة الدومينز (Coded Value Domains) ---------- */
+  function renderDomainsList(){
+    const container = document.getElementById('domainsList');
+    const names = Object.keys(state.domains);
+    if(!names.length){
+      container.innerHTML = '<div class="empty-state" style="padding:8px 0;">لا يوجد دومينز بعد</div>';
+      return;
+    }
+    container.innerHTML = names.map(name=>`
+      <div class="domain-block" style="border:1px solid #3a4048;border-radius:8px;padding:8px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <b style="color:#4a7fb5;font-size:12px;">${escapeHtml(name)}</b>
+          <button class="icon-btn del-domain" data-domain="${escapeHtml(name)}" title="حذف الدومين">${trashIcon()}</button>
+        </div>
+        <textarea class="domain-values" data-domain="${escapeHtml(name)}" rows="3" placeholder="قيمة في كل سطر" style="width:100%;font-family:var(--mono);font-size:11px;box-sizing:border-box;">${escapeHtml((state.domains[name]||[]).join('\n'))}</textarea>
+      </div>
+    `).join('');
+
+    container.querySelectorAll('.del-domain').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const dn = btn.dataset.domain;
+        if(confirm(`حذف الدومين "${dn}"؟ الحقول المرتبطة به هتفضل موجودة بس من غير قائمة قيم.`)){
+          delete state.domains[dn];
+          scheduleSave(); renderDomainsList();
+        }
+      });
+    });
+    container.querySelectorAll('.domain-values').forEach(ta=>{
+      ta.addEventListener('input', ()=>{
+        const dn = ta.dataset.domain;
+        state.domains[dn] = ta.value.split('\n').map(v=>v.trim()).filter(Boolean);
+        scheduleSave();
+      });
+    });
+  }
+
+  function openDomainsModal(){
+    renderDomainsList();
+    document.getElementById('domainsModal').style.display = 'flex';
+  }
+  function closeDomainsModalFn(){
+    document.getElementById('domainsModal').style.display = 'none';
+    renderAttrPanel(); // القيم اتحدثت، لو فيه عنصر محدد بيستخدم دومين
+  }
+
+  document.getElementById('manageDomainsBtn').addEventListener('click', openDomainsModal);
+  document.getElementById('closeDomainsModal').addEventListener('click', closeDomainsModalFn);
+  document.getElementById('addDomainBtn').addEventListener('click', ()=>{
+    const inp = document.getElementById('newDomainName');
+    const name = inp.value.trim();
+    if(!name) return;
+    if(state.domains[name]){ alert('الاسم ده مستخدم بالفعل'); return; }
+    state.domains[name] = [];
+    inp.value = '';
+    scheduleSave(); renderDomainsList();
+  });
+
+  /* ---------- سكيمة الطبقة (Feature Class Fields) ---------- */
+  let schemaModalLayerId = null;
+
+  function renderSchemaFieldsList(){
+    const layer = getLayer(schemaModalLayerId);
+    if(!layer) return;
+    document.getElementById('schemaModalTitle').textContent = `سكيمة الطبقة — ${layer.name}`;
+    const container = document.getElementById('schemaFieldsList');
+    const domainNames = Object.keys(state.domains);
+    if(!layer.fields.length){
+      container.innerHTML = '<div class="empty-state" style="padding:8px 0;">لا يوجد حقول مُعرّفة — الطبقة شغالة بحقول حرة زي الوضع القديم</div>';
+    } else {
+      container.innerHTML = layer.fields.map((fld, i)=>`
+        <div class="field-row" data-idx="${i}" style="align-items:center;">
+          <input type="text" class="schema-field-name" data-idx="${i}" value="${escapeHtml(fld.name)}" placeholder="اسم الحقل" style="flex:1.3;">
+          <select class="schema-field-type" data-idx="${i}" style="flex:1;">
+            <option value="text" ${fld.type==='text'?'selected':''}>نص</option>
+            <option value="number" ${fld.type==='number'?'selected':''}>رقم</option>
+            <option value="date" ${fld.type==='date'?'selected':''}>تاريخ</option>
+            <option value="domain" ${fld.type==='domain'?'selected':''}>دومين</option>
+          </select>
+          <select class="schema-field-domain" data-idx="${i}" style="flex:1;${fld.type==='domain'?'':'display:none;'}" ${domainNames.length?'':'disabled'}>
+            <option value="">${domainNames.length ? '— اختر —' : 'لا يوجد دومينز'}</option>
+            ${domainNames.map(dn=>`<option value="${escapeHtml(dn)}" ${fld.domain===dn?'selected':''}>${escapeHtml(dn)}</option>`).join('')}
+          </select>
+          <button class="icon-btn del-schema-field" data-idx="${i}" title="حذف الحقل">${trashIcon()}</button>
+        </div>
+      `).join('');
+    }
+
+    container.querySelectorAll('.schema-field-name').forEach(inp=>{
+      inp.addEventListener('input', ()=>{ layer.fields[+inp.dataset.idx].name = inp.value; });
+    });
+    container.querySelectorAll('.schema-field-type').forEach(sel=>{
+      sel.addEventListener('change', ()=>{
+        layer.fields[+sel.dataset.idx].type = sel.value;
+        if(sel.value !== 'domain') layer.fields[+sel.dataset.idx].domain = null;
+        renderSchemaFieldsList();
+      });
+    });
+    container.querySelectorAll('.schema-field-domain').forEach(sel=>{
+      sel.addEventListener('change', ()=>{ layer.fields[+sel.dataset.idx].domain = sel.value || null; });
+    });
+    container.querySelectorAll('.del-schema-field').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        layer.fields.splice(+btn.dataset.idx, 1);
+        renderSchemaFieldsList();
+      });
+    });
+  }
+
+  function openSchemaModal(layerId){
+    schemaModalLayerId = layerId;
+    renderSchemaFieldsList();
+    document.getElementById('schemaModal').style.display = 'flex';
+  }
+  function closeSchemaModalFn(){
+    document.getElementById('schemaModal').style.display = 'none';
+    schemaModalLayerId = null;
+  }
+
+  document.getElementById('closeSchemaModal').addEventListener('click', closeSchemaModalFn);
+  document.getElementById('addSchemaFieldBtn').addEventListener('click', ()=>{
+    const layer = getLayer(schemaModalLayerId);
+    if(!layer) return;
+    layer.fields.push({name:'حقل جديد', type:'text', domain:null});
+    renderSchemaFieldsList();
+  });
+  document.getElementById('applySchemaBtn').addEventListener('click', ()=>{
+    const layer = getLayer(schemaModalLayerId);
+    if(!layer) return;
+    pushStateToUndo();
+    // كل حقل في السكيمة لازم يبقى موجود في attrs كل عنصر بالطبقة (من غير ما نمسح القيم الموجودة)
+    layer.features.forEach(f=>{
+      layer.fields.forEach(fld=>{
+        if(!fld.name) return;
+        if(!(fld.name in f.attrs)) f.attrs[fld.name] = '';
+      });
+    });
+    renderLayerList(); renderAttrPanel(); scheduleSave();
+    closeSchemaModalFn();
+    document.getElementById('stHint').textContent = `✅ اتطبقت السكيمة على ${layer.features.length} عنصر`;
+  });
+
   /* ---------- تحديد متعدد ---------- */
+
   document.getElementById('multiSelectBtn').addEventListener('click', function(){
     multiSelectMode = !multiSelectMode;
     this.classList.toggle('active', multiSelectMode);
@@ -5555,10 +5759,46 @@
       ${f.color ? '<button id="fcReset">↩ لون الطبقة</button>' : ''}
     </div>`;
 
+    const _fLayerFields = (_fLayer && Array.isArray(_fLayer.fields)) ? _fLayer.fields : [];
+    if(_fLayerFields.length){
+      html += `<div class="section-title">الحقول الثابتة (السكيمة)</div>`;
+      _fLayerFields.forEach(fld=>{
+        if(!fld.name) return;
+        const val = f.attrs[fld.name] !== undefined ? f.attrs[fld.name] : '';
+        if(fld.type === 'domain'){
+          const domainVals = state.domains[fld.domain] || [];
+          html += `<div class="field-row">
+            <label style="flex:1;font-size:11px;color:var(--text-muted);">${escapeHtml(fld.name)}</label>
+            <select class="val schema-val" data-key="${escapeHtml(fld.name)}" style="flex:1.4;" ${domainVals.length?'':'disabled'}>
+              <option value="">${domainVals.length ? '— اختر —' : '— الدومين فارغ —'}</option>
+              ${domainVals.map(o=>`<option value="${escapeHtml(o)}" ${val===o?'selected':''}>${escapeHtml(o)}</option>`).join('')}
+            </select>
+          </div>`;
+        } else if(fld.type === 'number'){
+          html += `<div class="field-row">
+            <label style="flex:1;font-size:11px;color:var(--text-muted);">${escapeHtml(fld.name)}</label>
+            <input type="number" class="val schema-val" data-key="${escapeHtml(fld.name)}" value="${escapeHtml(val)}" style="flex:1.4;">
+          </div>`;
+        } else if(fld.type === 'date'){
+          html += `<div class="field-row">
+            <label style="flex:1;font-size:11px;color:var(--text-muted);">${escapeHtml(fld.name)}</label>
+            <input type="date" class="val schema-val" data-key="${escapeHtml(fld.name)}" value="${escapeHtml(val)}" style="flex:1.4;">
+          </div>`;
+        } else {
+          html += `<div class="field-row">
+            <label style="flex:1;font-size:11px;color:var(--text-muted);">${escapeHtml(fld.name)}</label>
+            <input type="text" class="val schema-val" data-key="${escapeHtml(fld.name)}" value="${escapeHtml(val)}" style="flex:1.4;">
+          </div>`;
+        }
+      });
+    }
+    const _schemaFieldNames = new Set(_fLayerFields.map(fld=>fld.name));
+
     html += `<div class="section-title" style="margin-top:0;">الحقول الوصفية</div>`;
     Object.keys(f.attrs).forEach(k=>{
+      if(_schemaFieldNames.has(k)) return; // معروض بالفعل في قسم السكيمة فوق
       if(k === 'النوع'){
-        const opts = Object.keys(SUBTYPE_USAGE_DOMAINS);
+        const opts = state.domains['النوع'] || [];
         html += `<div class="field-row">
           <input type="text" class="key" value="${escapeHtml(k)}" data-orig="${escapeHtml(k)}">
           <select class="val subtype-select" data-key="${escapeHtml(k)}">
@@ -5568,7 +5808,7 @@
           <button class="icon-btn del-attr" data-key="${escapeHtml(k)}" title="حذف الحقل">${trashIcon()}</button>
         </div>`;
       } else if(k === 'الاستخدام'){
-        const domainOpts = SUBTYPE_USAGE_DOMAINS[f.attrs['النوع']] || [];
+        const domainOpts = state.domains[USAGE_DOMAIN_PREFIX + f.attrs['النوع']] || [];
         html += `<div class="field-row">
           <input type="text" class="key" value="${escapeHtml(k)}" data-orig="${escapeHtml(k)}">
           <select class="val" data-key="${escapeHtml(k)}" ${domainOpts.length?'':'disabled'}>
@@ -5684,6 +5924,11 @@
     document.getElementById('fiDescRow').style.display     = isPoint ? 'none' : 'block';
     document.getElementById('fiNeighborRow').style.display = isPoint ? 'block' : 'none';
     document.getElementById('fiName').value     = '';
+    {
+      const subtypeOpts = state.domains['النوع'] || [];
+      document.getElementById('fiSubtype').innerHTML =
+        '<option value="">— اختر —</option>' + subtypeOpts.map(o=>'<option value="'+o+'">'+o+'</option>').join('');
+    }
     document.getElementById('fiSubtype').value = '';
     populateUsageOptions('', '');
     document.getElementById('fiNeighbor').value = '';
@@ -5699,8 +5944,8 @@
 
   function populateUsageOptions(subtype, selected){
     const usageSel = document.getElementById('fiUsage');
-    const opts = SUBTYPE_USAGE_DOMAINS[subtype];
-    if(!opts){
+    const opts = state.domains[USAGE_DOMAIN_PREFIX + subtype];
+    if(!opts || !opts.length){
       usageSel.innerHTML = '<option value="">— اختر النوع أولاً —</option>';
       usageSel.disabled = true;
       return;
@@ -6922,6 +7167,133 @@
     a.click();
     document.body.removeChild(a);
     setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  });
+
+  /* ===== توليد سكريبت ArcPy لبناء السكيمة والدومينز في File Geodatabase ===== */
+  // أسماء الجداول/الحقول/الدومينز في الجيوداتا بيز لازم تخلو من مسافات/رموز خاصة —
+  // بنسمح بحروف عربي/إنجليزي وأرقام و"_" بس، والباقي بيتحول لـ "_".
+  function gdbSafeName(raw, fallback){
+    let s = String(raw||'').trim();
+    s = s.replace(/[^\u0600-\u06FFa-zA-Z0-9_]+/g, '_').replace(/_+/g,'_').replace(/^_+|_+$/g,'');
+    if(!s) s = fallback || 'field';
+    if(/^[0-9]/.test(s)) s = 'F_' + s;
+    return s.slice(0, 60); // File GDB بيسمح بأسماء أطول من الـ shapefile، بس بنحافظ على طول معقول
+  }
+
+  function pyStr(s){
+    // تحويل نص JS لنص بايثون آمن (triple double-quoted) — بيتفادى مشاكل quotes/newlines
+    return '"""' + String(s==null?'':s).replace(/\\/g,'\\\\').replace(/"""/g,'\\"\\"\\"') + '"""';
+  }
+
+  const ARCPY_GEOM_MAP = {point:'POINT', line:'POLYLINE'}; // أي نوع تاني (polygon/rectangle/circle) بيتعتبر POLYGON
+
+  function buildArcpyScript(){
+    const lines = [];
+    lines.push('# -*- coding: utf-8 -*-');
+    lines.push('"""');
+    lines.push('سكريبت ArcPy مولّد تلقائيًا من أداة الويب GIS');
+    lines.push('بيبني في الجيوداتا بيز: Feature Classes بحقولها + الدومينز (Coded Value Domains) بنفس التسمية اللي عملتيها.');
+    lines.push('بعد التشغيل: استوردي بيانات كل طبقة (GeoJSON المُصدَّر) داخل الـ Feature Class المناسب باستخدام Append أو JSON To Features.');
+    lines.push(`تاريخ التوليد: ${new Date().toISOString().slice(0,19).replace('T',' ')}`);
+    lines.push('"""');
+    lines.push('import arcpy, os');
+    lines.push('');
+    lines.push('# ====== إعدادات — عدّلي المسارات دي حسب مشروعك ======');
+    lines.push('out_folder = r"C:\\GIS"          # المجلد اللي هيتحط فيه الجيوداتا بيز');
+    lines.push('gdb_name   = "Project.gdb"      # اسم الجيوداتا بيز');
+    lines.push('sr = arcpy.SpatialReference(4326)   # WGS84 — غيّريها لو محتاجة نظام إحداثيات تاني (مثلاً UTM)');
+    lines.push('');
+    lines.push('output_gdb = os.path.join(out_folder, gdb_name)');
+    lines.push('if not arcpy.Exists(output_gdb):');
+    lines.push('    arcpy.management.CreateFileGDB(out_folder, gdb_name)');
+    lines.push('    print("✅ اتعملت الجيوداتا بيز:", output_gdb)');
+    lines.push('');
+
+    // ---- الدومينز ----
+    const domainNames = Object.keys(state.domains);
+    lines.push('# ====== الدومينز (Coded Value Domains) ======');
+    lines.push('domains = {');
+    domainNames.forEach(dn=>{
+      const vals = state.domains[dn] || [];
+      lines.push(`    ${pyStr(dn)}: [${vals.map(v=>pyStr(v)).join(', ')}],`);
+    });
+    lines.push('}');
+    lines.push('existing_domain_names = [d.name for d in arcpy.da.ListDomains(output_gdb)]');
+    lines.push('for domain_name, values in domains.items():');
+    lines.push('    if domain_name not in existing_domain_names:');
+    lines.push('        arcpy.management.CreateDomain(output_gdb, domain_name, domain_name, "TEXT", "CODED")');
+    lines.push('    for v in values:');
+    lines.push('        try:');
+    lines.push('            arcpy.management.AddCodedValueToDomain(output_gdb, domain_name, v, v)');
+    lines.push('        except Exception:');
+    lines.push('            pass  # القيمة موجودة بالفعل غالبًا');
+    lines.push('    print("✅ دومين:", domain_name, "-", len(values), "قيمة")');
+    lines.push('');
+
+    // ---- خريطة نوع الحقل في التطبيق -> نوع حقل ArcGIS ----
+    lines.push('# ====== دالة مساعدة لإضافة حقول الطبقة (سكيمة) ======');
+    lines.push('FIELD_TYPE_MAP = {"text": "TEXT", "number": "DOUBLE", "date": "DATE", "domain": "TEXT"}');
+    lines.push('def add_layer_fields(fc_path, fields):');
+    lines.push('    for fld in fields:');
+    lines.push('        ftype = FIELD_TYPE_MAP.get(fld["type"], "TEXT")');
+    lines.push('        arcpy.management.AddField(fc_path, fld["field_name"], ftype,');
+    lines.push('            field_length=255 if ftype == "TEXT" else None,');
+    lines.push('            field_alias=fld["alias"])');
+    lines.push('        if fld.get("domain"):');
+    lines.push('            arcpy.management.AssignDomainToField(fc_path, fld["field_name"], fld["domain"])');
+    lines.push('');
+
+    // ---- الطبقات (Feature Classes) ----
+    lines.push('# ====== الطبقات (Feature Classes) ======');
+    state.layers.forEach(layer=>{
+      const geomTypesPresent = new Set(layer.features.map(f=>ARCPY_GEOM_MAP[f.type] || 'POLYGON'));
+      if(!geomTypesPresent.size) geomTypesPresent.add('POINT'); // طبقة فاضية — POINT كافتراضي، عدّليه لو محتاجة نوع تاني
+      const layerBase = gdbSafeName(layer.name, 'Layer');
+      const fieldDefs = (layer.fields||[]).filter(fld=>fld.name).map(fld=>{
+        const fieldName = gdbSafeName(fld.name, 'field');
+        return {field_name: fieldName, alias: fld.name, type: fld.type,
+                domain: fld.type==='domain' ? fld.domain : null};
+      });
+
+      [...geomTypesPresent].forEach(geom=>{
+        const suffix = geom==='POINT' ? 'Points' : geom==='POLYLINE' ? 'Lines' : 'Polygons';
+        const fcName = gdbSafeName(layerBase + '_' + suffix, 'Layer_' + suffix);
+        lines.push(`# --- طبقة: ${layer.name} (${geom}) ---`);
+        lines.push(`fc_path = os.path.join(output_gdb, ${pyStr(fcName)})`);
+        lines.push('if not arcpy.Exists(fc_path):');
+        lines.push(`    arcpy.management.CreateFeatureclass(output_gdb, ${pyStr(fcName)}, "${geom}", spatial_reference=sr)`);
+        if(fieldDefs.length){
+          lines.push('    layer_fields = [');
+          fieldDefs.forEach(fd=>{
+            lines.push(`        {"field_name": ${pyStr(fd.field_name)}, "alias": ${pyStr(fd.alias)}, "type": ${pyStr(fd.type)}, "domain": ${fd.domain ? pyStr(fd.domain) : 'None'}},`);
+          });
+          lines.push('    ]');
+          lines.push('    add_layer_fields(fc_path, layer_fields)');
+        }
+        lines.push(`    print("✅ Feature Class:", ${pyStr(fcName)})`);
+        lines.push('');
+      });
+    });
+
+    lines.push('print("=== خلص بناء السكيمة والدومينز ===")');
+    lines.push('print("الخطوة الجاية: استوردي بيانات كل طبقة من ملف الـ GeoJSON المُصدَّر (JSON To Features أو Append) جوه الـ Feature Class المناسب.")');
+
+    return lines.join('\n');
+  }
+
+  document.getElementById('exportArcpyBtn').addEventListener('click', ()=>{
+    const script = buildArcpyScript();
+    const blob = new Blob([script], {type:'text/x-python'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+    a.href = url;
+    a.download = 'build-geodatabase-' + stamp + '.py';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    document.getElementById('stHint').textContent = '✅ اتحمّل سكريبت الـ ArcPy — شغّليه من ArcGIS Pro Python Window أو IDLE بعد تعديل مسار الجيوداتا بيز';
   });
 
   document.getElementById('driveNameBtn').addEventListener('click', ()=>{
