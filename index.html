@@ -451,11 +451,11 @@
   .tb-footnote{text-align:center;font-size:.72em;color:#555;padding:.4em 0;}
   .plan-label-icon{ background:transparent; border:none; }
   .plan-vertex-label, .plan-edge-label{
-    display:inline-block; font-family:var(--sans); font-weight:800; font-size:11px;
-    padding:1px 4px; border-radius:4px; white-space:nowrap; box-shadow:0 1px 3px rgba(0,0,0,.5);
+    display:inline-block; font-family:var(--sans); font-weight:800; font-size:16px;
+    padding:3px 7px; border-radius:5px; white-space:nowrap; box-shadow:0 1px 4px rgba(0,0,0,.55);
   }
-  .plan-vertex-label{ background:#fff; color:#1F4A44; border:1.3px solid #1F4A44; }
-  .plan-edge-label{ background:#fff; color:#C9973F; border:1.3px solid #C9973F; }
+  .plan-vertex-label{ background:#fff; color:#1F4A44; border:2px solid #1F4A44; }
+  .plan-edge-label{ background:#fff; color:#C9973F; border:2px solid #C9973F; }
 
   /* ---- Print: map only ---- */
   @media print{
@@ -3210,7 +3210,7 @@
 
     if(hasVerticesTable){
       f.coords.forEach((c,i)=>{
-        const icon = L.divIcon({className:'plan-label-icon', html:`<div class="plan-vertex-label">V${i+1}</div>`, iconSize:[26,16], iconAnchor:[13,20]});
+        const icon = L.divIcon({className:'plan-label-icon', html:`<div class="plan-vertex-label">V${i+1}</div>`, iconSize:[40,26], iconAnchor:[20,32]});
         L.marker([c[0], c[1]], {icon, interactive:false, keyboard:false}).addTo(group);
       });
     }
@@ -3218,7 +3218,7 @@
       for(let i=0;i<n;i++){
         const a = f.coords[i], b = f.coords[(i+1)%n];
         const midLat = (a[0]+b[0])/2, midLng = (a[1]+b[1])/2;
-        const icon = L.divIcon({className:'plan-label-icon', html:`<div class="plan-edge-label">ض${i+1}</div>`, iconSize:[30,16], iconAnchor:[15,8]});
+        const icon = L.divIcon({className:'plan-label-icon', html:`<div class="plan-edge-label">ض${i+1}</div>`, iconSize:[44,26], iconAnchor:[22,13]});
         L.marker([midLat, midLng], {icon, interactive:false, keyboard:false}).addTo(group);
       }
     }
