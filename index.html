@@ -1060,13 +1060,13 @@
               <input type="text" id="nbTbQirat" placeholder="قيراط" style="text-align:center;">
               <input type="text" id="nbTbSahm" placeholder="سهم" style="text-align:center;">
             </div>
-            <textarea id="nbTbBuildings" placeholder="المبانى — سطر لكل مبنى: الوصف, الرقم, المساحة" rows="3" style="margin-top:6px;"></textarea>
-            <input type="text" id="nbTbCultivations" placeholder="الزراعات" style="margin-top:6px;">
+            <div style="font-size:10px;color:var(--text-muted);margin-top:6px;padding:6px;background:rgba(0,0,0,.15);border-radius:6px;">🏗️ جدول المبانى بيتحسب أوتوماتيك من المضلعات اللي جوه المضلع المرتبط بالصفحة دي (نفس بيانات "المضلعات الداخلية") — وصف المبنى = قيمة حقل "الاستخدام"، والمساحة بالمتر المربع محسوبة من شكل المضلع نفسه.</div>
+            <textarea id="nbTbCultivations" placeholder="الزراعات — سطر لكل نوع: الوصف, فدان, قيراط, سهم" rows="3" style="margin-top:6px;"></textarea>
             <input type="text" id="nbTbNotes" placeholder="ملاحظات" style="margin-top:6px;">
             <input type="text" id="nbTbSurveyor" placeholder="القائم بأعمال المساحة" style="margin-top:6px;">
             <input type="text" id="nbTbDate" placeholder="التاريخ" style="margin-top:6px;">
           </div>
-          <div id="lyPropsGeneric" style="display:none;font-size:11px;color:var(--text-muted);">اسحبي العنصر من جوه اللوحة عشان تحركيه، أو من زاويته السفلية اليمنى عشان تغيّري حجمه.</div>
+          <div id="lyPropsGeneric" style="display:none;font-size:11px;color:var(--text-muted);">اسحب العنصر من جوه اللوحة عشان تحركه، أو من زاويته السفلية اليمنى عشان تغيّر حجمه.</div>
         </div>
       </div>
 
@@ -2489,7 +2489,7 @@
       show:false,
       decisionText:'', ownerName:'', district:'', governorate:'',
       landUseType:'', areaFeddan:'', areaQirat:'', areaSahm:'',
-      buildingsText:'', cultivations:'', notes:'', surveyorName:'',
+      cultivations:'', notes:'', surveyorName:'',
       date: new Date().toLocaleDateString('ar-EG')
     };
   }
@@ -2507,37 +2507,42 @@
     Object.keys(d).forEach(k=>{ if(page.titleBlock[k] === undefined) page.titleBlock[k] = d[k]; });
   }
 
-  // بيانات المبانى: كل سطر "وصف المبنى, رقم المبنى, المساحة بالمتر" — بيترجم لجدول + إجمالي
-  function parseBuildingsText(txt){
+  // بيانات الزراعات: كل سطر "الوصف, فدان, قيراط, سهم" — بيترجم لجدول (م / وصف / س / ط / ف)
+  function parseCultivationsText(txt){
     const rows = [];
-    let total = 0;
     (txt||'').split('\n').forEach(line=>{
       line = line.trim();
       if(!line) return;
       const parts = line.split(',').map(s=>s.trim());
       const desc = parts[0] || '';
-      const num = parts[1] || '';
-      const area = parseFloat(parts[2]) || 0;
-      total += area;
-      rows.push({desc, num, area: parts[2] || ''});
+      const feddan = parts[1] || '';
+      const qirat = parts[2] || '';
+      const sahm = parts[3] || '';
+      rows.push({num: rows.length+1, desc, feddan, qirat, sahm});
     });
-    return {rows, total};
+    return {rows};
   }
 
-  // بناء لوحة الكرتوش الرسمي (كامل) على طراز نموذج الهيئة العامة لمشروعات التعمير والتنمية الزراعية
-  function buildOfficialTitleBlockHTML(tb){
+  // بناء لوحة الكرتوش الرسمي (كامل) — من غير هيدر/شعار، والمباني بتتحسب أوتوماتيك من المضلعات الداخلية للمضلع المرتبط
+  function buildOfficialTitleBlockHTML(tb, linkedFeature){
     const esc = escapeHtml;
-    const bld = parseBuildingsText(tb.buildingsText);
-    const buildingsRows = bld.rows.map(r=>
-      `<tr><td>${esc(r.num)}</td><td style="text-align:right;">${esc(r.desc)}</td><td>${esc(r.area)}</td></tr>`
+
+    // جدول المبانى: نفس آلية "جدول المضلعات الداخلية" — مضلعات جوه المضلع المرتبط بالصفحة
+    const containedPolys = linkedFeature ? getPolygonsContainedIn(linkedFeature) : [];
+    const buildingsRows = containedPolys.map((cf, idx)=>{
+      const usage = (cf.attrs && cf.attrs['الاستخدام']) || '';
+      const areaM2 = polygonAreaMeters(cf.coords);
+      return `<tr><td>${idx+1}</td><td style="text-align:right;">${esc(usage)}</td><td>${areaM2.toFixed(2)}</td></tr>`;
+    }).join('');
+    const buildingsTotal = containedPolys.reduce((sum, cf)=> sum + polygonAreaMeters(cf.coords), 0);
+
+    // جدول الزراعات: مدخل يدوي (كل سطر = نوع زراعة)
+    const cult = parseCultivationsText(tb.cultivations);
+    const cultRows = cult.rows.map(r=>
+      `<tr><td>${r.num}</td><td style="text-align:right;">${esc(r.desc)}</td><td>${esc(r.sahm)}</td><td>${esc(r.qirat)}</td><td>${esc(r.feddan)}</td></tr>`
     ).join('');
+
     return `
-      <div class="tb-logo-wrap"><img src="${GARPAD_LOGO_B64}" class="tb-logo-img"></div>
-      <div class="tb-org-name">
-        <div>الهيئة العامة لمشروعات التعمير والتنمية الزراعية</div>
-        <div>الإدارة المركزية للمشروعات المدنية</div>
-        <div>الإدارة العامة للمساحة</div>
-      </div>
       <table class="tb-grid">
         <tr><td class="tb-label" rowspan="1">القرار</td><td class="tb-value">${esc(tb.decisionText)||'<span class="tb-empty">—</span>'}</td></tr>
         <tr><td class="tb-label" rowspan="3">توصيف قطعة الأرض</td><td class="tb-value"><b>صاحب الشأن</b> &nbsp; ${esc(tb.ownerName)||'<span class="tb-empty">—</span>'}</td></tr>
@@ -2549,15 +2554,23 @@
         <tr><td class="tb-area-h">فدان</td><td class="tb-area-h">قيراط</td><td class="tb-area-h">سهم</td></tr>
         <tr><td></td><td class="tb-area-v">${esc(tb.areaFeddan)||'0'}</td><td class="tb-area-v">${esc(tb.areaQirat)||'0'}</td><td class="tb-area-v">${esc(tb.areaSahm)||'0'}</td></tr>
       </table>
-      ${bld.rows.length ? `
+      ${containedPolys.length ? `
       <table class="tb-grid">
-        <tr><td class="tb-label" rowspan="${bld.rows.length+2}">المبانى</td>
-            <td class="tb-bh">رقم المبنى</td><td class="tb-bh">وصف المبنى</td><td class="tb-bh">متر٢</td></tr>
+        <tr><td class="tb-label" rowspan="${containedPolys.length+2}">المبانى</td>
+            <td class="tb-bh">م</td><td class="tb-bh">وصف المبنى</td><td class="tb-bh">متر٢</td></tr>
         ${buildingsRows}
-        <tr><td colspan="2" class="tb-value"><b>إجمالى المبانى (م²)</b></td><td class="tb-value"><b>${bld.total.toFixed(2)}</b></td></tr>
+        <tr><td colspan="2" class="tb-value"><b>إجمالى المبانى (م²)</b></td><td class="tb-value"><b>${buildingsTotal.toFixed(2)}</b></td></tr>
       </table>` : ''}
+      ${cult.rows.length ? `
       <table class="tb-grid">
-        <tr><td class="tb-label">الزراعات</td><td class="tb-value">${esc(tb.cultivations)||'<span class="tb-empty">—</span>'}</td></tr>
+        <tr><td class="tb-label" rowspan="${cult.rows.length+1}">الزراعات</td>
+            <td class="tb-bh">م</td><td class="tb-bh">وصف</td><td class="tb-bh">س</td><td class="tb-bh">ط</td><td class="tb-bh">ف</td></tr>
+        ${cultRows}
+      </table>` : `
+      <table class="tb-grid">
+        <tr><td class="tb-label">الزراعات</td><td class="tb-value"><span class="tb-empty">—</span></td></tr>
+      </table>`}
+      <table class="tb-grid">
         <tr><td class="tb-label">ملاحظات</td><td class="tb-value">${esc(tb.notes)||'<span class="tb-empty">—</span>'}</td></tr>
       </table>
       <div class="tb-sign-row">
@@ -2725,7 +2738,7 @@
     } else if(el.type === 'titleBlock'){
       box.classList.add('tb-panel');
       box.style.fontSize = Math.max(6, pxW*(el.wPct/100)/22) + 'px';
-      box.innerHTML = buildOfficialTitleBlockHTML(page.titleBlock);
+      box.innerHTML = buildOfficialTitleBlockHTML(page.titleBlock, f);
     } else if(el.type === 'table'){
       const titles = {area:'📐 المساحة', lengths:'📏 أطوال الأضلاع', vertices:'📍 إحداثيات القطاعات (DD)', attrs:'🗂️ بيانات المضلعات الداخلية'};
       const html = f ? (el.tableKey==='area'?buildAreaTableHTML(f):el.tableKey==='lengths'?buildLengthsTableHTML(f):el.tableKey==='vertices'?buildVerticesTableHTML(f):buildAttrsTableHTML(f)) : '<div style="padding:4px;color:#999;">مفيش مضلع مرتبط بيها</div>';
@@ -2840,7 +2853,6 @@
       document.getElementById('nbTbFeddan').value = page.titleBlock.areaFeddan || '';
       document.getElementById('nbTbQirat').value = page.titleBlock.areaQirat || '';
       document.getElementById('nbTbSahm').value = page.titleBlock.areaSahm || '';
-      document.getElementById('nbTbBuildings').value = page.titleBlock.buildingsText || '';
       document.getElementById('nbTbCultivations').value = page.titleBlock.cultivations || '';
       document.getElementById('nbTbNotes').value = page.titleBlock.notes || '';
       document.getElementById('nbTbSurveyor').value = page.titleBlock.surveyorName || '';
@@ -2937,7 +2949,6 @@
     page.titleBlock.areaFeddan = document.getElementById('nbTbFeddan').value;
     page.titleBlock.areaQirat = document.getElementById('nbTbQirat').value;
     page.titleBlock.areaSahm = document.getElementById('nbTbSahm').value;
-    page.titleBlock.buildingsText = document.getElementById('nbTbBuildings').value;
     page.titleBlock.cultivations = document.getElementById('nbTbCultivations').value;
     page.titleBlock.notes = document.getElementById('nbTbNotes').value;
     page.titleBlock.surveyorName = document.getElementById('nbTbSurveyor').value;
@@ -2945,7 +2956,7 @@
     renderLayoutCanvas(page);
     scheduleSave();
   }
-  ['nbTbDecision','nbTbOwner','nbTbDistrict','nbTbGovernorate','nbTbLandUse','nbTbFeddan','nbTbQirat','nbTbSahm','nbTbBuildings','nbTbCultivations','nbTbNotes','nbTbSurveyor','nbTbDate'].forEach(id=>{
+  ['nbTbDecision','nbTbOwner','nbTbDistrict','nbTbGovernorate','nbTbLandUse','nbTbFeddan','nbTbQirat','nbTbSahm','nbTbCultivations','nbTbNotes','nbTbSurveyor','nbTbDate'].forEach(id=>{
     document.getElementById(id).addEventListener('input', applyTitleBlockFieldsToPage);
   });
 
