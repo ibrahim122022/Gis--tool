@@ -408,6 +408,8 @@
   }
   .ly-el:hover{ border-color:rgba(0,120,140,.4); }
   .ly-el.selected{ border-color:var(--teal); border-style:solid; }
+  .ly-el-shared{ outline:1.5px dotted #D4A020; outline-offset:1px; }
+  .ly-el-image .ly-el-placeholder{ background:#f0f0f0; }
   .ly-el .ly-resize-handle{
     position:absolute; left:-6px; bottom:-6px; width:14px; height:14px; border-radius:50%;
     background:var(--teal); border:2px solid #fff; cursor:nwse-resize; display:none; z-index:5;
@@ -1027,6 +1029,8 @@
               <button class="ly-add-item" data-type="northArrow">🧭 اتجاه الشمال</button>
               <button class="ly-add-item" data-type="scaleBar">📏 مقياس الرسم</button>
               <button class="ly-add-item" data-type="polygonTitle">🔤 اسم المضلع المرتبط</button>
+              <button class="ly-add-item" data-type="text">📝 نص (مشترك بين كل اللوحات)</button>
+              <button class="ly-add-item" data-type="image">🖼️ صورة من الجهاز (مشتركة بين كل اللوحات)</button>
             </div>
           </div>
           <button class="btn-cancel" id="lyLinkFeatureBtn" title="اربطي هذه اللوحة بمضلع محدد على الخريطة عشان تتغذى جداولها">🎯 اربط بالمضلع المحدد</button>
@@ -1067,6 +1071,28 @@
             <input type="text" id="nbTbDate" placeholder="التاريخ" style="margin-top:6px;">
           </div>
           <div id="lyPropsGeneric" style="display:none;font-size:11px;color:var(--text-muted);">اسحب العنصر من جوه اللوحة عشان تحركه، أو من زاويته السفلية اليمنى عشان تغيّر حجمه.</div>
+          <div id="lyPropsText" style="display:none;">
+            <textarea id="lyTextContent" placeholder="اكتب النص هنا" rows="3"></textarea>
+            <div style="display:flex;gap:4px;margin-top:6px;">
+              <input type="number" id="lyTextSize" placeholder="حجم الخط" style="width:70px;text-align:center;" min="6" max="72">
+              <input type="color" id="lyTextColor" value="#243E39" style="width:36px;padding:0;border:none;">
+              <select id="lyTextAlign" style="flex:1;">
+                <option value="right">يمين</option>
+                <option value="center">وسط</option>
+                <option value="left">شمال</option>
+              </select>
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:8px;padding:6px;background:rgba(212,160,32,.12);border-radius:6px;">🔗 العنصر ده مشترك — هيظهر بنفس المكان والتنسيق على كل لوحات الإخراج، وأي تعديل هنا بينعكس عليهم كلهم.</div>
+          </div>
+          <div id="lyPropsImage" style="display:none;">
+            <input type="file" id="lyImageFile" accept="image/*">
+            <select id="lyImageFit" style="margin-top:6px;">
+              <option value="contain">احتواء كامل (Contain)</option>
+              <option value="cover">ملء المساحة (Cover)</option>
+              <option value="fill">تمدد كامل (Fill)</option>
+            </select>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:8px;padding:6px;background:rgba(212,160,32,.12);border-radius:6px;">🔗 العنصر ده مشترك — هيظهر بنفس المكان والتنسيق على كل لوحات الإخراج، وأي تعديل هنا بينعكس عليهم كلهم.</div>
+          </div>
         </div>
       </div>
 
@@ -1551,6 +1577,7 @@
     layers: [{id:'L1', name:'طبقة 1', color: palette[0], visible:true, features:[], fields:[]}],
     activeLayerId:'L1', nextColorIdx:1,
     domains: {},   // {domainName: ['قيمة1','قيمة2', ...]} — قوائم قيم معتمدة قابلة لإعادة الاستخدام بين الطبقات (Coded Value Domains)
+    sharedLayoutElements: [], // عناصر (نص/صورة) بتتكرر بنفس المكان والتنسيق على كل لوحات الإخراج، بعكس عناصر page.elements المرتبطة بلوحة واحدة بس
     friendFileIds: [], friendLastPulled: {},   // friendLastPulled: {fileId: timestamp}
     userName: null,
     notebookSketches: [], // ضربات القلم الحر المحفوظة: {id, points:[[lat,lng]...], color, brush, width, smoothness}
@@ -2693,19 +2720,33 @@
     table: {wPct:25, hPct:15},
     northArrow: {wPct:7, hPct:9},
     scaleBar: {wPct:18, hPct:5},
-    polygonTitle: {wPct:30, hPct:6}
+    polygonTitle: {wPct:30, hPct:6},
+    text: {wPct:25, hPct:8},
+    image: {wPct:25, hPct:20}
   };
+  const SHARED_LAYOUT_TYPES = ['text', 'image']; // أنواع العناصر اللي بتتكرر على كل لوحات الإخراج
 
   function addLayoutElement(page, type, extra){
     const d = LY_ELEMENT_DEFAULTS[type] || {wPct:20, hPct:10};
-    const idx = page.elements.length;
+    const isShared = SHARED_LAYOUT_TYPES.includes(type);
+    const list = isShared ? state.sharedLayoutElements : page.elements;
+    const idx = list.length;
     const el = Object.assign({
       id: uid(), type,
       xPct: 5 + (idx%5)*4, yPct: 5 + (idx%5)*4,
       wPct: d.wPct, hPct: d.hPct
     }, extra||{});
-    page.elements.push(el);
+    list.push(el);
     return el;
+  }
+
+  // بيدور على عنصر سواء كان خاص باللوحة دي أو مشترك بين كل اللوحات
+  function findLayoutElement(page, id){
+    if(!id) return null;
+    return (page && page.elements.find(e=>e.id===id)) || state.sharedLayoutElements.find(e=>e.id===id) || null;
+  }
+  function isSharedLayoutElement(id){
+    return state.sharedLayoutElements.some(e=>e.id===id);
   }
 
   function getMapFrameScaleInfo(page){
@@ -2760,6 +2801,25 @@
       box.style.fontWeight='800'; box.style.color='#243E39';
       box.style.fontSize = Math.max(8, pxW*0.02) + 'px';
       box.textContent = f ? featureLabel(f) : 'مفيش مضلع مرتبط';
+    } else if(el.type === 'text'){
+      box.style.fontSize = Math.max(6, (el.fontSize||16) * (pxW/700)) + 'px';
+      box.style.color = el.color || '#243E39';
+      box.style.textAlign = el.align || 'right';
+      box.style.padding = '2px 4px';
+      box.style.whiteSpace = 'pre-wrap';
+      box.style.overflow = 'hidden';
+      box.style.fontFamily = 'var(--sans)';
+      box.textContent = el.content || 'نص جديد';
+    } else if(el.type === 'image'){
+      if(el.src){
+        const img = document.createElement('img');
+        img.src = el.src; img.style.width='100%'; img.style.height='100%'; img.style.objectFit = el.fit || 'contain'; img.style.display='block';
+        box.appendChild(img);
+      } else {
+        const ph = document.createElement('div'); ph.className = 'ly-el-placeholder';
+        ph.textContent = 'صورة فاضية — اختارها من لوحة الخصائص على اليسار';
+        box.appendChild(ph);
+      }
     }
 
     if(opts.interactive){
@@ -2786,8 +2846,10 @@
     wrap.style.width = pageWpx+'px';
     wrap.style.height = pageHpx+'px';
 
-    page.elements.forEach(el=>{
+    const allEls = [...page.elements, ...state.sharedLayoutElements];
+    allEls.forEach(el=>{
       const box = renderElementDOM(el, page, {interactive:true, pageWidthPx:pageWpx});
+      if(isSharedLayoutElement(el.id)) box.classList.add('ly-el-shared');
       box.addEventListener('pointerdown', e=>{
         if(!e.target.classList.contains('ly-resize-handle')) selectLayoutElement(el.id, page);
       });
@@ -2832,16 +2894,27 @@
     selectedElementId = id;
     document.querySelectorAll('.ly-el').forEach(b=> b.classList.toggle('selected', b.dataset.id===id));
     const propsEl = document.getElementById('lyElementProps');
-    const el = page.elements.find(e=>e.id===id);
+    const el = findLayoutElement(page, id);
     if(!el){ propsEl.style.display = 'none'; return; }
     propsEl.style.display = 'block';
     document.getElementById('lyPropsMapFrame').style.display = el.type==='mapFrame' ? 'block' : 'none';
     document.getElementById('lyPropsTitleBlock').style.display = el.type==='titleBlock' ? 'block' : 'none';
-    document.getElementById('lyPropsGeneric').style.display = (el.type!=='mapFrame' && el.type!=='titleBlock') ? 'block' : 'none';
-    const titles = {mapFrame:'🗺️ إطار خريطة', titleBlock:'🏷️ الكرتوش', table:'📊 جدول بيانات', northArrow:'🧭 اتجاه الشمال', scaleBar:'📏 مقياس الرسم', polygonTitle:'🔤 اسم المضلع'};
+    document.getElementById('lyPropsText').style.display = el.type==='text' ? 'block' : 'none';
+    document.getElementById('lyPropsImage').style.display = el.type==='image' ? 'block' : 'none';
+    document.getElementById('lyPropsGeneric').style.display = (el.type!=='mapFrame' && el.type!=='titleBlock' && el.type!=='text' && el.type!=='image') ? 'block' : 'none';
+    const titles = {mapFrame:'🗺️ إطار خريطة', titleBlock:'🏷️ الكرتوش', table:'📊 جدول بيانات', northArrow:'🧭 اتجاه الشمال', scaleBar:'📏 مقياس الرسم', polygonTitle:'🔤 اسم المضلع', text:'📝 نص (مشترك)', image:'🖼️ صورة (مشتركة)'};
     document.getElementById('lyPropsTitle').textContent = titles[el.type] || 'خصائص العنصر';
     if(el.type === 'mapFrame'){
       document.getElementById('lyMapFrameScaleReadout').textContent = el.scaleInfo ? ('آخر مقياس ملتقط: 1:'+el.scaleInfo.scaleDenom) : 'لسه ملتقطتش لقطة لإطار الخريطة ده';
+    }
+    if(el.type === 'text'){
+      document.getElementById('lyTextContent').value = el.content || '';
+      document.getElementById('lyTextSize').value = el.fontSize || 16;
+      document.getElementById('lyTextColor').value = el.color || '#243E39';
+      document.getElementById('lyTextAlign').value = el.align || 'right';
+    }
+    if(el.type === 'image'){
+      document.getElementById('lyImageFit').value = el.fit || 'contain';
     }
     if(el.type === 'titleBlock'){
       ensureTitleBlockDefaults(page);
@@ -3003,7 +3076,12 @@
     const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
     if(!page || !selectedElementId) return;
     delete layoutSnapshots[selectedElementId];
-    page.elements = page.elements.filter(e=>e.id!==selectedElementId);
+    if(isSharedLayoutElement(selectedElementId)){
+      if(!confirm('العنصر ده مشترك ومتكرر على كل لوحات الإخراج — حذفه هيشيله من كل اللوحات مش بس دي. متأكد؟')) return;
+      state.sharedLayoutElements = state.sharedLayoutElements.filter(e=>e.id!==selectedElementId);
+    } else {
+      page.elements = page.elements.filter(e=>e.id!==selectedElementId);
+    }
     selectLayoutElement(null, page);
     renderLayoutCanvas(page);
     scheduleSave();
@@ -3037,6 +3115,74 @@
 
   document.getElementById('lyExportJpgBtn').addEventListener('click', ()=>{ if(currentLayoutEditPageId) exportPageAsFile(currentLayoutEditPageId, 'jpg'); });
   document.getElementById('lyExportPdfBtn').addEventListener('click', ()=>{ if(currentLayoutEditPageId) exportPageAsFile(currentLayoutEditPageId, 'pdf'); });
+
+  /* ---------- عنصر النص المشترك ---------- */
+  function applyTextElementFields(){
+    const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+    const el = state.sharedLayoutElements.find(e=>e.id===selectedElementId);
+    if(!page || !el || el.type !== 'text') return;
+    el.content = document.getElementById('lyTextContent').value;
+    el.fontSize = parseFloat(document.getElementById('lyTextSize').value) || 16;
+    el.color = document.getElementById('lyTextColor').value;
+    el.align = document.getElementById('lyTextAlign').value;
+    renderLayoutCanvas(page);
+    scheduleSave();
+  }
+  ['lyTextContent','lyTextSize','lyTextColor','lyTextAlign'].forEach(id=>{
+    const elInput = document.getElementById(id);
+    const evt = (elInput.tagName === 'SELECT' || elInput.type === 'color') ? 'change' : 'input';
+    elInput.addEventListener(evt, applyTextElementFields);
+  });
+
+  /* ---------- عنصر الصورة المشتركة ---------- */
+  // بيصغّر أي صورة كبيرة قبل تخزينها (عرض أقصى 1000px) عشان ملف الحفظ ميتضخمش
+  function resizeImageFile(file, maxDim){
+    return new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        const img = new Image();
+        img.onload = ()=>{
+          let w = img.width, h = img.height;
+          if(w > maxDim || h > maxDim){
+            const ratio = Math.min(maxDim/w, maxDim/h);
+            w = Math.round(w*ratio); h = Math.round(h*ratio);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', 0.87));
+        };
+        img.onerror = reject;
+        img.src = reader.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+  document.getElementById('lyImageFile').addEventListener('change', async (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+    const el = state.sharedLayoutElements.find(el2=>el2.id===selectedElementId);
+    if(!page || !el || el.type !== 'image') return;
+    try{
+      el.src = await resizeImageFile(file, 1000);
+      renderLayoutCanvas(page);
+      scheduleSave();
+      document.getElementById('stHint').textContent = '✅ اتضافت الصورة — هتظهر بنفس المكان في كل لوحات الإخراج';
+    }catch(err){
+      alert('حصل خطأ أثناء قراءة الصورة — جرب صورة تانية.');
+    }
+  });
+  document.getElementById('lyImageFit').addEventListener('change', ()=>{
+    const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+    const el = state.sharedLayoutElements.find(e=>e.id===selectedElementId);
+    if(!page || !el || el.type !== 'image') return;
+    el.fit = document.getElementById('lyImageFit').value;
+    renderLayoutCanvas(page);
+    scheduleSave();
+  });
+
 
   window.addEventListener('resize', ()=>{
     if(document.getElementById('layoutView').style.display === 'flex' && currentLayoutEditPageId){
@@ -3096,7 +3242,7 @@
     const stage = document.createElement('div');
     stage.style.cssText = `position:fixed; left:-99999px; top:0; width:${wMM}mm; height:${hMM}mm; background:#fff; overflow:hidden; direction:rtl; font-family:var(--sans);`;
     const pageWidthPxApprox = wMM * 3.78;
-    page.elements.forEach(el=> stage.appendChild(renderElementDOM(el, page, {interactive:false, pageWidthPx:pageWidthPxApprox})));
+    [...page.elements, ...state.sharedLayoutElements].forEach(el=> stage.appendChild(renderElementDOM(el, page, {interactive:false, pageWidthPx:pageWidthPxApprox})));
     document.body.appendChild(stage);
     try{
       await new Promise(r=> requestAnimationFrame(()=>requestAnimationFrame(r)));
@@ -3208,7 +3354,7 @@
       const stage = document.createElement('div');
       stage.style.cssText = `position:fixed; left:-99999px; top:0; width:${wMM}mm; height:${hMM}mm; background:#fff; overflow:hidden; direction:rtl; font-family:var(--sans);`;
       const pageWidthPxApprox = wMM * 3.78;
-      page.elements.forEach(el=> stage.appendChild(renderElementDOM(el, page, {interactive:false, pageWidthPx:pageWidthPxApprox})));
+      [...page.elements, ...state.sharedLayoutElements].forEach(el=> stage.appendChild(renderElementDOM(el, page, {interactive:false, pageWidthPx:pageWidthPxApprox})));
       document.body.appendChild(stage);
       await new Promise(r=> requestAnimationFrame(()=>requestAnimationFrame(r)));
       const finalCanvas = await html2canvas(stage, {useCORS:true, allowTaint:true, scale:2.2, backgroundColor:'#ffffff'});
@@ -4166,6 +4312,7 @@
     if(!state.friendLastPulled) state.friendLastPulled = {};
     if(!Array.isArray(state.notebookSketches)) state.notebookSketches = [];
     if(!Array.isArray(state.layoutPages)) state.layoutPages = [];
+    if(!Array.isArray(state.sharedLayoutElements)) state.sharedLayoutElements = [];
     if(!Array.isArray(state.rasters)) state.rasters = [];
     if(!state.domains || typeof state.domains !== 'object') state.domains = {};
     state.layers.forEach(l=>{ if(!Array.isArray(l.fields)) l.fields = []; });
