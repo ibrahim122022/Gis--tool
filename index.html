@@ -1050,6 +1050,8 @@
               <button class="ly-add-item" data-type="polygonTitle">🔤 اسم المضلع المرتبط</button>
               <button class="ly-add-item" data-type="text">📝 نص (مشترك بين كل اللوحات)</button>
               <button class="ly-add-item" data-type="image">🖼️ صورة من الجهاز (مشتركة بين كل اللوحات)</button>
+              <button class="ly-add-item" data-type="shapeRect">🔲 شكل مستطيل</button>
+              <button class="ly-add-item" data-type="shapeArrow">➡️ سهم</button>
             </div>
           </div>
           <button class="btn-cancel" id="lyLinkFeatureBtn" title="اربطي هذه اللوحة بمضلع محدد على الخريطة عشان تتغذى جداولها">🎯 اربط بالمضلع المحدد</button>
@@ -1116,6 +1118,41 @@
               <option value="fill">تمدد كامل (Fill)</option>
             </select>
             <div style="font-size:10px;color:var(--text-muted);margin-top:8px;padding:6px;background:rgba(212,160,32,.12);border-radius:6px;">🔗 العنصر ده مشترك — هيظهر بنفس المكان والتنسيق على كل لوحات الإخراج، وأي تعديل هنا بينعكس عليهم كلهم.</div>
+          </div>
+          <div id="lyPropsShapeRect" style="display:none;">
+            <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+              <label style="flex:1;font-size:11px;">لون الإطار</label>
+              <input type="color" id="lyRectBorderColor" value="#243E39" style="width:36px;padding:0;border:none;">
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+              <label style="flex:1;font-size:11px;">سمك الإطار</label>
+              <input type="number" id="lyRectBorderWidth" value="2" min="0" max="20" style="width:60px;text-align:center;">
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+              <label style="flex:1;font-size:11px;">لون التعبئة</label>
+              <input type="color" id="lyRectFillColor" value="#ffffff" style="width:36px;padding:0;border:none;">
+            </div>
+            <label style="display:flex;align-items:center;gap:5px;font-size:11px;margin-top:6px;cursor:pointer;">
+              <input type="checkbox" id="lyRectFillNone" style="width:14px;height:14px;"> بدون تعبئة (شفاف)
+            </label>
+          </div>
+          <div id="lyPropsShapeArrow" style="display:none;">
+            <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+              <label style="flex:1;font-size:11px;">لون الخط/الإطار</label>
+              <input type="color" id="lyArrowBorderColor" value="#243E39" style="width:36px;padding:0;border:none;">
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+              <label style="flex:1;font-size:11px;">سمك الخط</label>
+              <input type="number" id="lyArrowBorderWidth" value="4" min="1" max="20" style="width:60px;text-align:center;">
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+              <label style="flex:1;font-size:11px;">لون تعبئة الرأس</label>
+              <input type="color" id="lyArrowFillColor" value="#243E39" style="width:36px;padding:0;border:none;">
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+              <label style="flex:1;font-size:11px;">الدوران (درجة)</label>
+              <input type="number" id="lyArrowRotation" value="0" min="-180" max="180" style="width:60px;text-align:center;">
+            </div>
           </div>
         </div>
       </div>
@@ -2814,7 +2851,9 @@
     scaleBar: {wPct:18, hPct:5},
     polygonTitle: {wPct:30, hPct:6},
     text: {wPct:25, hPct:8},
-    image: {wPct:25, hPct:20}
+    image: {wPct:25, hPct:20},
+    shapeRect: {wPct:20, hPct:15},
+    shapeArrow: {wPct:20, hPct:8}
   };
   const SHARED_LAYOUT_TYPES = ['text', 'image']; // أنواع العناصر اللي بتتكرر على كل لوحات الإخراج
 
@@ -2912,6 +2951,19 @@
         ph.textContent = 'صورة فاضية — اختارها من لوحة الخصائص على اليسار';
         box.appendChild(ph);
       }
+    } else if(el.type === 'shapeRect'){
+      box.style.border = `${el.borderWidth!=null?el.borderWidth:2}px solid ${el.borderColor||'#243E39'}`;
+      box.style.background = el.fillColor || 'transparent';
+      box.style.boxSizing = 'border-box';
+    } else if(el.type === 'shapeArrow'){
+      const strokeColor = el.borderColor || '#243E39';
+      const fillColor = el.fillColor || strokeColor;
+      const bw = el.borderWidth!=null ? el.borderWidth : 4;
+      const rot = el.rotation || 0;
+      box.innerHTML = `<svg viewBox="0 0 100 40" preserveAspectRatio="none" style="width:100%;height:100%;overflow:visible;transform:rotate(${rot}deg);transform-origin:center;">
+        <line x1="2" y1="20" x2="72" y2="20" stroke="${strokeColor}" stroke-width="${bw}"/>
+        <polygon points="66,4 98,20 66,36" fill="${fillColor}" stroke="${strokeColor}" stroke-width="${Math.max(1,bw/2)}"/>
+      </svg>`;
     }
 
     if(opts.interactive){
@@ -2993,8 +3045,10 @@
     document.getElementById('lyPropsTitleBlock').style.display = el.type==='titleBlock' ? 'block' : 'none';
     document.getElementById('lyPropsText').style.display = el.type==='text' ? 'block' : 'none';
     document.getElementById('lyPropsImage').style.display = el.type==='image' ? 'block' : 'none';
-    document.getElementById('lyPropsGeneric').style.display = (el.type!=='mapFrame' && el.type!=='titleBlock' && el.type!=='text' && el.type!=='image') ? 'block' : 'none';
-    const titles = {mapFrame:'🗺️ إطار خريطة', titleBlock:'🏷️ الكرتوش', table:'📊 جدول بيانات', northArrow:'🧭 اتجاه الشمال', scaleBar:'📏 مقياس الرسم', polygonTitle:'🔤 اسم المضلع', text:'📝 نص (مشترك)', image:'🖼️ صورة (مشتركة)'};
+    document.getElementById('lyPropsShapeRect').style.display = el.type==='shapeRect' ? 'block' : 'none';
+    document.getElementById('lyPropsShapeArrow').style.display = el.type==='shapeArrow' ? 'block' : 'none';
+    document.getElementById('lyPropsGeneric').style.display = (el.type!=='mapFrame' && el.type!=='titleBlock' && el.type!=='text' && el.type!=='image' && el.type!=='shapeRect' && el.type!=='shapeArrow') ? 'block' : 'none';
+    const titles = {mapFrame:'🗺️ إطار خريطة', titleBlock:'🏷️ الكرتوش', table:'📊 جدول بيانات', northArrow:'🧭 اتجاه الشمال', scaleBar:'📏 مقياس الرسم', polygonTitle:'🔤 اسم المضلع', text:'📝 نص (مشترك)', image:'🖼️ صورة (مشتركة)', shapeRect:'🔲 شكل مستطيل', shapeArrow:'➡️ سهم'};
     document.getElementById('lyPropsTitle').textContent = titles[el.type] || 'خصائص العنصر';
     if(el.type === 'mapFrame'){
       document.getElementById('lyMapFrameScaleReadout').textContent = el.scaleInfo ? ('آخر مقياس ملتقط: 1:'+el.scaleInfo.scaleDenom) : 'لسه ملتقطتش لقطة لإطار الخريطة ده';
@@ -3007,6 +3061,20 @@
     }
     if(el.type === 'image'){
       document.getElementById('lyImageFit').value = el.fit || 'contain';
+    }
+    if(el.type === 'shapeRect'){
+      document.getElementById('lyRectBorderColor').value = el.borderColor || '#243E39';
+      document.getElementById('lyRectBorderWidth').value = el.borderWidth!=null ? el.borderWidth : 2;
+      const isNone = !el.fillColor || el.fillColor === 'transparent';
+      document.getElementById('lyRectFillNone').checked = isNone;
+      document.getElementById('lyRectFillColor').value = isNone ? '#ffffff' : el.fillColor;
+      document.getElementById('lyRectFillColor').disabled = isNone;
+    }
+    if(el.type === 'shapeArrow'){
+      document.getElementById('lyArrowBorderColor').value = el.borderColor || '#243E39';
+      document.getElementById('lyArrowBorderWidth').value = el.borderWidth!=null ? el.borderWidth : 4;
+      document.getElementById('lyArrowFillColor').value = el.fillColor || '#243E39';
+      document.getElementById('lyArrowRotation').value = el.rotation || 0;
     }
     if(el.type === 'titleBlock'){
       ensureTitleBlockDefaults(page);
@@ -3155,7 +3223,10 @@
         document.getElementById('lyAddElMenu').style.display = 'none';
         return;
       }
-      const extra = type === 'table' ? {tableKey: btn.dataset.key} : {};
+      const extra = type === 'table' ? {tableKey: btn.dataset.key}
+        : type === 'shapeRect' ? {borderColor:'#243E39', borderWidth:2, fillColor:'transparent'}
+        : type === 'shapeArrow' ? {borderColor:'#243E39', borderWidth:4, fillColor:'#243E39', rotation:0}
+        : {};
       const el = addLayoutElement(page, type, extra);
       renderLayoutCanvas(page);
       selectLayoutElement(el.id, page);
@@ -3273,6 +3344,43 @@
     el.fit = document.getElementById('lyImageFit').value;
     renderLayoutCanvas(page);
     scheduleSave();
+  });
+
+  /* ---------- عنصر المستطيل ---------- */
+  function applyRectFields(){
+    const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+    const el = page && page.elements.find(e=>e.id===selectedElementId);
+    if(!page || !el || el.type !== 'shapeRect') return;
+    el.borderColor = document.getElementById('lyRectBorderColor').value;
+    el.borderWidth = parseFloat(document.getElementById('lyRectBorderWidth').value) || 0;
+    const isNone = document.getElementById('lyRectFillNone').checked;
+    document.getElementById('lyRectFillColor').disabled = isNone;
+    el.fillColor = isNone ? 'transparent' : document.getElementById('lyRectFillColor').value;
+    renderLayoutCanvas(page);
+    scheduleSave();
+  }
+  ['lyRectBorderColor','lyRectBorderWidth','lyRectFillColor','lyRectFillNone'].forEach(id=>{
+    const inp = document.getElementById(id);
+    const evt = (inp.type === 'color' || inp.type === 'checkbox') ? 'change' : 'input';
+    inp.addEventListener(evt, applyRectFields);
+  });
+
+  /* ---------- عنصر السهم ---------- */
+  function applyArrowFields(){
+    const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+    const el = page && page.elements.find(e=>e.id===selectedElementId);
+    if(!page || !el || el.type !== 'shapeArrow') return;
+    el.borderColor = document.getElementById('lyArrowBorderColor').value;
+    el.borderWidth = parseFloat(document.getElementById('lyArrowBorderWidth').value) || 1;
+    el.fillColor = document.getElementById('lyArrowFillColor').value;
+    el.rotation = parseFloat(document.getElementById('lyArrowRotation').value) || 0;
+    renderLayoutCanvas(page);
+    scheduleSave();
+  }
+  ['lyArrowBorderColor','lyArrowBorderWidth','lyArrowFillColor','lyArrowRotation'].forEach(id=>{
+    const inp = document.getElementById(id);
+    const evt = (inp.type === 'color') ? 'change' : 'input';
+    inp.addEventListener(evt, applyArrowFields);
   });
 
   /* ---------- اقتراح الناحية والمحافظة أوتوماتيك من موقع المضلع (Nominatim/OpenStreetMap) ---------- */
