@@ -428,6 +428,14 @@
   .ly-el-table .ly-table-body{ padding:3px 5px; overflow:auto; }
   .nb-table td,.nb-table th{border:1px solid #DDD2BA;padding:2px 5px;text-align:center;white-space:nowrap;}
   .nb-table th{background:#eef3f8;font-weight:700;}
+  #attrTableGrid th,#attrTableGrid td{border:1px solid #444;padding:0;white-space:nowrap;}
+  #attrTableGrid th{background:#243E39;color:#fff;padding:6px 10px;position:sticky;top:0;z-index:2;font-size:11px;}
+  #attrTableGrid td{background:var(--bg-panel);}
+  #attrTableGrid input.atg-cell{width:100%;min-width:90px;box-sizing:border-box;border:none;background:transparent;color:var(--text);padding:6px 8px;font-size:11.5px;font-family:var(--sans);}
+  #attrTableGrid input.atg-cell:focus{outline:2px solid var(--teal);background:rgba(107,127,114,.15);}
+  #attrTableGrid .atg-rowbtn{padding:5px 8px;cursor:pointer;background:none;border:none;color:var(--text-muted);font-size:13px;}
+  #attrTableGrid .atg-rowbtn:hover{color:var(--danger);}
+  #attrTableGrid tr:nth-child(even) td{background:rgba(255,255,255,.04);}
 
   /* ---- هالة بيضاء شفافة تُستخدم لمقابض سحب أركان الراستر فوق الخريطة ---- */
   .nb-map-label{background:transparent!important;border:none!important;box-shadow:none!important;}
@@ -827,6 +835,21 @@
           <div class="ribbon-group-caption">أدوات التحليل</div>
         </div>
 
+        <div class="ribbon-group">
+          <div class="ribbon-group-row">
+            <button class="tool-btn" id="attrTableBtn" title="جدول سمات شامل لكل عناصر كل الطبقات — عرض وتعديل سريع زي جدول إكسيل">
+              <svg viewBox="0 0 24 24">
+                <rect x="3" y="4" width="18" height="16" rx="1.5" stroke-width="1.8" fill="none"/>
+                <line x1="3" y1="9" x2="21" y2="9" stroke-width="1.4"/>
+                <line x1="3" y1="14" x2="21" y2="14" stroke-width="1.4"/>
+                <line x1="9" y1="4" x2="9" y2="20" stroke-width="1.4"/>
+                <line x1="15" y1="4" x2="15" y2="20" stroke-width="1.4"/>
+              </svg><span>جدول السمات</span>
+            </button>
+          </div>
+          <div class="ribbon-group-caption">جدول شامل</div>
+        </div>
+
       </div>
 
       <!-- ══════ تبويب: عرض ══════ -->
@@ -1115,6 +1138,16 @@
             <input type="text" id="nbTbDate" placeholder="التاريخ" style="margin-top:6px;">
           </div>
           <div id="lyPropsGeneric" style="display:none;font-size:11px;color:var(--text-muted);">اسحب العنصر من جوه اللوحة عشان تحركه، أو من زاويته السفلية اليمنى عشان تغيّر حجمه.</div>
+          <div id="lyPropsVerticesTable" style="display:none;">
+            <label style="font-size:11px;display:block;margin-bottom:4px;">نظام الإحداثيات المعروض</label>
+            <select id="lyVerticesCrsSelect" style="width:100%;">
+              <option value="EPSG:4326">WGS84 (درجات عشرية)</option>
+              <option value="EPSG:32635">UTM Zone 35N</option>
+              <option value="EPSG:32636">UTM Zone 36N</option>
+              <option value="EPSG:22992">مصر 1907 / الحزام الأحمر</option>
+              <option value="EPSG:22993">مصر 1907 / الحزام الأرجواني</option>
+            </select>
+          </div>
           <div id="lyPropsText" style="display:none;">
             <textarea id="lyTextContent" placeholder="اكتب النص هنا" rows="3"></textarea>
             <div style="display:flex;gap:4px;margin-top:6px;">
@@ -1316,6 +1349,22 @@
             <button class="btn-cancel" id="closeSchemaModal" style="flex:1;">إغلاق</button>
             <button class="btn-create" id="applySchemaBtn" style="flex:1;background:#4a7fb5;">✅ تطبيق على العناصر</button>
           </div>
+        </div>
+      </div>
+
+
+      <!-- ── جدول السمات الشامل (كل عناصر كل الطبقات) ── -->
+      <div id="attrTableModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:965;flex-direction:column;">
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg-panel);border-bottom:1.5px solid #4a7fb5;">
+          <b style="color:#4a7fb5;font-size:13px;">📋 جدول السمات الشامل</b>
+          <select id="attrTableLayerFilter" style="margin-right:auto;max-width:160px;">
+            <option value="">كل الطبقات</option>
+          </select>
+          <span id="attrTableCount" style="font-size:11px;color:var(--text-muted);"></span>
+          <button class="btn-cancel" id="closeAttrTableModal" style="padding:5px 14px;">إغلاق</button>
+        </div>
+        <div style="flex:1;overflow:auto;padding:10px;">
+          <table id="attrTableGrid" style="border-collapse:collapse;width:max-content;min-width:100%;font-size:11.5px;"></table>
         </div>
       </div>
 
@@ -1657,6 +1706,7 @@
     activeLayerId:'L1', nextColorIdx:1,
     domains: {},   // {domainName: ['قيمة1','قيمة2', ...]} — قوائم قيم معتمدة قابلة لإعادة الاستخدام بين الطبقات (Coded Value Domains)
     sharedLayoutElements: [], // عناصر (نص/صورة) بتتكرر بنفس المكان والتنسيق على كل لوحات الإخراج، بعكس عناصر page.elements المرتبطة بلوحة واحدة بس
+    layoutSnapshots: {}, // elementId -> dataURL (لقطة إطار الخريطة الملتقطة) — بتتحفظ عشان متضيعش لما تقفل وتفتح تاني
     friendFileIds: [], friendLastPulled: {},   // friendLastPulled: {fileId: timestamp}
     userName: null,
     notebookSketches: [], // ضربات القلم الحر المحفوظة: {id, points:[[lat,lng]...], color, brush, width, smoothness}
@@ -2782,12 +2832,20 @@
     return `<table class="nb-table"><tr><th>الضلع</th><th>الطول</th></tr>${rows}</table>`;
   }
 
-  function buildVerticesTableHTML(f){
+  function buildVerticesTableHTML(f, crsCode){
+    const code = crsCode || 'EPSG:4326';
     let rows = '';
+    if(code === 'EPSG:4326'){
+      f.coords.forEach((c,i)=>{
+        rows += `<tr><td>V${i+1}</td><td>${c[0].toFixed(6)}</td><td>${c[1].toFixed(6)}</td></tr>`;
+      });
+      return `<table class="nb-table"><tr><th>#</th><th>Lat</th><th>Lng</th></tr>${rows}</table>`;
+    }
     f.coords.forEach((c,i)=>{
-      rows += `<tr><td>V${i+1}</td><td>${c[0].toFixed(6)}</td><td>${c[1].toFixed(6)}</td></tr>`;
+      const p = latLngToProjected(c[0], c[1], code);
+      rows += `<tr><td>V${i+1}</td><td>${p.x.toFixed(2)}</td><td>${p.y.toFixed(2)}</td></tr>`;
     });
-    return `<table class="nb-table"><tr><th>#</th><th>Lat</th><th>Lng</th></tr>${rows}</table>`;
+    return `<table class="nb-table"><tr><th>#</th><th>X</th><th>Y</th></tr>${rows}</table>`;
   }
 
   function toTurfPolygon(coords){
@@ -2839,7 +2897,8 @@
 
   /* ===== معمارية الإخراج: لقطة من منظور الخريطة الحالي + "مسرح" ثابت المقاس بالمليمتر (زي Map Frame في ArcGIS Pro) — يُستخدم للمعاينة الحية وللتصدير النهائي بنفس الكود ===== */
 
-  let layoutSnapshots = {}; // pageId -> dataURL (لقطة الخريطة الأخيرة؛ في الذاكرة بس، مش متخزنة محليًا عشان الحجم)
+  // لقطات الخريطة (layoutSnapshots) بقت جزء من state.layoutSnapshots عشان تتحفظ وترجع تظهر بعد الإغلاق والفتح تاني —
+  // قبل كده كانت متغير منفصل في الذاكرة بس، فكانت بتضيع مع كل تحميل جديد للصفحة
 
   function getFeatureByRef(ref){
     if(!ref) return null;
@@ -2945,7 +3004,7 @@
     const pxW = opts.pageWidthPx || 700;
 
     if(el.type === 'mapFrame'){
-      const snap = layoutSnapshots[el.id];
+      const snap = state.layoutSnapshots[el.id];
       if(snap){
         const img = document.createElement('img'); img.src = snap; box.appendChild(img);
       } else {
@@ -2958,8 +3017,10 @@
       box.style.fontSize = Math.max(6, pxW*(el.wPct/100)/22) + 'px';
       box.innerHTML = buildOfficialTitleBlockHTML(page.titleBlock, f);
     } else if(el.type === 'table'){
-      const titles = {area:'📐 المساحة', lengths:'📏 أطوال الأضلاع', vertices:'📍 إحداثيات القطاعات (DD)', attrs:'🗂️ بيانات المضلعات الداخلية'};
-      const html = f ? (el.tableKey==='area'?buildAreaTableHTML(f):el.tableKey==='lengths'?buildLengthsTableHTML(f):el.tableKey==='vertices'?buildVerticesTableHTML(f):buildAttrsTableHTML(f)) : '<div style="padding:4px;color:#999;">مفيش مضلع مرتبط بيها</div>';
+      const crsLabels = {'EPSG:4326':'(DD)', 'EPSG:32635':'(UTM 35N)', 'EPSG:32636':'(UTM 36N)', 'EPSG:22992':'(الحزام الأحمر)', 'EPSG:22993':'(الحزام الأرجواني)'};
+      const verticesCrsLabel = crsLabels[el.displayCrs] || '(DD)';
+      const titles = {area:'📐 المساحة', lengths:'📏 أطوال الأضلاع', vertices:'📍 إحداثيات القطاعات '+verticesCrsLabel, attrs:'🗂️ بيانات المضلعات الداخلية'};
+      const html = f ? (el.tableKey==='area'?buildAreaTableHTML(f):el.tableKey==='lengths'?buildLengthsTableHTML(f):el.tableKey==='vertices'?buildVerticesTableHTML(f, el.displayCrs):buildAttrsTableHTML(f)) : '<div style="padding:4px;color:#999;">مفيش مضلع مرتبط بيها</div>';
       box.classList.add('ly-el-table');
       box.style.fontSize = Math.max(7, pxW*0.012) + 'px';
       box.innerHTML = `<div class="ly-table-head">${titles[el.tableKey]||''}</div><div class="ly-table-body">${html}</div>`;
@@ -3094,9 +3155,14 @@
     document.getElementById('lyPropsImage').style.display = el.type==='image' ? 'block' : 'none';
     document.getElementById('lyPropsShapeRect').style.display = el.type==='shapeRect' ? 'block' : 'none';
     document.getElementById('lyPropsShapeArrow').style.display = el.type==='shapeArrow' ? 'block' : 'none';
-    document.getElementById('lyPropsGeneric').style.display = (el.type!=='mapFrame' && el.type!=='titleBlock' && el.type!=='text' && el.type!=='image' && el.type!=='shapeRect' && el.type!=='shapeArrow') ? 'block' : 'none';
+    const isVerticesTable = el.type==='table' && el.tableKey==='vertices';
+    document.getElementById('lyPropsVerticesTable').style.display = isVerticesTable ? 'block' : 'none';
+    document.getElementById('lyPropsGeneric').style.display = (el.type!=='mapFrame' && el.type!=='titleBlock' && el.type!=='text' && el.type!=='image' && el.type!=='shapeRect' && el.type!=='shapeArrow' && !isVerticesTable) ? 'block' : 'none';
     const titles = {mapFrame:'🗺️ إطار خريطة', titleBlock:'🏷️ الكرتوش', table:'📊 جدول بيانات', northArrow:'🧭 اتجاه الشمال', scaleBar:'📏 مقياس الرسم', polygonTitle:'🔤 اسم المضلع', text:'📝 نص (مشترك)', image:'🖼️ صورة (مشتركة)', shapeRect:'🔲 شكل مستطيل', shapeArrow:'➡️ سهم'};
     document.getElementById('lyPropsTitle').textContent = titles[el.type] || 'خصائص العنصر';
+    if(isVerticesTable){
+      document.getElementById('lyVerticesCrsSelect').value = el.displayCrs || 'EPSG:4326';
+    }
     if(el.type === 'mapFrame'){
       document.getElementById('lyMapFrameScaleReadout').textContent = el.scaleInfo ? ('آخر مقياس ملتقط: 1:'+el.scaleInfo.scaleDenom) : 'لسه ملتقطتش لقطة لإطار الخريطة ده';
     }
@@ -3170,7 +3236,7 @@
       row.appendChild(mk('📕', 'تصدير PDF', ()=> exportPageAsFile(page.id, 'pdf')));
       row.appendChild(mk('🗑️', 'حذف اللوحة', ()=>{
         if(!confirm('تحذف لوحة "'+page.name+'"؟')) return;
-        page.elements.forEach(el=> delete layoutSnapshots[el.id]);
+        page.elements.forEach(el=> delete state.layoutSnapshots[el.id]);
         state.layoutPages = state.layoutPages.filter(p=>p.id!==page.id);
         renderLayoutPageList(); scheduleSave();
       }));
@@ -3270,7 +3336,7 @@
         document.getElementById('lyAddElMenu').style.display = 'none';
         return;
       }
-      const extra = type === 'table' ? {tableKey: btn.dataset.key}
+      const extra = type === 'table' ? Object.assign({tableKey: btn.dataset.key}, btn.dataset.key==='vertices' ? {displayCrs:'EPSG:4326'} : {})
         : type === 'shapeRect' ? {borderColor:'#243E39', borderWidth:2, fillColor:'transparent'}
         : type === 'shapeArrow' ? {borderColor:'#243E39', borderWidth:4, fillColor:'#243E39', rotation:0}
         : {};
@@ -3285,7 +3351,7 @@
   document.getElementById('lyDeleteElBtn').addEventListener('click', ()=>{
     const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
     if(!page || !selectedElementId) return;
-    delete layoutSnapshots[selectedElementId];
+    delete state.layoutSnapshots[selectedElementId];
     if(isSharedLayoutElement(selectedElementId)){
       if(!confirm('العنصر ده مشترك ومتكرر على كل لوحات الإخراج — حذفه هيشيله من كل اللوحات مش بس دي. متأكد؟')) return;
       state.sharedLayoutElements = state.sharedLayoutElements.filter(e=>e.id!==selectedElementId);
@@ -3325,7 +3391,7 @@
     const el = page && page.elements.find(e=>e.id===selectedElementId);
     if(!page || !el || el.type !== 'mapFrame') return;
     captureCurrentMapView(page, el, (dataURL, scaleInfo)=>{
-      layoutSnapshots[el.id] = dataURL;
+      state.layoutSnapshots[el.id] = dataURL;
       el.scaleInfo = scaleInfo;
       renderLayoutCanvas(page);
       selectLayoutElement(el.id, page);
@@ -3439,6 +3505,16 @@
     const inp = document.getElementById(id);
     const evt = (inp.type === 'color') ? 'change' : 'input';
     inp.addEventListener(evt, applyArrowFields);
+  });
+
+  /* ---------- نظام الإحداثيات المعروض في جدول القطاعات ---------- */
+  document.getElementById('lyVerticesCrsSelect').addEventListener('change', ()=>{
+    const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+    const el = page && page.elements.find(e=>e.id===selectedElementId);
+    if(!page || !el || el.type !== 'table' || el.tableKey !== 'vertices') return;
+    el.displayCrs = document.getElementById('lyVerticesCrsSelect').value;
+    renderLayoutCanvas(page);
+    scheduleSave();
   });
 
   /* ---------- اقتراح الناحية والمحافظة أوتوماتيك من موقع المضلع (Nominatim/OpenStreetMap) ---------- */
@@ -3583,11 +3659,11 @@
         const scaleDenom = Math.round(1000 * groundWidthM / mapPhysicalWidthMM);
         const targetM = niceScaleLength(groundWidthM/4);
         const label = targetM >= 1000 ? (targetM/1000)+' كم' : targetM+' م';
-        const canvas = await html2canvas(document.getElementById('map'), {useCORS:true, allowTaint:true, scale:2, backgroundColor:'#ffffff'});
+        const canvas = await html2canvas(document.getElementById('map'), {useCORS:true, allowTaint:true, scale:2.2, backgroundColor:'#ffffff'});
         document.body.classList.remove('notebook-print-mode');
         map.invalidateSize({pan:false});
         map.removeLayer(labelsLayer);
-        onDone(canvas.toDataURL('image/jpeg', 0.93), {scaleDenom, label});
+        onDone(canvas.toDataURL('image/jpeg', 0.92), {scaleDenom, label});
       }catch(e){
         console.error(e);
         document.body.classList.remove('notebook-print-mode');
@@ -3607,7 +3683,7 @@
       return;
     }
     const mapFrames = page.elements.filter(el=>el.type==='mapFrame');
-    if(mapFrames.length && mapFrames.some(el=>!layoutSnapshots[el.id])){
+    if(mapFrames.length && mapFrames.some(el=>!state.layoutSnapshots[el.id])){
       alert('في إطار خريطة على اللوحة دي لسه ملتقطش لقطة — افتح اللوحة، حدد الإطار، ودوس "📸 التقط لقطة" الأول.');
       return;
     }
@@ -3724,7 +3800,7 @@
         });
         dataURL = res[0]; scaleInfo = res[1];
       }catch(e){ console.error('فشل التقاط صفحة', page.name, e); continue; }
-      layoutSnapshots[mapFrame.id] = dataURL;
+      state.layoutSnapshots[mapFrame.id] = dataURL;
       mapFrame.scaleInfo = scaleInfo;
       state.layoutPages.push(page);
 
@@ -4726,7 +4802,7 @@
     }catch(e){
       console.error('save failed', e);
       if(e && (e.name === 'QuotaExceededError' || /quota/i.test(e.message||''))){
-        document.getElementById('stHint').textContent = '⚠️ مساحة التخزين المحلي امتلأت — قلل حجم/عدد خرائط الراستر عشان يقدر يحفظ شغلك';
+        document.getElementById('stHint').textContent = '⚠️ مساحة التخزين المحلي امتلأت — قلل حجم/عدد خرائط الراستر أو لقطات لوحات الإخراج عشان يقدر يحفظ شغلك';
       }
     }
   }
@@ -4740,6 +4816,7 @@
     if(!Array.isArray(state.notebookSketches)) state.notebookSketches = [];
     if(!Array.isArray(state.layoutPages)) state.layoutPages = [];
     if(!Array.isArray(state.sharedLayoutElements)) state.sharedLayoutElements = [];
+    if(!state.layoutSnapshots || typeof state.layoutSnapshots !== 'object') state.layoutSnapshots = {};
     if(!Array.isArray(state.rasters)) state.rasters = [];
     if(!state.domains || typeof state.domains !== 'object') state.domains = {};
     state.layers.forEach(l=>{ if(!Array.isArray(l.fields)) l.fields = []; });
@@ -6176,6 +6253,95 @@
     closeSchemaModalFn();
     document.getElementById('stHint').textContent = `✅ اتطبقت السكيمة على ${layer.features.length} عنصر`;
   });
+
+  /* ---------- جدول السمات الشامل (كل عناصر كل الطبقات في شاشة واحدة قابلة للتعديل) ---------- */
+  const FEATURE_TYPE_AR = {point:'نقطة', line:'خط', polygon:'مضلع', rectangle:'مستطيل', circle:'دائرة'};
+
+  function renderAttrTableGrid(){
+    const filterId = document.getElementById('attrTableLayerFilter').value;
+    const grid = document.getElementById('attrTableGrid');
+    const rowsData = []; // {layer, f}
+    state.layers.forEach(layer=>{
+      if(filterId && layer.id !== filterId) return;
+      layer.features.forEach(f=> rowsData.push({layer, f}));
+    });
+
+    // اتحاد كل مفاتيح attrs الموجودة فعليًا عبر كل العناصر المعروضة
+    const allKeys = [];
+    rowsData.forEach(({f})=>{
+      Object.keys(f.attrs||{}).forEach(k=>{ if(!allKeys.includes(k)) allKeys.push(k); });
+    });
+
+    let thead = '<tr><th>الطبقة</th><th>النوع</th>' + allKeys.map(k=>`<th>${escapeHtml(k)}</th>`).join('') + '<th></th><th></th></tr>';
+    let tbody = rowsData.map(({layer, f})=>{
+      const cells = allKeys.map(k=>{
+        const val = (f.attrs && f.attrs[k] !== undefined) ? f.attrs[k] : '';
+        return `<td><input class="atg-cell" data-layer="${layer.id}" data-feature="${f.id}" data-key="${escapeHtml(k)}" value="${escapeHtml(val)}"></td>`;
+      }).join('');
+      return `<tr>
+        <td style="padding:6px 8px;color:${layer.color};font-weight:700;">${escapeHtml(layer.name)}</td>
+        <td style="padding:6px 8px;">${FEATURE_TYPE_AR[f.type]||f.type}</td>
+        ${cells}
+        <td><button class="atg-rowbtn atg-zoom" data-layer="${layer.id}" data-feature="${f.id}" title="زووم وتحديد">🎯</button></td>
+        <td><button class="atg-rowbtn atg-del" data-layer="${layer.id}" data-feature="${f.id}" title="حذف العنصر">🗑️</button></td>
+      </tr>`;
+    }).join('');
+
+    if(!rowsData.length) tbody = `<tr><td colspan="${2+allKeys.length+2}" style="padding:14px;text-align:center;color:var(--text-muted);">مفيش عناصر</td></tr>`;
+
+    grid.innerHTML = '<thead>'+thead+'</thead><tbody>'+tbody+'</tbody>';
+    document.getElementById('attrTableCount').textContent = `${rowsData.length} عنصر`;
+
+    grid.querySelectorAll('input.atg-cell').forEach(inp=>{
+      inp.addEventListener('change', ()=>{
+        const layer = getLayer(inp.dataset.layer);
+        const f = layer && layer.features.find(x=>x.id===inp.dataset.feature);
+        if(!f) return;
+        f.attrs[inp.dataset.key] = inp.value;
+        scheduleSave();
+      });
+    });
+    grid.querySelectorAll('.atg-zoom').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const layer = getLayer(btn.dataset.layer);
+        const f = layer && layer.features.find(x=>x.id===btn.dataset.feature);
+        if(!f) return;
+        selection = {layerId: layer.id, featureId: f.id};
+        state.activeLayerId = layer.id;
+        renderLayerList(); renderFeatures(); renderAttrPanel();
+        zoomToFeature(f);
+        document.getElementById('attrTableModal').style.display = 'none';
+        const attrTab = document.querySelector('[data-panel="attrPanel"]');
+        if(attrTab){ document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active')); attrTab.classList.add('active'); document.getElementById('attrPanel').classList.add('active'); }
+      });
+    });
+    grid.querySelectorAll('.atg-del').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const layer = getLayer(btn.dataset.layer);
+        if(!layer) return;
+        const f = layer.features.find(x=>x.id===btn.dataset.feature);
+        if(!f) return;
+        if(!confirm('حذف العنصر ده نهائيًا؟')) return;
+        pushStateToUndo();
+        layer.features = layer.features.filter(x=>x.id!==btn.dataset.feature);
+        if(selection && selection.featureId === btn.dataset.feature) selection = null;
+        renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
+        renderAttrTableGrid();
+      });
+    });
+  }
+
+  function openAttrTableModal(){
+    const sel = document.getElementById('attrTableLayerFilter');
+    sel.innerHTML = '<option value="">كل الطبقات</option>' + state.layers.map(l=>`<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
+    renderAttrTableGrid();
+    document.getElementById('attrTableModal').style.display = 'flex';
+  }
+  document.getElementById('attrTableBtn').addEventListener('click', openAttrTableModal);
+  document.getElementById('closeAttrTableModal').addEventListener('click', ()=>{
+    document.getElementById('attrTableModal').style.display = 'none';
+  });
+  document.getElementById('attrTableLayerFilter').addEventListener('change', renderAttrTableGrid);
 
   /* ---------- تحديد متعدد ---------- */
 
