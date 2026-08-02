@@ -767,6 +767,18 @@
           <div class="ribbon-group-caption">خرائط راستر</div>
         </div>
 
+        <div class="ribbon-group">
+          <div class="ribbon-group-row">
+            <button class="tool-btn" id="osmBuildingsBtn" title="استخراج حدود المباني المسجّلة في OpenStreetMap للمنطقة الظاهرة حاليًا على الخريطة">
+              <svg viewBox="0 0 24 24">
+                <rect x="4" y="9" width="7" height="11" fill="currentColor" opacity=".18" stroke-width="1.8"/>
+                <rect x="13" y="4" width="7" height="16" fill="currentColor" opacity=".18" stroke-width="1.8"/>
+              </svg><span>مباني OSM</span>
+            </button>
+          </div>
+          <div class="ribbon-group-caption">استخراج مباني (OpenStreetMap)</div>
+        </div>
+
       </div>
 
       <!-- ══════ تبويب: تحليل ══════ -->
@@ -1068,6 +1080,12 @@
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
             <b id="lyPropsTitle" style="font-size:12.5px;color:#6B7F72;">خصائص العنصر</b>
             <button class="icon-btn" id="lyDeleteElBtn" title="حذف العنصر">🗑️</button>
+          </div>
+          <div style="display:flex;gap:4px;margin-bottom:10px;">
+            <button class="icon-btn" id="lyZFrontBtn" title="خليه فوق كل حاجة" style="flex:1;border:1px solid var(--border);">⏫</button>
+            <button class="icon-btn" id="lyZForwardBtn" title="طلعه درجة لفوق" style="flex:1;border:1px solid var(--border);">⬆️</button>
+            <button class="icon-btn" id="lyZBackwardBtn" title="نزّله درجة لتحت" style="flex:1;border:1px solid var(--border);">⬇️</button>
+            <button class="icon-btn" id="lyZBackBtn" title="خليه تحت كل حاجة" style="flex:1;border:1px solid var(--border);">⏬</button>
           </div>
           <div id="lyPropsMapFrame" style="display:none;">
             <button class="btn-create" id="lyCaptureBtn" style="width:100%;margin-bottom:6px;">📸 التقط لقطة من موضع الخريطة الحالي</button>
@@ -1933,7 +1951,7 @@
   const btnPadRotate = document.getElementById('btnPadRotate');
   const btnPadScale = document.getElementById('btnPadScale');
 
-  const map = L.map('map', {zoomControl:false, zoomSnap:0, zoomDelta:1, wheelPxPerZoomLevel:100, center:[29.9792, 31.1342], zoom:16, worldCopyJump:true, preferCanvas:true});
+  const map = L.map('map', {zoomControl:false, zoomSnap:0, zoomDelta:1, wheelPxPerZoomLevel:100, maxZoom:24, center:[29.9792, 31.1342], zoom:16, worldCopyJump:true, preferCanvas:true});
   L.control.zoom({position:'topleft'}).addTo(map);
 
   /* ---------- أداة إدخال المقياس بالظبط (زي شريط المقياس في ArcGIS Pro) ---------- */
@@ -1998,10 +2016,10 @@
   const rasterHandleGroup = L.layerGroup().addTo(map); // نقط سحب أركان الراستر وقت التصحيح اليدوي
 
   const satLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-    attribution: '© Google Maps', maxZoom: 20
+    attribution: '© Google Maps', maxZoom: 24, maxNativeZoom: 20
   });
   const streetsLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors', maxZoom:22, subdomains:'abc'
+    attribution: '© OpenStreetMap contributors', maxZoom:24, maxNativeZoom:19, subdomains:'abc'
   });
   satLayer.addTo(map);
   const labelsLayerGroup = L.layerGroup().addTo(map);
@@ -2857,6 +2875,11 @@
   };
   const SHARED_LAYOUT_TYPES = ['text', 'image']; // أنواع العناصر اللي بتتكرر على كل لوحات الإخراج
 
+  function getNextZOrder(page){
+    const all = [...page.elements, ...state.sharedLayoutElements];
+    return all.length ? Math.max(...all.map(e=> e.zOrder||0)) + 1 : 1;
+  }
+
   function addLayoutElement(page, type, extra){
     const d = LY_ELEMENT_DEFAULTS[type] || {wPct:20, hPct:10};
     const isShared = SHARED_LAYOUT_TYPES.includes(type);
@@ -2865,10 +2888,33 @@
     const el = Object.assign({
       id: uid(), type,
       xPct: 5 + (idx%5)*4, yPct: 5 + (idx%5)*4,
-      wPct: d.wPct, hPct: d.hPct
+      wPct: d.wPct, hPct: d.hPct,
+      zOrder: getNextZOrder(page)
     }, extra||{});
     list.push(el);
     return el;
+  }
+
+  // بيرجع كل عناصر اللوحة (خاصة + مشتركة) مرتبة حسب ترتيب الطبقات (الأقل تحت، الأكبر فوق)
+  function getOrderedLayoutElements(page){
+    return [...page.elements, ...state.sharedLayoutElements].sort((a,b)=>(a.zOrder||0)-(b.zOrder||0));
+  }
+
+  // تحريك عنصر في ترتيب الطبقات: 'front' فوق كل حاجة، 'back' تحت كل حاجة، 'forward'/'backward' درجة واحدة
+  function reorderLayoutElement(page, id, action){
+    const all = getOrderedLayoutElements(page);
+    all.forEach(e=>{ if(e.zOrder==null) e.zOrder = 0; });
+    const idx = all.findIndex(e=>e.id===id);
+    if(idx === -1) return;
+    if(action === 'front'){
+      all[idx].zOrder = Math.max(...all.map(e=>e.zOrder)) + 1;
+    } else if(action === 'back'){
+      all[idx].zOrder = Math.min(...all.map(e=>e.zOrder)) - 1;
+    } else if(action === 'forward' && idx < all.length-1){
+      const tmp = all[idx].zOrder; all[idx].zOrder = all[idx+1].zOrder; all[idx+1].zOrder = tmp;
+    } else if(action === 'backward' && idx > 0){
+      const tmp = all[idx].zOrder; all[idx].zOrder = all[idx-1].zOrder; all[idx-1].zOrder = tmp;
+    }
   }
 
   // بيدور على عنصر سواء كان خاص باللوحة دي أو مشترك بين كل اللوحات
@@ -2990,7 +3036,7 @@
     wrap.style.width = pageWpx+'px';
     wrap.style.height = pageHpx+'px';
 
-    const allEls = [...page.elements, ...state.sharedLayoutElements];
+    const allEls = getOrderedLayoutElements(page);
     allEls.forEach(el=>{
       const box = renderElementDOM(el, page, {interactive:true, pageWidthPx:pageWpx});
       if(isSharedLayoutElement(el.id)) box.classList.add('ly-el-shared');
@@ -3001,6 +3047,7 @@
       wrap.appendChild(box);
     });
     wrap.onpointerdown = (e)=>{ if(e.target === wrap) selectLayoutElement(null, page); };
+    if(selectedElementId) document.querySelectorAll('.ly-el').forEach(b=> b.classList.toggle('selected', b.dataset.id===selectedElementId));
   }
 
   function makeElementInteractive(box, page, el, canvasEl){
@@ -3250,6 +3297,17 @@
     scheduleSave();
   });
 
+  ['lyZFrontBtn','lyZForwardBtn','lyZBackwardBtn','lyZBackBtn'].forEach(btnId=>{
+    const action = {lyZFrontBtn:'front', lyZForwardBtn:'forward', lyZBackwardBtn:'backward', lyZBackBtn:'back'}[btnId];
+    document.getElementById(btnId).addEventListener('click', ()=>{
+      const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+      if(!page || !selectedElementId) return;
+      reorderLayoutElement(page, selectedElementId, action);
+      renderLayoutCanvas(page);
+      scheduleSave();
+    });
+  });
+
   document.getElementById('lyLinkFeatureBtn').addEventListener('click', ()=>{
     const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
     if(!page) return;
@@ -3475,7 +3533,7 @@
     });
     if(neighborPoints.length){
       const sampleTextEl = state.sharedLayoutElements.find(e=>e.type==='text');
-      const nFontSize = sampleTextEl ? (sampleTextEl.fontSize||16) : 16;
+      const nFontSize = Math.max(sampleTextEl ? (sampleTextEl.fontSize||16) : 16, 22);
       const nColor = sampleTextEl ? (sampleTextEl.color||'#243E39') : '#243E39';
       neighborPoints.forEach(pf=>{
         const plat = pf.coords[0][0], plng = pf.coords[0][1];
@@ -3497,7 +3555,7 @@
         const icon = L.divIcon({
           className: 'plan-label-icon',
           html: `<div class="plan-neighbor-label" style="font-size:${nFontSize}px;color:${nColor};transform:rotate(${angle}deg);">${escapeHtml(pf.attrs['الجار'])}</div>`,
-          iconSize: [120, 24], iconAnchor: [60, 12]
+          iconSize: [150, 34], iconAnchor: [75, 17]
         });
         L.marker([plat, plng], {icon, interactive:false, keyboard:false}).addTo(group);
       });
@@ -3561,7 +3619,7 @@
     const stage = document.createElement('div');
     stage.style.cssText = `position:fixed; left:-99999px; top:0; width:${wMM}mm; height:${hMM}mm; background:#fff; overflow:hidden; direction:rtl; font-family:var(--sans);`;
     const pageWidthPxApprox = wMM * 3.78;
-    [...page.elements, ...state.sharedLayoutElements].forEach(el=> stage.appendChild(renderElementDOM(el, page, {interactive:false, pageWidthPx:pageWidthPxApprox})));
+    getOrderedLayoutElements(page).forEach(el=> stage.appendChild(renderElementDOM(el, page, {interactive:false, pageWidthPx:pageWidthPxApprox})));
     document.body.appendChild(stage);
     try{
       await new Promise(r=> requestAnimationFrame(()=>requestAnimationFrame(r)));
@@ -3673,7 +3731,7 @@
       const stage = document.createElement('div');
       stage.style.cssText = `position:fixed; left:-99999px; top:0; width:${wMM}mm; height:${hMM}mm; background:#fff; overflow:hidden; direction:rtl; font-family:var(--sans);`;
       const pageWidthPxApprox = wMM * 3.78;
-      [...page.elements, ...state.sharedLayoutElements].forEach(el=> stage.appendChild(renderElementDOM(el, page, {interactive:false, pageWidthPx:pageWidthPxApprox})));
+      getOrderedLayoutElements(page).forEach(el=> stage.appendChild(renderElementDOM(el, page, {interactive:false, pageWidthPx:pageWidthPxApprox})));
       document.body.appendChild(stage);
       await new Promise(r=> requestAnimationFrame(()=>requestAnimationFrame(r)));
       const finalCanvas = await html2canvas(stage, {useCORS:true, allowTaint:true, scale:2.2, backgroundColor:'#ffffff'});
@@ -4429,6 +4487,56 @@
   document.getElementById('rasterHudClose').addEventListener('click', ()=>{
     document.getElementById('rasterHud').style.display = 'none';
   });
+
+  /* ---------- استخراج مباني OpenStreetMap للمنطقة الظاهرة على الخريطة ---------- */
+  async function extractOSMBuildings(){
+    if(map.getZoom() < 15){
+      alert('زوم أكتر شوية على المنطقة اللي عايز تستخرج مبانيها الأول (زووم 15 أو أعلى)، عشان الاستعلام ميكونش واسع جدًا.');
+      return;
+    }
+    const b = map.getBounds();
+    const bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
+    const query = `[out:json][timeout:25];way["building"](${bbox});(._;>;);out body;`;
+    const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
+    document.getElementById('stHint').textContent = '⏳ بيدور على مباني OpenStreetMap في المنطقة الظاهرة حاليًا...';
+    try{
+      const res = await fetch(url);
+      if(!res.ok) throw new Error('overpass-error');
+      const data = await res.json();
+      const nodesById = {};
+      data.elements.forEach(elm=>{ if(elm.type==='node') nodesById[elm.id] = [elm.lat, elm.lon]; });
+      const ways = data.elements.filter(elm=> elm.type==='way' && elm.tags && elm.tags.building);
+      if(!ways.length){
+        document.getElementById('stHint').textContent = '⚠️ OpenStreetMap مفيهوش مباني متسجلة في المنطقة دي — البيانات محتاجة تكون اتضافت هناك الأول من مساهمين.';
+        return;
+      }
+      pushStateToUndo();
+      const id = 'L' + uid();
+      const color = palette[state.nextColorIdx++ % palette.length];
+      const newLayer = {id, name:'مباني OSM', color, visible:true, features:[], fields:[]};
+      state.layers.push(newLayer);
+      state.activeLayerId = id;
+      let count = 0;
+      ways.forEach(way=>{
+        let coords = way.nodes.map(nid=> nodesById[nid]).filter(Boolean);
+        if(coords.length>1 && coords[0][0]===coords[coords.length-1][0] && coords[0][1]===coords[coords.length-1][1]) coords.pop();
+        if(coords.length < 3) return;
+        const f = {id:uid(), type:'polygon', coords, attrs:{}};
+        if(way.tags.name) f.attrs.name = way.tags.name;
+        f.attrs['الاستخدام'] = (way.tags.building && way.tags.building !== 'yes') ? way.tags.building : 'مبنى';
+        newLayer.features.push(f);
+        count++;
+      });
+      renderLayerList(); renderFeatures(); scheduleSave();
+      document.getElementById('stHint').textContent = count
+        ? `✅ اتضاف ${count} مبنى من OpenStreetMap في طبقة جديدة "مباني OSM" — البيانات دي من مساهمين مش مسح رسمي، راجعها وعدّل عليها قبل الاعتماد عليها.`
+        : '⚠️ مفيش مباني صالحة اتلاقت في المنطقة دي.';
+    }catch(e){
+      console.error(e);
+      document.getElementById('stHint').textContent = '❌ حصل خطأ في الاتصال بـ OpenStreetMap — تأكد من الإنترنت وجرب تاني.';
+    }
+  }
+  document.getElementById('osmBuildingsBtn').addEventListener('click', extractOSMBuildings);
 
   document.getElementById('rasterAddConfirmBtn').addEventListener('click', async ()=>{
     const imgInput = document.getElementById('rasterImgFile');
