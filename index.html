@@ -102,6 +102,7 @@
   #polygonDmsBtn {--tc:#7B68EE;}
   #pointUtmBtn {--tc:#2a9d5c;}
   .pu-mode-btn.active, .pu-geo-fmt-btn.active{ background:#2a9d5c; border-color:#2a9d5c; color:#fff; }
+  .pd-ocr-lang-btn.active{ background:#7B68EE; border-color:#7B68EE; color:#fff; }
   .search-hud{width:310px;border-color:var(--gold);}
   .search-input-row{display:flex;gap:6px;margin-top:4px;}
   .search-input-row input{flex:1;background:var(--bg-panel-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-family:var(--mono);font-size:12px;}
@@ -1550,6 +1551,13 @@
           <div class="row-btns" style="margin-top:6px;">
             <button class="btn-cancel" id="pdBulkFileBtn" style="flex:1;font-size:10.5px;">📁 من ملف</button>
             <button class="btn-cancel" id="pdBulkImgBtn" style="flex:1;font-size:10.5px;">📷 من صورة (OCR)</button>
+          </div>
+          <div style="margin-top:5px;">
+            <div style="font-size:9px;color:var(--text-muted);margin-bottom:3px;">لغة الأرقام في الصورة:</div>
+            <div class="row-btns">
+              <button class="btn-cancel pd-ocr-lang-btn active" data-lang="eng" style="flex:1;font-size:9.5px;padding:4px 2px;">أرقام إنجليزية (Latin)</button>
+              <button class="btn-cancel pd-ocr-lang-btn" data-lang="eng+ara" style="flex:1;font-size:9.5px;padding:4px 2px;">فيها أرقام عربية ٠١٢</button>
+            </div>
           </div>
           <div id="pdBulkOcrStatus" style="font-size:9.5px;color:var(--text-muted);margin-top:4px;display:none;"></div>
           <div style="margin-top:6px;">
@@ -8804,6 +8812,13 @@
     document.getElementById('pdBulkImgBtn').addEventListener('click', ()=>{
       document.getElementById('pdBulkImgInput').click();
     });
+    let pdOcrLang = 'eng';
+    document.querySelectorAll('.pd-ocr-lang-btn').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        pdOcrLang = b.dataset.lang;
+        document.querySelectorAll('.pd-ocr-lang-btn').forEach(x=>x.classList.toggle('active', x===b));
+      });
+    });
     document.getElementById('pdBulkImgInput').addEventListener('change', async e=>{
       const file=e.target.files[0]; if(!file) return;
       if(typeof Tesseract==='undefined'){
@@ -8814,9 +8829,9 @@
         setOcrStatus('⏳ جارٍ تجهيز الصورة...');
         const processedBlob = await preprocessImageForOcr(file);
         setOcrStatus('⏳ جارٍ التعرف على النص (قد يستغرق دقيقة)...');
-        // استخدام الواجهة المبسّطة recognize() مباشرة (أكثر استقرارًا) بدل إنشاء worker يدويًا
-        // ودعم عربي+إنجليزي معًا لقراءة الأرقام العربية واللاتينية في نفس الصورة
-        const result = await Tesseract.recognize(processedBlob, 'eng+ara', {
+        // اختيار لغة التعرف حسب ما يحدده المستخدم: إنجليزي فقط أدق مع الأرقام اللاتينية،
+        // ويُفضَّل تفعيل "فيها أرقام عربية" فقط لو الصورة فعلًا بأرقام عربية (٠١٢) لتفادي دمج الاتجاهين
+        const result = await Tesseract.recognize(processedBlob, pdOcrLang, {
           logger: m=>{
             if(m.status==='recognizing text'){
               setOcrStatus(`⏳ جارٍ التعرف على النص... ${Math.round((m.progress||0)*100)}%`);
