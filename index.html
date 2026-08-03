@@ -1544,7 +1544,7 @@
 
         <div style="border:1px dashed #7B68EE;border-radius:8px;padding:7px;margin-bottom:10px;background:rgba(123,104,238,.06);">
           <label style="font-size:10px;font-weight:700;color:#7B68EE;display:block;margin-bottom:4px;">📋 استيراد جدول إحداثيات دفعة واحدة</label>
-          <textarea id="pdBulkText" rows="4" placeholder="الصق هنا جدول الإحداثيات (سطر لكل نقطة) — يدعم صيغة DMS مثل: 22°40'42.399&quot;N 31°17'20.257&quot;E أو أرقام عشرية 22.678433, 31.288961" style="width:100%;resize:vertical;font-family:var(--mono);font-size:10.5px;background:var(--bg-panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 6px;"></textarea>
+          <textarea id="pdBulkText" rows="4" dir="ltr" placeholder="الصق هنا جدول الإحداثيات (سطر لكل نقطة) — يدعم صيغة DMS مثل: 22°40'42.399&quot;N 31°17'20.257&quot;E أو أرقام عشرية 22.678433, 31.288961" style="width:100%;resize:vertical;font-family:var(--mono);font-size:10.5px;background:var(--bg-panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 6px;direction:ltr;text-align:left;unicode-bidi:plaintext;"></textarea>
           <input type="file" id="pdBulkFileInput" accept=".txt,.csv" style="display:none;">
           <input type="file" id="pdBulkImgInput" accept="image/*" style="display:none;">
           <div class="row-btns" style="margin-top:6px;">
@@ -8717,7 +8717,7 @@
       const text = toEnglishDigits(raw);
       const lines = text.split(/\r?\n/);
       // نمط DMS: درجة (رمز اختياري) دقيقة (رمز اختياري) ثانية (رمز اختياري) ثم حرف الاتجاه N/S/E/W
-      const dmsRe = /(\d{1,3})\s*(?:°|º|deg)?\s*(\d{1,2})\s*(?:'|′|,)\s*(\d{1,2}(?:[.,]\d+)?)\s*(?:"|″)?\s*([NSEWnsew])/g;
+      const dmsRe = /(\d{1,3})\s*(?:°|º|deg)?\s*(\d{1,2})\s*(?:'|′|’|ʹ|,)\s*(\d{1,2}(?:[.,]\d+)?)\s*(?:"|″|”)?\s*([NSEWnsew])/g;
       const results=[];
       lines.forEach(line=>{
         if(!line.trim()) return;
@@ -8814,13 +8814,20 @@
         setOcrStatus('⏳ جارٍ تجهيز الصورة...');
         const processedBlob = await preprocessImageForOcr(file);
         setOcrStatus('⏳ جارٍ التعرف على النص (قد يستغرق دقيقة)...');
-        const result = await Tesseract.recognize(processedBlob, 'eng+ara', {
+        const worker = await Tesseract.createWorker('eng+ara', 1, {
           logger: m=>{
             if(m.status==='recognizing text'){
               setOcrStatus(`⏳ جارٍ التعرف على النص... ${Math.round((m.progress||0)*100)}%`);
             }
           }
         });
+        // تقييد الحروف المتوقعة فقط (أرقام لاتينية/عربية + رموز الدرجات + حروف الاتجاهات)
+        // لمنع المحرك من "تخمين" حروف عربية عشوائية بدل الأرقام، مع دعم الصيغتين معًا
+        await worker.setParameters({
+          tessedit_char_whitelist: '0123456789٠١٢٣٤٥٦٧٨٩°ºo\'′’ʹ"″”.,:؛-NSEWnsew \t\n'
+        });
+        const result = await worker.recognize(processedBlob);
+        await worker.terminate();
         const text = result && result.data && result.data.text ? result.data.text : '';
         if(!text.trim()){
           setOcrStatus('');
