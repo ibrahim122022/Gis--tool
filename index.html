@@ -15,6 +15,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
@@ -100,6 +101,7 @@
   #searchPlaceBtn{--tc:#E8A432;}
   #polygonDmsBtn {--tc:#7B68EE;}
   #pointUtmBtn {--tc:#2a9d5c;}
+  .pu-mode-btn.active, .pu-geo-fmt-btn.active{ background:#2a9d5c; border-color:#2a9d5c; color:#fff; }
   .search-hud{width:310px;border-color:var(--gold);}
   .search-input-row{display:flex;gap:6px;margin-top:4px;}
   .search-input-row input{flex:1;background:var(--bg-panel-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-family:var(--mono);font-size:12px;}
@@ -274,6 +276,13 @@
   .vertex-ghost-marker{background:transparent;border:2px dashed rgba(0,180,166,.6);border-radius:50%;cursor:pointer;}
   .rect-rotate-marker{background:var(--accent);border:2px solid var(--bg-panel);border-radius:50%;cursor:alias;}
   .rect-scale-marker{background:var(--teal);border:2px solid var(--bg-panel);border-radius:50%;cursor:se-resize;}
+  .poly-rotate-marker{cursor:alias;}
+  .move-handle-icon{background:transparent;border:none;}
+  .move-handle-inner{
+    width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    background:#5070C8;border:2px solid var(--bg-panel);color:#fff;font-size:15px;font-weight:800;
+    cursor:move;box-shadow:0 1px 5px rgba(0,0,0,.45);
+  }
 
   .mobile-sidebar-toggle{display:none;position:fixed;bottom:calc(76px + env(safe-area-inset-bottom, 0px) + 52px);left:12px;z-index:900;width:48px;height:48px;border-radius:50%;background:var(--accent);color:#fff;border:none;box-shadow:0 6px 16px rgba(232,69,122,.35);align-items:center;justify-content:center;}
   #mobileDriveToggle{left:auto;right:12px;box-shadow:0 6px 16px rgba(0,120,140,.35);}
@@ -610,6 +619,13 @@
                 <path d="M15.5 15.5L21 21" stroke-width="2.3" stroke-linecap="round"/>
               </svg><span>بحث</span>
             </button>
+            <button class="tool-btn" id="searchFeaturesBtn" title="بحث سريع في عناصرك (الاسم، النوع، الاستخدام، أي حقل) والقفز مباشرة للعنصر">
+              <svg viewBox="0 0 24 24">
+                <circle cx="10.5" cy="10.5" r="6.5" stroke-width="2"/>
+                <path d="M15.5 15.5L21 21" stroke-width="2.3" stroke-linecap="round"/>
+                <circle cx="10.5" cy="10.5" r="2.3" fill="currentColor" stroke="none"/>
+              </svg><span>عناصري</span>
+            </button>
             <button class="tool-btn" id="goToCoordsBtn" title="انتقال إلى إحداثيات">
               <svg viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="9" fill="currentColor" opacity=".1" stroke-width="1.8"/>
@@ -686,7 +702,7 @@
                 <path d="M12 4.5v2M12 17.5v2M4.5 12h2M17.5 12h2" stroke-width="1.5"/>
               </svg><span>نقطة</span>
             </button>
-            <button class="tool-btn" id="pointUtmBtn" title="إضافة نقطة بإحداثي UTM (شرقي/شمالي بالمتر)">
+            <button class="tool-btn" id="pointUtmBtn" title="إضافة نقطة بإحداثي UTM أو ETM (النظام المصري) أو جغرافي WGS84 (DD/DMS)">
               <svg viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="4.5" fill="currentColor" opacity=".2"/>
                 <circle cx="12" cy="12" r="4.5" stroke-width="2"/>
@@ -1002,6 +1018,17 @@
         <div class="search-results" id="searchPlaceResults"></div>
         <div style="margin-top:8px;text-align:left;">
           <button class="btn-cancel" id="searchPlaceClose" style="font-size:11px;padding:4px 10px;">إغلاق</button>
+        </div>
+      </div>
+
+      <div class="rect-hud search-hud" id="searchFeaturesHud" style="display:none;top:60px;right:10px;width:320px;">
+        <h4 style="color:var(--gold);margin:0 0 6px;">🔎 بحث في عناصري</h4>
+        <div class="search-input-row">
+          <input type="text" id="searchFeaturesInput" placeholder="اكتب أي جزء من الاسم أو أي قيمة حقل..." autocomplete="off">
+        </div>
+        <div class="search-results" id="searchFeaturesResults"></div>
+        <div style="margin-top:8px;text-align:left;">
+          <button class="btn-cancel" id="searchFeaturesClose" style="font-size:11px;padding:4px 10px;">إغلاق</button>
         </div>
       </div>
 
@@ -1514,7 +1541,24 @@
       <!-- ── Polygon DMS HUD ── -->
       <div class="rect-hud" id="polygonDmsHud" style="width:320px;border-color:#7B68EE;display:none;">
         <h4 style="color:#7B68EE;margin:0 0 8px;">🔺 رسم مضلع بالإحداثيات (DMS)</h4>
-        <label style="font-size:10px;">خط العرض (Latitude)</label>
+
+        <div style="border:1px dashed #7B68EE;border-radius:8px;padding:7px;margin-bottom:10px;background:rgba(123,104,238,.06);">
+          <label style="font-size:10px;font-weight:700;color:#7B68EE;display:block;margin-bottom:4px;">📋 استيراد جدول إحداثيات دفعة واحدة</label>
+          <textarea id="pdBulkText" rows="4" placeholder="الصق هنا جدول الإحداثيات (سطر لكل نقطة) — يدعم صيغة DMS مثل: 22°40'42.399&quot;N 31°17'20.257&quot;E أو أرقام عشرية 22.678433, 31.288961" style="width:100%;resize:vertical;font-family:var(--mono);font-size:10.5px;background:var(--bg-panel-2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 6px;"></textarea>
+          <input type="file" id="pdBulkFileInput" accept=".txt,.csv" style="display:none;">
+          <input type="file" id="pdBulkImgInput" accept="image/*" style="display:none;">
+          <div class="row-btns" style="margin-top:6px;">
+            <button class="btn-cancel" id="pdBulkFileBtn" style="flex:1;font-size:10.5px;">📁 من ملف</button>
+            <button class="btn-cancel" id="pdBulkImgBtn" style="flex:1;font-size:10.5px;">📷 من صورة (OCR)</button>
+          </div>
+          <div id="pdBulkOcrStatus" style="font-size:9.5px;color:var(--text-muted);margin-top:4px;display:none;"></div>
+          <div style="margin-top:6px;">
+            <button id="pdBulkParseBtn" style="width:100%;border-radius:6px;border:none;padding:6px 0;font-size:10.5px;font-weight:600;cursor:pointer;font-family:var(--sans);background:#7B68EE;color:#fff;">＋ إضافة كل النقاط</button>
+          </div>
+          <div style="font-size:9px;color:var(--danger);margin-top:4px;">⚠ التعرف على الصورة قد يخطئ في بعض الأرقام — راجع النص في المربع قبل الضغط على "إضافة كل النقاط".</div>
+        </div>
+
+        <label style="font-size:10px;">أو أضف نقطة واحدة يدويًا — خط العرض (Latitude)</label>
         <div class="dms-row">
           <input class="dms-deg" type="number" id="pdLatDeg" value="29" min="0" max="90" step="1" placeholder="°">
           <span class="dms-sym">°</span>
@@ -1595,20 +1639,70 @@
         </div>
       </div>
 
-      <div class="rect-hud" id="pointUtmHud" style="width:270px;border-color:#2a9d5c;display:none;">
-        <h4 style="color:#2a9d5c;margin:0 0 8px;">📍 إضافة نقطة بإحداثي UTM</h4>
-        <label style="font-size:10px;">رقم المنطقة (Zone)</label>
-        <div class="dms-row">
-          <input type="number" id="puZone" value="36" min="1" max="60" step="1" placeholder="Zone" style="width:60%;">
-          <select id="puHemi" style="width:38%;">
-            <option value="N">N شمال</option>
-            <option value="S">S جنوب</option>
-          </select>
+      <div class="rect-hud" id="pointUtmHud" style="width:280px;border-color:#2a9d5c;display:none;">
+        <h4 style="color:#2a9d5c;margin:0 0 8px;">📍 إضافة نقطة بإحداثي</h4>
+        <div class="row-btns" style="margin-bottom:8px;">
+          <button class="btn-cancel pu-mode-btn active" data-mode="utm" style="flex:1;font-size:10px;padding:5px 3px;">UTM</button>
+          <button class="btn-cancel pu-mode-btn" data-mode="etm" style="flex:1;font-size:10px;padding:5px 3px;">ETM (مصري)</button>
+          <button class="btn-cancel pu-mode-btn" data-mode="geo" style="flex:1;font-size:10px;padding:5px 3px;">جغرافي WGS84</button>
         </div>
-        <label style="font-size:10px;margin-top:6px;display:block;">الإحداثي الشرقي — Easting (م)</label>
-        <input type="number" id="puEasting" step="0.01" placeholder="مثال: 350000.00">
-        <label style="font-size:10px;margin-top:6px;display:block;">الإحداثي الشمالي — Northing (م)</label>
-        <input type="number" id="puNorthing" step="0.01" placeholder="مثال: 3315000.00">
+
+        <div id="puModeUtm">
+          <label style="font-size:10px;">رقم المنطقة (Zone)</label>
+          <div class="dms-row">
+            <input type="number" id="puZone" value="36" min="1" max="60" step="1" placeholder="Zone" style="width:60%;">
+            <select id="puHemi" style="width:38%;">
+              <option value="N">N شمال</option>
+              <option value="S">S جنوب</option>
+            </select>
+          </div>
+          <label style="font-size:10px;margin-top:6px;display:block;">الإحداثي الشرقي — Easting (م)</label>
+          <input type="number" id="puEasting" step="0.01" placeholder="مثال: 350000.00">
+          <label style="font-size:10px;margin-top:6px;display:block;">الإحداثي الشمالي — Northing (م)</label>
+          <input type="number" id="puNorthing" step="0.01" placeholder="مثال: 3315000.00">
+        </div>
+
+        <div id="puModeEtm" style="display:none;">
+          <label style="font-size:10px;">الحزام (Belt)</label>
+          <select id="puBelt" style="width:100%;">
+            <option value="EPSG:22992">الحزام الأحمر (Red Belt)</option>
+            <option value="EPSG:22993">الحزام الأرجواني (Purple Belt)</option>
+          </select>
+          <label style="font-size:10px;margin-top:6px;display:block;">X — شرقي (م)</label>
+          <input type="number" id="puEtmX" step="0.01" placeholder="مثال: 615000.00">
+          <label style="font-size:10px;margin-top:6px;display:block;">Y — شمالي (م)</label>
+          <input type="number" id="puEtmY" step="0.01" placeholder="مثال: 810000.00">
+        </div>
+
+        <div id="puModeGeo" style="display:none;">
+          <div class="row-btns" style="margin-bottom:6px;">
+            <button class="btn-cancel pu-geo-fmt-btn active" data-fmt="dd" style="flex:1;font-size:10px;padding:5px 3px;">DD (عشري)</button>
+            <button class="btn-cancel pu-geo-fmt-btn" data-fmt="dms" style="flex:1;font-size:10px;padding:5px 3px;">DMS (د/ق/ث)</button>
+          </div>
+          <div id="puGeoDD">
+            <label style="font-size:10px;">خط العرض (Latitude)</label>
+            <input type="number" id="puDdLat" step="0.000001" placeholder="مثال: 29.979200">
+            <label style="font-size:10px;margin-top:6px;display:block;">خط الطول (Longitude)</label>
+            <input type="number" id="puDdLng" step="0.000001" placeholder="مثال: 31.134200">
+          </div>
+          <div id="puGeoDMS" style="display:none;">
+            <label style="font-size:10px;">خط العرض (Latitude)</label>
+            <div class="dms-row">
+              <input type="number" id="puLatD" placeholder="د" style="width:26%;">
+              <input type="number" id="puLatM" placeholder="ق" style="width:26%;">
+              <input type="number" id="puLatS" placeholder="ث" step="0.01" style="width:26%;">
+              <select id="puLatDir" style="width:20%;"><option value="N">N</option><option value="S">S</option></select>
+            </div>
+            <label style="font-size:10px;margin-top:6px;display:block;">خط الطول (Longitude)</label>
+            <div class="dms-row">
+              <input type="number" id="puLngD" placeholder="د" style="width:26%;">
+              <input type="number" id="puLngM" placeholder="ق" style="width:26%;">
+              <input type="number" id="puLngS" placeholder="ث" step="0.01" style="width:26%;">
+              <select id="puLngDir" style="width:20%;"><option value="E">E</option><option value="W">W</option></select>
+            </div>
+          </div>
+        </div>
+
         <div id="puPreview" style="font-size:10px;color:var(--text-muted);margin-top:6px;min-height:14px;"></div>
         <div class="row-btns" style="margin-top:10px;">
           <button class="btn-cancel" id="puCancelBtn">إلغاء</button>
@@ -1963,6 +2057,9 @@
 
   let mobileMode = 'move'; 
   let mobileActiveVertexIdx = 0;
+  let mobileRotatePivot = null;       // [lat,lng] مركز التدوير — للمضلعات/الخطوط (المستطيل له منطقه الخاص)
+  let mobileRotateStartAngle = 0;
+  let mobileRotateOrigCoords = null;  // نسخة من الإحداثيات الأصلية وقت الدخول لوضع التدوير
   let isMobileEnv = false;
 
   let undoStack = [];
@@ -4838,7 +4935,7 @@
     btnPadVertex.style.display = (f.type !== 'rectangle' && f.type !== 'circle') ? 'block' : 'none';
     btnPadDeleteVertex.style.display = (f.type !== 'rectangle' && f.type !== 'circle') ? 'block' : 'none';
     btnPadAddVertex.style.display = (f.type === 'polygon') ? 'block' : 'none';
-    btnPadRotate.style.display = (f.type === 'rectangle') ? 'block' : 'none';
+    btnPadRotate.style.display = (f.type === 'rectangle' || f.type === 'polygon' || f.type === 'line') ? 'block' : 'none';
     btnPadScale.style.display = (f.type === 'rectangle') ? 'block' : 'none';
 
     setMobileEditMode('move');
@@ -4871,8 +4968,18 @@
     }
     else if(mode === 'rotate') {
       btnPadRotate.classList.add('active');
-      mobilePadTitle.textContent = "🔄 حرك الخريطة لتدوير المستطيل حول مركزه";
       mobileVertexRow.style.display = 'none';
+      if(f.type === 'rectangle'){
+        mobilePadTitle.textContent = "🔄 حرك الخريطة لتدوير المستطيل حول مركزه";
+      } else {
+        mobilePadTitle.textContent = "🔄 حرك الخريطة لتدوير الشكل حول مركزه";
+        let cLat=0, cLng=0;
+        f.coords.forEach(c=>{ cLat+=c[0]; cLng+=c[1]; });
+        cLat/=f.coords.length; cLng/=f.coords.length;
+        mobileRotatePivot = [cLat, cLng];
+        mobileRotateStartAngle = metricAngleRad({lat:cLat, lng:cLng}, map.getCenter());
+        mobileRotateOrigCoords = JSON.parse(JSON.stringify(f.coords));
+      }
     }
     else if(mode === 'scale') {
       btnPadScale.classList.add('active');
@@ -4969,12 +5076,18 @@
       f.coords[mobileActiveVertexIdx] = [centerLatLng.lat, centerLatLng.lng];
     }
     else if(mobileMode === 'rotate') {
-      const corners = f.coords;
-      const cLat = (corners[0][0] + corners[2][0]) / 2;
-      const cLng = (corners[0][1] + corners[2][1]) / 2;
-      const angle = metricAngleRad({lat:cLat,lng:cLng}, centerLatLng);
-      f.rect.rotation = Math.round(toDeg(angle) % 360);
-      syncRectCoords(f);
+      if(f.type === 'rectangle'){
+        const corners = f.coords;
+        const cLat = (corners[0][0] + corners[2][0]) / 2;
+        const cLng = (corners[0][1] + corners[2][1]) / 2;
+        const angle = metricAngleRad({lat:cLat,lng:cLng}, centerLatLng);
+        f.rect.rotation = Math.round(toDeg(angle) % 360);
+        syncRectCoords(f);
+      } else if(mobileRotatePivot && mobileRotateOrigCoords){
+        const newAngle = metricAngleRad({lat:mobileRotatePivot[0], lng:mobileRotatePivot[1]}, centerLatLng);
+        const deltaAngle = newAngle - mobileRotateStartAngle;
+        f.coords = mobileRotateOrigCoords.map(c=> rotateCoordAroundPivot(c, mobileRotatePivot, deltaAngle));
+      }
     }
     else if(mobileMode === 'scale') {
       const anchor = f.coords[0];
@@ -5044,24 +5157,37 @@
         });
 
         shape.on('mousedown', (e) => {
-          if(tool!=='select' || window.innerWidth <= 760) return;
-          L.DomEvent.stopPropagation(e);
-          selection = {layerId:layer.id, featureId:f.id};
-          renderAttrPanel(); renderFeatures();
-          map.dragging.disable();
-          pushStateToUndo(); 
-          dragCtx = {
-            mode:'move', feature:f, startLatLng:e.latlng, 
-            origCoords:JSON.parse(JSON.stringify(f.coords)), 
-            origRect: f.rect?Object.assign({},f.rect):null, 
-            origCircle: f.circle?Object.assign({},f.circle):null
-          };
+          // اتشالت خاصية "دوس على جسم الشكل يحركه على طول" — كانت بتتفعل بسهولة زيادة وانت بس بتحدد.
+          // دلوقتي التحريك بقى بس من مقبض مخصص (✥) بيظهر لما تحددي العنصر، عشان تتحكمي في التوقيت والنقطة المرجعية.
         });
 
         shape.addTo(lg);
 
         // إضافة نقاط التحكم والعقد الوصفية التفاعلية
         if(isSel && window.innerWidth > 760 && !multiSelectMode) {
+          // ── مقبض "نقل الكل" (✥) — بيظهر لكل أنواع العناصر لما تتحددي، وهو الطريقة الوحيدة دلوقتي لنقل الشكل بالكامل ──
+          {
+            let centerLat, centerLng;
+            if(f.type==='rectangle'){ centerLat=(f.coords[0][0]+f.coords[2][0])/2; centerLng=(f.coords[0][1]+f.coords[2][1])/2; }
+            else if(f.type==='circle'){ centerLat=f.circle.lat; centerLng=f.circle.lng; }
+            else { centerLat=0; centerLng=0; f.coords.forEach(c=>{centerLat+=c[0]; centerLng+=c[1];}); centerLat/=f.coords.length; centerLng/=f.coords.length; }
+
+            const moveMarker = L.marker([centerLat, centerLng], {
+              icon: L.divIcon({className:'move-handle-icon', html:'<div class="move-handle-inner">✥</div>', iconSize:[26,26], iconAnchor:[13,13]}),
+              interactive:true, keyboard:false
+            });
+            moveMarker.on('mousedown', (se)=>{
+              L.DomEvent.stopPropagation(se); map.dragging.disable(); pushStateToUndo();
+              dragCtx = {
+                mode:'move', feature:f, startLatLng:se.latlng,
+                origCoords:JSON.parse(JSON.stringify(f.coords)),
+                origRect: f.rect?Object.assign({},f.rect):null,
+                origCircle: f.circle?Object.assign({},f.circle):null
+              };
+            });
+            moveMarker.addTo(lg);
+          }
+
           if(f.type==='rectangle') {
             const corners = f.coords;
             const centerLat = (corners[0][0] + corners[2][0]) / 2;
@@ -5084,6 +5210,28 @@
               dragCtx = { mode:'rect-scale', feature:f, anchor: corners[0], origWidth: f.rect.width, origLength: f.rect.length, startLatLng: se.latlng };
             });
             scaleMarker.addTo(lg);
+          }
+
+          // ── مقبض تدوير عام للمضلعات والخطوط — بيلف كل نقط الشكل حوالين مركزه ──
+          if(f.type==='polygon' || f.type==='line'){
+            let centerLat=0, centerLng=0;
+            f.coords.forEach(c=>{centerLat+=c[0]; centerLng+=c[1];});
+            centerLat/=f.coords.length; centerLng/=f.coords.length;
+            // أبعد نقطة عن المركز بنحط عندها مقبض التدوير، بمسافة إضافية بسيطة برّه الشكل
+            let maxDist=0;
+            f.coords.forEach(c=>{ const d=haversine(centerLat,centerLng,c[0],c[1]); if(d>maxDist) maxDist=d; });
+            const rotatePt = destPoint(centerLat, centerLng, 0, maxDist + 12);
+
+            const polyRotMarker = L.circleMarker(rotatePt, {radius:9, className:'poly-rotate-marker', color:'#243E39', weight:1.5, fillColor:'#E8A432', fillOpacity:1});
+            polyRotMarker.on('mousedown', (se)=>{
+              L.DomEvent.stopPropagation(se); map.dragging.disable(); pushStateToUndo();
+              dragCtx = {
+                mode:'poly-rotate', feature:f, center:[centerLat, centerLng],
+                origCoords: JSON.parse(JSON.stringify(f.coords)),
+                startAngle: metricAngleRad({lat:centerLat, lng:centerLng}, se.latlng)
+              };
+            });
+            polyRotMarker.addTo(lg);
           }
 
           if(f.type!=='rectangle' && f.type!=='circle'){
@@ -5194,6 +5342,11 @@
         dragCtx.feature.rect.width = Math.max(0.5, parseFloat((dragCtx.origWidth * ratio).toFixed(1)));
         dragCtx.feature.rect.length = Math.max(0.5, parseFloat((dragCtx.origLength * ratio).toFixed(1)));
         syncRectCoords(dragCtx.feature);
+      }
+      else if(dragCtx.mode==='poly-rotate'){
+        const currentAngle = metricAngleRad({lat:dragCtx.center[0], lng:dragCtx.center[1]}, e.latlng);
+        const angleDiff = currentAngle - dragCtx.startAngle;
+        dragCtx.feature.coords = dragCtx.origCoords.map(c=> rotateCoordAroundPivot(c, dragCtx.center, angleDiff));
       }
       else if(dragCtx.mode==='move'){
         const dLat = e.latlng.lat - dragCtx.startLatLng.lat;
@@ -7023,6 +7176,18 @@
     return Math.atan2(b.y - a.y, b.x - a.x);
   }
 
+  // بيدوّر إحداثي (lat,lng) حوالين نقطة ارتكاز (pivot) بزاوية معينة (راديان) — بيستخدم نفس الإسقاط المتري المحلي
+  // اللي بتستخدمه باقي أدوات القياس في التطبيق (metricXY/destPoint)، فدقته متسقة مع باقي الحسابات
+  function rotateCoordAroundPivot(coord, pivot, angleRad){
+    const refLat = pivot[0];
+    const p = metricXY(refLat, coord[0], coord[1]);
+    const c = metricXY(refLat, pivot[0], pivot[1]);
+    const dx = p.x - c.x, dy = p.y - c.y;
+    const cosA = Math.cos(angleRad), sinA = Math.sin(angleRad);
+    const rx = dx*cosA - dy*sinA, ry = dx*sinA + dy*cosA;
+    return destPoint(pivot[0], pivot[1], rx, ry);
+  }
+
   function angleFromPoints(p1, p2){
     // زاوية اتجاه القطع (بنفس اصطلاح angleDeg المستخدم في turf.transformRotate)
     // بتتحسب من الاتجاه الحقيقي على الأرض بالأمتار، مش من فروق درجات lat/lng مباشرة،
@@ -8315,6 +8480,67 @@
     searchPlaceResults.innerHTML = '';
   });
 
+  /* ---------- بحث سريع في عناصري (بالاسم أو أي قيمة حقل) ---------- */
+  function performFeatureSearch(query){
+    const q = String(query||'').trim().toLowerCase();
+    const results = document.getElementById('searchFeaturesResults');
+    if(!q){ results.innerHTML = ''; return; }
+    const matches = [];
+    state.layers.forEach(layer=>{
+      layer.features.forEach(f=>{
+        let matchText = null;
+        const label = featureLabel(f);
+        if(label.toLowerCase().includes(q)) matchText = label;
+        if(!matchText && f.attrs){
+          for(const k in f.attrs){
+            if(String(f.attrs[k]||'').toLowerCase().includes(q)){ matchText = `${k}: ${f.attrs[k]}`; break; }
+          }
+        }
+        if(matchText) matches.push({layer, f, matchText});
+      });
+    });
+    if(!matches.length){
+      results.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:11px;padding:10px 0;">مفيش نتائج</div>';
+      return;
+    }
+    results.innerHTML = matches.slice(0,40).map((m,i)=>`
+      <div class="search-result-item" data-idx="${i}">
+        <div class="sr-name">${escapeHtml(featureLabel(m.f))}</div>
+        <div class="sr-type">${escapeHtml(m.layer.name)} · ${FEATURE_TYPE_AR[m.f.type]||m.f.type} · ${escapeHtml(m.matchText)}</div>
+      </div>
+    `).join('');
+    results.querySelectorAll('.search-result-item').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const m = matches[+el.dataset.idx];
+        selection = {layerId: m.layer.id, featureId: m.f.id};
+        state.activeLayerId = m.layer.id;
+        renderLayerList(); renderFeatures(); renderAttrPanel();
+        zoomToFeature(m.f);
+        document.getElementById('searchFeaturesHud').style.display = 'none';
+        const attrTab = document.querySelector('[data-panel="attrPanel"]');
+        if(attrTab){
+          document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+          document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+          attrTab.classList.add('active'); document.getElementById('attrPanel').classList.add('active');
+        }
+      });
+    });
+  }
+  document.getElementById('searchFeaturesBtn').addEventListener('click', ()=>{
+    const hud = document.getElementById('searchFeaturesHud');
+    const isVisible = hud.style.display !== 'none';
+    document.querySelectorAll('.rect-hud').forEach(h => h.style.display = 'none');
+    if(!isVisible){
+      hud.style.display = 'block';
+      document.getElementById('searchFeaturesInput').focus();
+    }
+  });
+  document.getElementById('searchFeaturesClose').addEventListener('click', ()=>{
+    document.getElementById('searchFeaturesHud').style.display = 'none';
+    document.getElementById('searchFeaturesResults').innerHTML = '';
+  });
+  document.getElementById('searchFeaturesInput').addEventListener('input', e=> performFeatureSearch(e.target.value));
+
   async function doSearch() {
     const q = searchPlaceInput.value.trim();
     if (!q) return;
@@ -8477,8 +8703,140 @@
       dmsPoints=[];
       if(dmsPreviewLine){ map.removeLayer(dmsPreviewLine); dmsPreviewLine=null; }
       dmsPreviewMarkers.forEach(m=>map.removeLayer(m)); dmsPreviewMarkers=[];
+      const bulkTa=document.getElementById('pdBulkText'); if(bulkTa) bulkTa.value='';
       refreshList(); updateCount();
     }
+
+    /* ---- استيراد جدول إحداثيات دفعة واحدة (لصق نص أو ملف) ---- */
+    function toEnglishDigits(s){
+      const map={'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9','٫':'.','،':',','۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9'};
+      return String(s).replace(/[٠-٩۰-۹٫،]/g, ch=>map[ch]||ch);
+    }
+
+    function parseBulkCoords(raw){
+      const text = toEnglishDigits(raw);
+      const lines = text.split(/\r?\n/);
+      // نمط DMS: درجة (رمز اختياري) دقيقة (رمز اختياري) ثانية (رمز اختياري) ثم حرف الاتجاه N/S/E/W
+      const dmsRe = /(\d{1,3})\s*(?:°|º|deg)?\s*(\d{1,2})\s*(?:'|′|,)\s*(\d{1,2}(?:[.,]\d+)?)\s*(?:"|″)?\s*([NSEWnsew])/g;
+      const results=[];
+      lines.forEach(line=>{
+        if(!line.trim()) return;
+        const matches=[...line.matchAll(dmsRe)];
+        let lat=null, lng=null;
+        if(matches.length>=2){
+          matches.forEach(m=>{
+            const deg=+m[1], min=+m[2], sec=parseFloat(m[3].replace(',','.')), dir=m[4].toUpperCase();
+            const val=dmsToDecimal(deg,min,sec,dir);
+            if(dir==='N'||dir==='S') lat=val; else lng=val;
+          });
+        }
+        if(lat===null || lng===null){
+          // احتياطي: رقمان عشريان في نفس السطر (خط عرض، خط طول) مفصولان بفاصلة/تاب/مسافة
+          const nums=[...line.matchAll(/-?\d{1,3}\.\d{3,}/g)].map(m=>parseFloat(m[0]));
+          if(nums.length>=2){
+            let a=nums[0], b=nums[1];
+            if(Math.abs(a)<=90 && Math.abs(b)<=180){ lat=a; lng=b; }
+          }
+        }
+        if(lat!==null && lng!==null && !isNaN(lat) && !isNaN(lng) && Math.abs(lat)<=90 && Math.abs(lng)<=180){
+          results.push({lat, lng, label:`${lat.toFixed(6)}, ${lng.toFixed(6)}`});
+        }
+      });
+      return results;
+    }
+
+    document.getElementById('pdBulkParseBtn').addEventListener('click', ()=>{
+      const raw=document.getElementById('pdBulkText').value;
+      if(!raw.trim()){ alert('الصق جدول الإحداثيات أولاً، أو اختر ملف نصي'); return; }
+      const pts=parseBulkCoords(raw);
+      if(!pts.length){ alert('لم يتم العثور على إحداثيات صالحة في النص الملصق.\nتأكد من صيغة DMS (درجة/دقيقة/ثانية + N/S/E/W) أو أرقام عشرية.'); return; }
+      dmsPoints=dmsPoints.concat(pts);
+      refreshList(); refreshPreview(); updateCount();
+      const bounds=L.latLngBounds(dmsPoints.map(p=>[p.lat,p.lng]));
+      map.fitBounds(bounds,{padding:[40,40]});
+      document.getElementById('stHint').textContent=`✓ تم إضافة ${pts.length} نقطة من الجدول الملصق (الإجمالي ${dmsPoints.length})`;
+    });
+
+    document.getElementById('pdBulkFileBtn').addEventListener('click', ()=>{
+      document.getElementById('pdBulkFileInput').click();
+    });
+    document.getElementById('pdBulkFileInput').addEventListener('change', e=>{
+      const file=e.target.files[0]; if(!file) return;
+      const reader=new FileReader();
+      reader.onload=ev=>{ document.getElementById('pdBulkText').value = ev.target.result; };
+      reader.readAsText(file, 'UTF-8');
+      e.target.value='';
+    });
+
+    /* ---- استيراد جدول إحداثيات من صورة (OCR بواسطة Tesseract.js) ---- */
+    const ocrStatus = document.getElementById('pdBulkOcrStatus');
+    function setOcrStatus(msg){
+      if(!msg){ ocrStatus.style.display='none'; ocrStatus.textContent=''; return; }
+      ocrStatus.style.display='block'; ocrStatus.textContent=msg;
+    }
+    // تكبير الصورة وزيادة التباين قبل تمريرها لمحرك OCR لتحسين دقة قراءة الأرقام الصغيرة
+    function preprocessImageForOcr(file){
+      return new Promise((resolve,reject)=>{
+        const img=new Image();
+        img.onload=()=>{
+          const scale=Math.min(2600/img.width, 4); // تكبير حتى عرض ~2600px بحد أقصى x4
+          const w=Math.round(img.width*scale), h=Math.round(img.height*scale);
+          const canvas=document.createElement('canvas');
+          canvas.width=w; canvas.height=h;
+          const ctx=canvas.getContext('2d');
+          ctx.imageSmoothingEnabled=true;
+          ctx.drawImage(img,0,0,w,h);
+          // تحويل لتدرج رمادي + زيادة تباين بسيطة
+          const id=ctx.getImageData(0,0,w,h), d=id.data;
+          for(let i=0;i<d.length;i+=4){
+            const gray=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+            const contrasted=Math.min(255,Math.max(0,(gray-128)*1.35+128));
+            d[i]=d[i+1]=d[i+2]=contrasted;
+          }
+          ctx.putImageData(id,0,0);
+          canvas.toBlob(blob=>resolve(blob), 'image/png');
+        };
+        img.onerror=reject;
+        img.src=URL.createObjectURL(file);
+      });
+    }
+
+    document.getElementById('pdBulkImgBtn').addEventListener('click', ()=>{
+      document.getElementById('pdBulkImgInput').click();
+    });
+    document.getElementById('pdBulkImgInput').addEventListener('change', async e=>{
+      const file=e.target.files[0]; if(!file) return;
+      if(typeof Tesseract==='undefined'){
+        alert('تعذّر تحميل مكتبة التعرف الضوئي (OCR) — تأكد من الاتصال بالإنترنت.');
+        e.target.value=''; return;
+      }
+      try{
+        setOcrStatus('⏳ جارٍ تجهيز الصورة...');
+        const processedBlob = await preprocessImageForOcr(file);
+        setOcrStatus('⏳ جارٍ التعرف على النص (قد يستغرق دقيقة)...');
+        const result = await Tesseract.recognize(processedBlob, 'eng+ara', {
+          logger: m=>{
+            if(m.status==='recognizing text'){
+              setOcrStatus(`⏳ جارٍ التعرف على النص... ${Math.round((m.progress||0)*100)}%`);
+            }
+          }
+        });
+        const text = result && result.data && result.data.text ? result.data.text : '';
+        if(!text.trim()){
+          setOcrStatus('');
+          alert('لم يتم استخراج أي نص من الصورة. جرّب صورة أوضح أو أقرب.');
+        } else {
+          const ta=document.getElementById('pdBulkText');
+          ta.value = (ta.value.trim() ? ta.value.trim()+'\n' : '') + text.trim();
+          setOcrStatus('✓ تم استخراج نص من الصورة — راجعه وصحّح أي رقم قبل الإضافة');
+        }
+      }catch(err){
+        console.warn('OCR error:', err);
+        setOcrStatus('');
+        alert('حدث خطأ أثناء التعرف على الصورة:\n'+(err && err.message ? err.message : err));
+      }
+      e.target.value='';
+    });
 
     document.getElementById('polygonDmsBtn').addEventListener('click', ()=>{
       if(hud.style.display==='block'){ hud.style.display='none'; clearDmsTool(); return; }
@@ -8545,28 +8903,61 @@
   })();
   /* ── نهاية Polygon DMS Tool ───────────────────────────────────────── */
 
-  /* ── Point UTM Tool ───────────────────────────────────────────────── */
+  /* ── Point UTM/ETM/Geo Tool ───────────────────────────────────────────────── */
   (function(){
     const hud       = document.getElementById('pointUtmHud');
+    const preview   = document.getElementById('puPreview');
+    const addBtn    = document.getElementById('puAddBtn');
+    const cancelBtn = document.getElementById('puCancelBtn');
+
+    // عناصر وضع UTM
     const zoneInp   = document.getElementById('puZone');
     const hemiSel   = document.getElementById('puHemi');
     const eastInp   = document.getElementById('puEasting');
     const northInp  = document.getElementById('puNorthing');
-    const preview   = document.getElementById('puPreview');
-    const addBtn    = document.getElementById('puAddBtn');
-    const cancelBtn = document.getElementById('puCancelBtn');
+    // عناصر وضع ETM
+    const beltSel   = document.getElementById('puBelt');
+    const etmXInp   = document.getElementById('puEtmX');
+    const etmYInp   = document.getElementById('puEtmY');
+    // عناصر وضع جغرافي
+    const ddLatInp  = document.getElementById('puDdLat');
+    const ddLngInp  = document.getElementById('puDdLng');
+
+    let puMode = 'utm';    // 'utm' | 'etm' | 'geo'
+    let puGeoFmt = 'dd';   // 'dd' | 'dms'
+
+    function setMode(mode){
+      puMode = mode;
+      document.querySelectorAll('.pu-mode-btn').forEach(b=> b.classList.toggle('active', b.dataset.mode===mode));
+      document.getElementById('puModeUtm').style.display = mode==='utm' ? 'block' : 'none';
+      document.getElementById('puModeEtm').style.display = mode==='etm' ? 'block' : 'none';
+      document.getElementById('puModeGeo').style.display = mode==='geo' ? 'block' : 'none';
+      updatePreview();
+    }
+    function setGeoFmt(fmt){
+      puGeoFmt = fmt;
+      document.querySelectorAll('.pu-geo-fmt-btn').forEach(b=> b.classList.toggle('active', b.dataset.fmt===fmt));
+      document.getElementById('puGeoDD').style.display = fmt==='dd' ? 'block' : 'none';
+      document.getElementById('puGeoDMS').style.display = fmt==='dms' ? 'block' : 'none';
+      updatePreview();
+    }
+    document.querySelectorAll('.pu-mode-btn').forEach(b=> b.addEventListener('click', ()=> setMode(b.dataset.mode)));
+    document.querySelectorAll('.pu-geo-fmt-btn').forEach(b=> b.addEventListener('click', ()=> setGeoFmt(b.dataset.fmt)));
 
     function openHud(){
       document.querySelectorAll('.rect-hud').forEach(h=>h.style.display='none');
       hud.style.left='90px'; hud.style.top='70px';
       hud.style.display='block';
-      // اقترح رقم المنطقة ونصف الكرة تلقائياً بناءً على مركز الخريطة الحالي
+      // اقترح رقم منطقة الـ UTM ونصف الكرة تلقائياً بناءً على مركز الخريطة الحالي
       const c = map.getCenter();
       const guess = latLngToUTM(c.lat, c.lng);
       zoneInp.value = guess.zone;
       hemiSel.value = guess.hemisphere;
-      eastInp.value = '';
-      northInp.value = '';
+      eastInp.value = ''; northInp.value = '';
+      etmXInp.value = ''; etmYInp.value = '';
+      ddLatInp.value = ''; ddLngInp.value = '';
+      ['puLatD','puLatM','puLatS','puLngD','puLngM','puLngS'].forEach(id=> document.getElementById(id).value = '');
+      setMode('utm'); setGeoFmt('dd');
       preview.textContent = '';
     }
 
@@ -8574,29 +8965,57 @@
       hud.style.display = 'none';
     }
 
+    function invalidPreview(msg){
+      preview.style.color = 'var(--danger)';
+      preview.textContent = msg || 'إحداثي غير صالح';
+      return null;
+    }
+
     function updatePreview(){
-      const zone = +zoneInp.value;
-      const hemi = hemiSel.value;
-      const easting = +eastInp.value;
-      const northing = +northInp.value;
-      if(!zone || zone<1 || zone>60 || !eastInp.value || !northInp.value || isNaN(easting) || isNaN(northing)){
-        preview.textContent = '';
-        return null;
+      let ll = null;
+
+      if(puMode === 'utm'){
+        const zone = +zoneInp.value, hemi = hemiSel.value;
+        const easting = +eastInp.value, northing = +northInp.value;
+        if(!zone || zone<1 || zone>60 || !eastInp.value || !northInp.value || isNaN(easting) || isNaN(northing)){
+          preview.textContent = ''; return null;
+        }
+        ll = utmToLatLng(zone, hemi, easting, northing);
+
+      } else if(puMode === 'etm'){
+        const x = +etmXInp.value, y = +etmYInp.value;
+        if(!etmXInp.value || !etmYInp.value || isNaN(x) || isNaN(y)){
+          preview.textContent = ''; return null;
+        }
+        ll = projectedToLatLng(x, y, beltSel.value);
+
+      } else { // geo
+        if(puGeoFmt === 'dd'){
+          if(!ddLatInp.value || !ddLngInp.value){ preview.textContent = ''; return null; }
+          ll = {lat:+ddLatInp.value, lng:+ddLngInp.value};
+        } else {
+          const latD = document.getElementById('puLatD').value, lngD = document.getElementById('puLngD').value;
+          if(!latD || !lngD){ preview.textContent = ''; return null; }
+          const lat = dmsToDecimal(latD, document.getElementById('puLatM').value, document.getElementById('puLatS').value, document.getElementById('puLatDir').value);
+          const lng = dmsToDecimal(lngD, document.getElementById('puLngM').value, document.getElementById('puLngS').value, document.getElementById('puLngDir').value);
+          ll = {lat, lng};
+        }
       }
-      const ll = utmToLatLng(zone, hemi, easting, northing);
-      if(isNaN(ll.lat) || isNaN(ll.lng) || ll.lat<-90 || ll.lat>90 || ll.lng<-180 || ll.lng>180){
-        preview.textContent = 'إحداثي غير صالح';
-        preview.style.color = 'var(--danger)';
-        return null;
+
+      if(!ll || isNaN(ll.lat) || isNaN(ll.lng) || ll.lat<-90 || ll.lat>90 || ll.lng<-180 || ll.lng>180){
+        return invalidPreview();
       }
       preview.style.color = 'var(--text-muted)';
       preview.textContent = `≈ ${ll.lat.toFixed(6)}, ${ll.lng.toFixed(6)}`;
       return ll;
     }
 
-    [zoneInp, hemiSel, eastInp, northInp].forEach(el=>{
-      el.addEventListener('input', updatePreview);
-      el.addEventListener('change', updatePreview);
+    [zoneInp, hemiSel, eastInp, northInp, beltSel, etmXInp, etmYInp, ddLatInp, ddLngInp,
+     'puLatD','puLatM','puLatS','puLatDir','puLngD','puLngM','puLngS','puLngDir'
+    ].forEach(el=>{
+      const node = typeof el === 'string' ? document.getElementById(el) : el;
+      node.addEventListener('input', updatePreview);
+      node.addEventListener('change', updatePreview);
     });
 
     document.getElementById('pointUtmBtn').addEventListener('click', ()=>{
@@ -8607,7 +9026,7 @@
     addBtn.addEventListener('click', ()=>{
       const ll = updatePreview();
       if(!ll){
-        alert('الرجاء إدخال رقم منطقة (Zone) وإحداثي شرقي وشمالي صحيحين');
+        alert('الرجاء إدخال إحداثي صحيح في الوضع المختار');
         return;
       }
       pushStateToUndo();
@@ -8626,7 +9045,7 @@
       if(e.key==='Escape' && hud.style.display==='block') closeHud();
     });
   })();
-  /* ── نهاية Point UTM Tool ─────────────────────────────────────────── */
+  /* ── نهاية Point UTM/ETM/Geo Tool ─────────────────────────────────────────── */
 
 })();
 </script>
