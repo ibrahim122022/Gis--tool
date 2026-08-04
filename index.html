@@ -115,6 +115,7 @@
   .search-empty{text-align:center;color:var(--text-muted);font-size:11.5px;padding:14px 0;}
   .search-loading{text-align:center;color:var(--teal);font-size:11.5px;padding:14px 0;}
   .tool-btn[data-tool="divide"]{--tc:#2a9d5c;}
+  .tool-btn[data-tool="split"]{--tc:#c0392b;}
 
   .tool-btn:hover:not(:disabled){
     color:var(--tc, var(--teal));
@@ -822,6 +823,13 @@
                 <circle cx="20.5" cy="14.5" r="1.8" fill="currentColor" stroke="none"/>
               </svg><span>تقسيم</span>
             </button>
+            <button class="tool-btn" data-tool="split" title="قطع مضلع بخط حر ترسمه، أو تقطيع خط من نقطة (زي أداة Split في ArcGIS Pro)">
+              <svg viewBox="0 0 24 24">
+                <polygon points="12,3 21,9 18,20 6,20 3,9" fill="currentColor" opacity=".14" stroke-width="1.8" stroke-linejoin="round"/>
+                <line x1="2" y1="12" x2="22" y2="12" stroke-width="2.2" stroke-dasharray="3 2.2"/>
+                <path d="M9 8.5l-3 3.5 3 3.5M15 8.5l3 3.5-3 3.5" stroke-width="1.8" fill="none"/>
+              </svg><span>قطع (Split)</span>
+            </button>
             <button class="tool-btn" data-tool="measure" title="قياس المسافة بين نقطتين">
               <svg viewBox="0 0 24 24">
                 <line x1="3.5" y1="20.5" x2="20.5" y2="3.5" stroke-width="2.4"/>
@@ -1492,6 +1500,16 @@
         </div>
       </div>
 
+      <!-- ── Split (قطع) HUD ── -->
+      <div class="rect-hud" id="splitHud" style="width:250px;border-color:#c0392b;display:none;position:fixed;top:56px;left:50%;transform:translateX(-50%);z-index:965;">
+        <h4 style="color:#c0392b;">✂ قطع (Split)</h4>
+        <div id="splitHudMsg" style="font-size:11.5px;color:var(--text-muted);line-height:1.6;margin-bottom:8px;">اضغط على المضلع أو الخط اللي عايز تقطعه</div>
+        <div class="row-btns" style="margin-top:6px;">
+          <button class="btn-cancel" id="splitCancelBtn">إلغاء</button>
+          <button class="btn-create" id="splitFinishBtn" style="background:#c0392b;display:none;">✔ تم القطع</button>
+        </div>
+      </div>
+
       <!-- ── لوحة التحديد المتعدد ── -->
       <div class="rect-hud" id="bulkSelectHud" style="width:250px;border-color:#C9973F;display:none;position:fixed;top:56px;left:50%;transform:translateX(-50%);z-index:965;">
         <h4 style="color:#C9973F;">🔲 تحديد متعدد</h4>
@@ -2083,6 +2101,12 @@
   // --- Divide tool state ---
   let dividePendingLayerId = null, dividePendingFeatureId = null;
   let divideAngleMode = null; // null | 'drawline' | 'edge' — وضع تحديد اتجاه التقسيم من الخريطة
+
+  // ── حالة أداة القطع (Split) ──
+  let splitTargetLayerId = null, splitTargetFeatureId = null;
+  let splitCutCoords = [];          // نقاط خط القطع (للمضلعات) [[lat,lng],...]
+  let splitAwaitingLineClick = false; // مستني كليك واحد على خط عشان يقطعه من عنده
+  let splitPreviewLine = null, splitPreviewMarkers = [];
   let divideDrawPt1 = null;   // أول نقطة عند رسم خط الاتجاه
   let divideTempMarker = null, divideTempLine = null; // عناصر مؤقتة أثناء الرسم/الاختيار
   let divideComputedAngle = null; // الزاوية المحسوبة من الرسم أو من الضلع المختار
@@ -4748,6 +4772,34 @@
   });
 
   /* ---------- استخراج مباني OpenStreetMap للمنطقة الظاهرة على الخريطة ---------- */
+  const OVERPASS_MIRRORS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass.openstreetmap.ru/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter'
+  ];
+  async function fetchOverpass(query){
+    let lastErr = null;
+    for(const endpoint of OVERPASS_MIRRORS){
+      try{
+        document.getElementById('stHint').textContent = `⏳ بيدور على مباني OpenStreetMap... (بيجرّب سيرفر: ${endpoint.replace('https://','').split('/')[0]})`;
+        const res = await fetch(endpoint, {
+          method:'POST',
+          headers:{'Content-Type':'application/x-www-form-urlencoded'},
+          body: 'data=' + encodeURIComponent(query)
+        });
+        if(!res.ok) throw new Error(`HTTP ${res.status} من ${endpoint}`);
+        const data = await res.json();
+        return data;
+      }catch(e){
+        lastErr = e;
+        console.warn('Overpass mirror failed:', endpoint, e);
+        continue; // جرّب السيرفر التالي
+      }
+    }
+    throw lastErr || new Error('كل سيرفرات Overpass فشلت');
+  }
+
   async function extractOSMBuildings(){
     if(map.getZoom() < 15){
       alert('زوم أكتر شوية على المنطقة اللي عايز تستخرج مبانيها الأول (زووم 15 أو أعلى)، عشان الاستعلام ميكونش واسع جدًا.');
@@ -4756,12 +4808,9 @@
     const b = map.getBounds();
     const bbox = `${b.getSouth()},${b.getWest()},${b.getNorth()},${b.getEast()}`;
     const query = `[out:json][timeout:25];way["building"](${bbox});(._;>;);out body;`;
-    const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
     document.getElementById('stHint').textContent = '⏳ بيدور على مباني OpenStreetMap في المنطقة الظاهرة حاليًا...';
     try{
-      const res = await fetch(url);
-      if(!res.ok) throw new Error('overpass-error');
-      const data = await res.json();
+      const data = await fetchOverpass(query);
       const nodesById = {};
       data.elements.forEach(elm=>{ if(elm.type==='node') nodesById[elm.id] = [elm.lat, elm.lon]; });
       const ways = data.elements.filter(elm=> elm.type==='way' && elm.tags && elm.tags.building);
@@ -4792,7 +4841,7 @@
         : '⚠️ مفيش مباني صالحة اتلاقت في المنطقة دي.';
     }catch(e){
       console.error(e);
-      document.getElementById('stHint').textContent = '❌ حصل خطأ في الاتصال بـ OpenStreetMap — تأكد من الإنترنت وجرب تاني.';
+      document.getElementById('stHint').textContent = `❌ حصل خطأ أثناء الاتصال بكل سيرفرات OpenStreetMap المتاحة: ${e && e.message ? e.message : e}. ممكن يكون في مشكلة إنترنت عندك أو السيرفرات كلها مشغولة دلوقتي — جرّب تاني بعد شوية.`;
     }
   }
   document.getElementById('osmBuildingsBtn').addEventListener('click', extractOSMBuildings);
@@ -5237,6 +5286,38 @@
             document.getElementById('stHint').textContent='✂ حدد إعدادات التقسيم ثم اضغط تطبيق';
             return;
           }
+          if(tool==='split'){
+            L.DomEvent.stopPropagation(e);
+            if(!splitTargetFeatureId){
+              if(f.type!=='polygon' && f.type!=='rectangle' && f.type!=='line'){
+                document.getElementById('stHint').textContent='⚠️ أداة القطع تشتغل بس على مضلع أو خط';
+                return;
+              }
+              splitTargetLayerId = layer.id; splitTargetFeatureId = f.id;
+              selection = {layerId:layer.id, featureId:f.id};
+              renderFeatures();
+              document.getElementById('splitHud').style.display='block';
+              if(f.type==='line'){
+                splitAwaitingLineClick = true;
+                document.getElementById('splitHudMsg').textContent='دوس على أي نقطة قريبة من الخط لتقطعه من عندها';
+                document.getElementById('splitFinishBtn').style.display='none';
+                document.getElementById('stHint').textContent='✂ دوس على نقطة على الخط لتقطعه من عندها';
+              } else {
+                splitCutCoords = [];
+                document.getElementById('splitHudMsg').textContent='ارسم خط القطع فوق المضلع: دوس نقطة نقطة (لازم يعدّي المضلع بالكامل)، وبعدين دوس «✔ تم القطع»';
+                document.getElementById('splitFinishBtn').style.display='inline-block';
+                document.getElementById('stHint').textContent='✂ ارسم خط القطع عبر المضلع';
+              }
+              return;
+            }
+            if(splitAwaitingLineClick){
+              performLineSplitAtPoint(e.latlng);
+              return;
+            }
+            splitCutCoords.push([e.latlng.lat, e.latlng.lng]);
+            updateSplitPreview();
+            return;
+          }
           if(tool!=='select') return;
           L.DomEvent.stopPropagation(e);
           cycleSelectAtPoint(e.latlng);
@@ -5604,6 +5685,19 @@
       handleDivideMapClick(e.latlng);
       return;
     }
+    if(tool==='split'){
+      if(!splitTargetFeatureId){
+        document.getElementById('stHint').textContent='⚠️ اضغط على المضلع أو الخط اللي عايز تقطعه الأول';
+        return;
+      }
+      if(splitAwaitingLineClick){
+        performLineSplitAtPoint(e.latlng);
+        return;
+      }
+      splitCutCoords.push([e.latlng.lat, e.latlng.lng]);
+      updateSplitPreview();
+      return;
+    }
     if(tool==='select'){
       if(window.innerWidth > 760) { selection=null; renderAttrPanel(); renderFeatures(); }
       return;
@@ -5866,6 +5960,7 @@
       document.getElementById('lengthsCloseBtn').style.display = 'none';
       hideInlineValueHud();
       rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none'; document.getElementById('pointUtmHud').style.display='none'; document.getElementById('divideHud').style.display='none'; dividePendingLayerId=null; dividePendingFeatureId=null;
+      resetSplitState();
       document.getElementById('areaCalcHud').style.display='none';
       document.getElementById('snapSettingsHud').style.display='none';
       cancelDivideAngleMode(); divideComputedAngle = null;
@@ -5999,6 +6094,7 @@
     if(measureLine){ map.removeLayer(measureLine); measureLine=null; }
     document.getElementById('divideHud').style.display='none';
     dividePendingLayerId=null; dividePendingFeatureId=null;
+    resetSplitState();
     document.getElementById('stTemp').textContent='';
     document.getElementById('penHud').style.display = (tool==='pen') ? 'block' : 'none';
     penDrawing = null;
@@ -6007,6 +6103,11 @@
       document.getElementById('stHint').textContent = 'مستطيل بـ 3 نقاط: انقر 1 للبدء، 2 للاتجاه (يقفل مغناطيسياً للزوايا الرئيسية)، 3 لتحديد الطول...';
     } else if (tool === 'divide') {
       document.getElementById('stHint').textContent = '✂ انقر على أي مضلع لتقسيمه إلى أجزاء متساوية';
+    } else if (tool === 'split') {
+      document.getElementById('splitHud').style.display='block';
+      document.getElementById('splitHudMsg').textContent='اضغط على المضلع أو الخط اللي عايز تقطعه';
+      document.getElementById('splitFinishBtn').style.display='none';
+      document.getElementById('stHint').textContent = '✂ اضغط على المضلع أو الخط اللي عايز تقطعه';
     } else if (tool === 'pen') {
       document.getElementById('stHint').textContent = '✏️ ارسم حر بالماوس أو بصباعك — اختار نوع الفرشة واللون والنعومة من اللوحة';
     } else {
@@ -7347,6 +7448,146 @@
     }
     return false;
   }
+
+  /* ========== أداة القطع (Split) — زي أداة Split في ArcGIS Pro ========== */
+  function resetSplitState(){
+    splitTargetLayerId = null; splitTargetFeatureId = null;
+    splitCutCoords = []; splitAwaitingLineClick = false;
+    if(splitPreviewLine){ map.removeLayer(splitPreviewLine); splitPreviewLine=null; }
+    splitPreviewMarkers.forEach(m=>map.removeLayer(m)); splitPreviewMarkers=[];
+    document.getElementById('splitHud').style.display='none';
+  }
+
+  function updateSplitPreview(){
+    if(splitPreviewLine){ map.removeLayer(splitPreviewLine); splitPreviewLine=null; }
+    splitPreviewMarkers.forEach(m=>map.removeLayer(m)); splitPreviewMarkers=[];
+    if(splitCutCoords.length>=2){
+      splitPreviewLine = L.polyline(splitCutCoords, {color:'#c0392b', weight:2.5, dashArray:'6 4'}).addTo(map);
+    }
+    splitCutCoords.forEach(c=>{
+      const m = L.circleMarker(c, {radius:5, color:'#c0392b', weight:2, fillColor:'#fff', fillOpacity:1}).addTo(map);
+      splitPreviewMarkers.push(m);
+    });
+  }
+
+  // قطع خط (LineString) عند أقرب نقطة لمكان الكليك
+  function performLineSplitAtPoint(latlng){
+    const f = getFeature(splitTargetLayerId, splitTargetFeatureId);
+    if(!f || f.type!=='line' || !f.coords || f.coords.length<2){
+      document.getElementById('stHint').textContent='⚠️ تعذر العثور على الخط المطلوب قطعه';
+      resetSplitState(); document.querySelector('.tool-btn[data-tool="select"]').click();
+      return;
+    }
+    try{
+      const lineTurf = turf.lineString(f.coords.map(c=>[c[1],c[0]]));
+      const pt = turf.point([latlng.lng, latlng.lat]);
+      const snapped = turf.nearestPointOnLine(lineTurf, pt);
+      const idx = snapped.properties.index;
+      const sc = snapped.geometry.coordinates; // [lng,lat]
+      const snappedLatLng = [sc[1], sc[0]];
+      if(idx<0 || idx>=f.coords.length-1){
+        document.getElementById('stHint').textContent='⚠️ النقطة دي طرف الخط، مش نقطة تقطيع صالحة';
+        return;
+      }
+      let part1 = f.coords.slice(0, idx+1).concat([snappedLatLng]);
+      let part2 = [snappedLatLng].concat(f.coords.slice(idx+1));
+      // لو النقطة قريبة جدًا من رأس موجود فعلًا، منتجش جزء بطول شبه صفري
+      if(part1.length<2 || part2.length<2){
+        document.getElementById('stHint').textContent='⚠️ اختر نقطة تانية أبعد عن طرف الخط';
+        return;
+      }
+      pushStateToUndo();
+      const layer = getLayer(splitTargetLayerId);
+      const idxInLayer = layer.features.findIndex(x=>x.id===f.id);
+      const baseName = (f.attrs && f.attrs.name) ? f.attrs.name : null;
+      const f1 = {id:uid(), type:'line', coords:part1, attrs:Object.assign({}, f.attrs||{})};
+      const f2 = {id:uid(), type:'line', coords:part2, attrs:Object.assign({}, f.attrs||{})};
+      if(baseName){ f1.attrs.name = baseName+' - 1'; f2.attrs.name = baseName+' - 2'; }
+      layer.features.splice(idxInLayer, 1, f1, f2);
+      selection = {layerId:layer.id, featureId:f1.id};
+      renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
+      document.getElementById('stHint').textContent='✅ اتقطع الخط لجزئين';
+    }catch(err){
+      console.error(err);
+      document.getElementById('stHint').textContent='❌ حصل خطأ أثناء قطع الخط: '+(err&&err.message?err.message:err);
+    }
+    resetSplitState();
+    document.querySelector('.tool-btn[data-tool="select"]').click();
+  }
+
+  // قطع مضلع بخط حر يعديه بالكامل — عن طريق إنشاء "شريط" رفيع جدًا حوالين خط القطع وطرحه من المضلع (turf.difference)
+  function splitPolygonByLine(polyCoordsLatLng, cutCoordsLatLng){
+    const poly = toTurfPolygon(polyCoordsLatLng);
+    if(!poly) return null;
+    const cutLine = turf.lineString(cutCoordsLatLng.map(c=>[c[1], c[0]]));
+    // مد طرفي خط القطع شوية لبره المضلع عشان نضمن قطع كامل حتى لو المستخدم ما وصلش للحافة بالظبط
+    const extended = extendLineEnds(cutCoordsLatLng, 0.15); // تمديد 15% من طول الخط من كل طرف
+    const extLine = turf.lineString(extended.map(c=>[c[1], c[0]]));
+    const bufferStrip = turf.buffer(extLine, 0.00005, {units:'kilometers'}); // ~5 سم عرض القطع
+    let result;
+    try{ result = turf.difference(poly, bufferStrip); }catch(err){ console.error(err); return null; }
+    if(!result) return null;
+    const geomType = result.geometry.type;
+    const polysRings = geomType==='MultiPolygon' ? result.geometry.coordinates : [result.geometry.coordinates];
+    if(polysRings.length < 2) return null; // ماحصلش قطع فعلي (الخط ميعديش المضلع بالكامل)
+    return polysRings.map(rings => rings[0].map(c=>[c[1], c[0]]));
+  }
+
+  // تمديد طرفي خط متعدد النقاط بنسبة من طوله الكلي (لضمان قطع كامل عبر حدود المضلع)
+  function extendLineEnds(coords, ratio){
+    if(coords.length<2) return coords;
+    const first = coords[0], second = coords[1];
+    const last = coords[coords.length-1], beforeLast = coords[coords.length-2];
+    const totalLen = turf.length(turf.lineString(coords.map(c=>[c[1],c[0]])), {units:'kilometers'});
+    const extDist = Math.max(totalLen*ratio, 0.001); // بحد أدنى 1 متر تمديد
+    const bearingStart = turf.bearing(turf.point([second[1],second[0]]), turf.point([first[1],first[0]]));
+    const bearingEnd = turf.bearing(turf.point([beforeLast[1],beforeLast[0]]), turf.point([last[1],last[0]]));
+    const newFirst = turf.destination(turf.point([first[1],first[0]]), extDist, bearingStart, {units:'kilometers'});
+    const newLast = turf.destination(turf.point([last[1],last[0]]), extDist, bearingEnd, {units:'kilometers'});
+    const nf = newFirst.geometry.coordinates, nl = newLast.geometry.coordinates;
+    return [[nf[1],nf[0]], ...coords.slice(1,-1), [nl[1],nl[0]]];
+  }
+
+  function finishPolygonSplit(){
+    if(splitCutCoords.length<2){
+      document.getElementById('stHint').textContent='⚠️ لازم ترسم خط قطع نقطتين على الأقل';
+      return;
+    }
+    const f = getFeature(splitTargetLayerId, splitTargetFeatureId);
+    if(!f){
+      document.getElementById('stHint').textContent='⚠️ تعذر العثور على المضلع المطلوب قطعه';
+      resetSplitState(); document.querySelector('.tool-btn[data-tool="select"]').click();
+      return;
+    }
+    const pieces = splitPolygonByLine(f.coords, splitCutCoords);
+    if(!pieces){
+      document.getElementById('stHint').textContent='⚠️ الخط لازم يعدّي المضلع بالكامل من طرف للتاني عشان يقسمه — جرّب تاني وطوّل الخط أكتر';
+      return;
+    }
+    pushStateToUndo();
+    const layer = getLayer(splitTargetLayerId);
+    const idxInLayer = layer.features.findIndex(x=>x.id===f.id);
+    const baseName = (f.attrs && f.attrs.name) ? f.attrs.name : null;
+    const newFeatures = pieces.map((coords,i)=>{
+      const nf = {id:uid(), type:'polygon', coords, attrs:Object.assign({}, f.attrs||{})};
+      if(baseName) nf.attrs.name = baseName+' - '+(i+1);
+      return nf;
+    });
+    layer.features.splice(idxInLayer, 1, ...newFeatures);
+    selection = {layerId:layer.id, featureId:newFeatures[0].id};
+    renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
+    document.getElementById('stHint').textContent = `✅ اتقطع المضلع لـ ${newFeatures.length} أجزاء`;
+    resetSplitState();
+    document.querySelector('.tool-btn[data-tool="select"]').click();
+  }
+
+  document.getElementById('splitFinishBtn').addEventListener('click', finishPolygonSplit);
+  document.getElementById('splitCancelBtn').addEventListener('click', ()=>{
+    resetSplitState();
+    document.getElementById('stHint').textContent='تم إلغاء القطع';
+    document.querySelector('.tool-btn[data-tool="select"]').click();
+  });
+
   document.getElementById('circleCreate').addEventListener('click', ()=>{
     if(!circlePending)return;
     pushStateToUndo();
