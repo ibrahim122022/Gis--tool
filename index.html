@@ -1108,6 +1108,7 @@
               <button class="ly-add-item" data-type="table" data-key="lengths">📏 جدول أطوال الأضلاع</button>
               <button class="ly-add-item" data-type="table" data-key="vertices">📍 جدول إحداثيات القطاعات</button>
               <button class="ly-add-item" data-type="table" data-key="attrs">🗂️ جدول المضلعات الداخلية</button>
+              <button class="ly-add-item" data-type="table" data-key="surveySheets">🗺️ جدول لوحات المساحة (تقريبي)</button>
               <button class="ly-add-item" data-type="northArrow">🧭 اتجاه الشمال</button>
               <button class="ly-add-item" data-type="scaleBar">📏 مقياس الرسم</button>
               <button class="ly-add-item" data-type="polygonTitle">🔤 اسم المضلع المرتبط</button>
@@ -2978,6 +2979,83 @@
     return results;
   }
 
+  // ===== حساب لوحات هيئة المساحة المصرية (تكشيف الخرائط) =====
+  // النظام مبني على تكشيف الخريطة الدولية (IMW) المستخدم فعليًا في تسمية لوحات مصر 1:1,000,000 و1:250,000
+  // (تم التحقق من الصيغة بأمثلة فعلية: NH35-1 إلخ). أما 1:100,000/50,000/25,000 فتسمياتها الرسمية عند
+  // الهيئة تاريخية/بأسماء أماكن وليست ناتجة عن معادلة، لذلك نديها هنا تقسيم هندسي تقريبي فقط (غير رسمي).
+  function computeEsaSurveyGrid(lat, lng){
+    const rowLetters = ['A','B','C','D','E','F','G','H','J','K','L','M','N','P','Q','R','S','T','U','V'];
+    const hemi = lat>=0 ? 'N' : 'S';
+    const latAbs = Math.abs(lat);
+    const rowIdx = Math.floor(latAbs/4);
+    const rowLetter = rowLetters[Math.min(rowIdx, rowLetters.length-1)];
+    const col = Math.floor((lng+180)/6) + 1;
+    const latBandMin = lat>=0 ? rowIdx*4 : -(rowIdx*4+4);
+    const latBandMax = latBandMin + 4;
+    const lonBandMin = (col-1)*6 - 180;
+    const lonBandMax = lonBandMin + 6;
+    const name1M = hemi + rowLetter + col;
+
+    // تقسيم 1:250000 (16 لوحة، 4 صفوف × 4 أعمدة، كل لوحة 1° عرض × 1.5° طول)
+    const subRow = Math.floor((latBandMax - lat)/1);   // 0 = أعلى صف (شمالًا)
+    const subCol = Math.floor((lng - lonBandMin)/1.5); // 0 = أول عمود (غربًا)
+    const num250 = Math.min(subRow,3)*4 + Math.min(subCol,3) + 1;
+    const s250_latMax = latBandMax - Math.min(subRow,3)*1;
+    const s250_latMin = s250_latMax - 1;
+    const s250_lonMin = lonBandMin + Math.min(subCol,3)*1.5;
+    const s250_lonMax = s250_lonMin + 1.5;
+    const name250 = `${name1M}-${num250}`;
+
+    // تقسيم تقريبي (غير رسمي) لمقاييس 100k/50k/25k عن طريق تنصيف كل مربع لـ 4 أرباع بالتتابع
+    function quarter(latMin,latMax,lonMin,lonMax,lat,lng){
+      const midLat=(latMin+latMax)/2, midLon=(lonMin+lonMax)/2;
+      const north = lat>=midLat, east = lng>=midLon;
+      return {
+        label: (north?'ش':'ج')+(east?'ق':'غ'), // شمال/جنوب + شرق/غرب
+        latMin: north?midLat:latMin, latMax: north?latMax:midLat,
+        lonMin: east?midLon:lonMin, lonMax: east?lonMax:midLon
+      };
+    }
+    const q100 = quarter(s250_latMin,s250_latMax,s250_lonMin,s250_lonMax, lat,lng);
+    const q50  = quarter(q100.latMin,q100.latMax,q100.lonMin,q100.lonMax, lat,lng);
+    const q25  = quarter(q50.latMin,q50.latMax,q50.lonMin,q50.lonMax, lat,lng);
+
+    return {
+      s1M:  {name:name1M,  latMin:latBandMin, latMax:latBandMax, lonMin:lonBandMin, lonMax:lonBandMax},
+      s250: {name:name250, latMin:s250_latMin, latMax:s250_latMax, lonMin:s250_lonMin, lonMax:s250_lonMax},
+      q100, q50, q25
+    };
+  }
+
+  function buildSurveySheetsTableHTML(f){
+    if(!f || !f.coords || f.coords.length<3){
+      return '<div style="padding:5px;color:#888;font-size:10px;">مفيش مضلع مرتبط بيها</div>';
+    }
+    // مركز المضلع (متوسط الرؤوس) + الركن الجنوبي الغربي الفعلي للمضلع نفسه
+    const lats=f.coords.map(c=>c[0]), lngs=f.coords.map(c=>c[1]);
+    const cLat = lats.reduce((a,b)=>a+b,0)/lats.length;
+    const cLng = lngs.reduce((a,b)=>a+b,0)/lngs.length;
+    const swLat = Math.min(...lats), swLng = Math.min(...lngs);
+
+    const g = computeEsaSurveyGrid(cLat, cLng);
+    const extentStr = (o)=>`${o.latMin.toFixed(4)}° - ${o.latMax.toFixed(4)}° N&nbsp;|&nbsp;${o.lonMin.toFixed(4)}° - ${o.lonMax.toFixed(4)}° E`;
+
+    return `
+      <table class="nb-table">
+        <tr><th>المقياس</th><th>اللوحة (تقريبي/مؤكد)</th><th>حدود اللوحة التقريبية</th></tr>
+        <tr><td>1:1,000,000</td><td><b>${g.s1M.name}</b> ✓</td><td style="font-size:8px;">${extentStr(g.s1M)}</td></tr>
+        <tr><td>1:250,000</td><td><b>${g.s250.name}</b> ✓</td><td style="font-size:8px;">${extentStr(g.s250)}</td></tr>
+        <tr><td>1:100,000</td><td>الربع ${g.q100.label} من ${g.s250.name} <span style="color:#e08b00;">(تقريبي)</span></td><td style="font-size:8px;">${extentStr(g.q100)}</td></tr>
+        <tr><td>1:50,000</td><td>الربع ${g.q50.label} من سابقتها <span style="color:#e08b00;">(تقريبي)</span></td><td style="font-size:8px;">${extentStr(g.q50)}</td></tr>
+        <tr><td>1:25,000</td><td>الربع ${g.q25.label} من سابقتها <span style="color:#e08b00;">(تقريبي)</span></td><td style="font-size:8px;">${extentStr(g.q25)}</td></tr>
+        <tr><td>1:2,500</td><td colspan="2" style="text-align:right;font-size:8.5px;">لوحات الزمام غير مبنية على شبكة هندسية — الاسم الرسمي يحتاج فهرس الهيئة. الإحداثي الجنوبي الغربي للمضلع نفسه:<br><b>${decToDMSStr(swLat,true)} &nbsp; ${decToDMSStr(swLng,false)}</b></td></tr>
+      </table>
+      <div style="padding:4px 2px;font-size:7.5px;color:#a66;line-height:1.5;">
+        ✓ = مبني على نظام التكشيف الدولي المؤكد (IMW) المستخدم فعليًا في تسمية لوحات مصر 1M/250k.<br>
+        باقي المقاييس تقسيم هندسي تقريبي فقط لتحديد الموقع النسبي — مش أسماء اللوحات الرسمية عند الهيئة (دي محتاجة فهرس رسمي).
+      </div>`;
+  }
+
   function buildAttrsTableHTML(f){
     const contained = getPolygonsContainedIn(f);
     if(!contained.length){
@@ -3124,8 +3202,8 @@
     } else if(el.type === 'table'){
       const crsLabels = {'EPSG:4326':'(DD)', 'EPSG:32635':'(UTM 35N)', 'EPSG:32636':'(UTM 36N)', 'EPSG:22992':'(الحزام الأحمر)', 'EPSG:22993':'(الحزام الأرجواني)'};
       const verticesCrsLabel = crsLabels[el.displayCrs] || '(DD)';
-      const titles = {area:'📐 المساحة', lengths:'📏 أطوال الأضلاع', vertices:'📍 إحداثيات القطاعات '+verticesCrsLabel, attrs:'🗂️ بيانات المضلعات الداخلية'};
-      const html = f ? (el.tableKey==='area'?buildAreaTableHTML(f):el.tableKey==='lengths'?buildLengthsTableHTML(f):el.tableKey==='vertices'?buildVerticesTableHTML(f, el.displayCrs):buildAttrsTableHTML(f)) : '<div style="padding:4px;color:#999;">مفيش مضلع مرتبط بيها</div>';
+      const titles = {area:'📐 المساحة', lengths:'📏 أطوال الأضلاع', vertices:'📍 إحداثيات القطاعات '+verticesCrsLabel, attrs:'🗂️ بيانات المضلعات الداخلية', surveySheets:'🗺️ لوحات هيئة المساحة (تقريبي)'};
+      const html = f ? (el.tableKey==='area'?buildAreaTableHTML(f):el.tableKey==='lengths'?buildLengthsTableHTML(f):el.tableKey==='vertices'?buildVerticesTableHTML(f, el.displayCrs):el.tableKey==='surveySheets'?buildSurveySheetsTableHTML(f):buildAttrsTableHTML(f)) : '<div style="padding:4px;color:#999;">مفيش مضلع مرتبط بيها</div>';
       box.classList.add('ly-el-table');
       box.style.fontSize = Math.max(7, pxW*0.012) + 'px';
       box.innerHTML = `<div class="ly-table-head">${titles[el.tableKey]||''}</div><div class="ly-table-body">${html}</div>`;
