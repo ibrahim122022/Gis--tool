@@ -16,8 +16,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root{
     --bg:#F1E9DB;
@@ -989,15 +988,9 @@
       <div id="driveMenuPopup" style="display:none;position:fixed;top:56px;left:50%;transform:translateX(-50%);z-index:970;">
         <div class="drive-control disconnected" id="driveControl">
           <svg viewBox="0 0 24 24"><path d="M7 15l-4-7 4-7h10l4 7-4 7z"/><path d="M3 8h18M9 15l3 5 3-5"/></svg>
-          <span class="drive-msg" id="driveMsg">جاري الاتصال بالتخزين السحابي...</span>
-          <button id="driveNameBtn" title="حدد اسمك عشان يظهر لأصدقائك">اسمي</button>
-          <button id="driveJoinBtn" title="ربط بـ ID صديقك لعرض رسمه على خريطتك (للقراءة فقط)">ربط بصديق</button>
-          <button id="driveCopyIdBtn" title="نسخ الـ ID بتاعك لمشاركته">نسخ ID</button>
-        </div>
-        <div class="drive-control" id="driveUpdateBanner" style="display:none;margin-top:6px;border-color:var(--accent);">
-          <span class="drive-msg" style="color:var(--accent);">🔄 فيه نسخة تانية على Drive</span>
-          <button id="driveImportBtn">استيراد</button>
-          <button id="driveDismissBtn" style="background:var(--bg-panel-2);color:var(--text-muted);">تجاهل</button>
+          <span class="drive-msg" id="driveMsg">مش متصل بـ Google Drive</span>
+          <button id="driveConnectBtn" title="سجّل دخول بحساب Google عشان يتحفظ شغلك في درايفك">اتصال بـ Drive</button>
+          <button id="driveRefreshBtn" title="تحديث من آخر نسخة محفوظة في Drive (لو فتحت من جهاز تاني)" style="display:none;">تحديث من Drive</button>
         </div>
       </div>
       
@@ -6233,10 +6226,6 @@
     const el = document.getElementById('driveMenuPopup');
     const opening = el.style.display !== 'block';
     el.style.display = opening ? 'block' : 'none';
-    if(opening){
-      // بيبان صف "فيه نسخة تانية" هنا بس لما المستخدم نفسه يفتح قائمة الدرايف — مفيش بانر تلقائي فوق الخريطة
-      driveUpdateBanner.style.display = pendingRemote ? 'flex' : 'none';
-    }
   }
   document.getElementById('driveMenuToggleBtn').addEventListener('click', (e)=>{ e.stopPropagation(); toggleDriveMenuPopup(); });
   document.getElementById('mobileDriveToggle').addEventListener('click', (e)=>{ e.stopPropagation(); toggleDriveMenuPopup(); });
@@ -8429,25 +8418,20 @@
     }
   };
 
-  /* ---------- Firebase Cloud Sync (بديل عن Google Drive OAuth) ---------- */
-  // ⚠️ لازم تحط بيانات مشروع Firebase بتاعك هنا. اعمل مشروع مجاني على
-  // https://console.firebase.google.com → أنشئ مشروع → من القائمة الجانبية
-  // فعّل "Realtime Database" → من إعدادات المشروع (⚙) → "Your apps" → أضف تطبيق ويب
-  // وانسخ القيم اللي هتظهر لك هنا بدل الكلام اللي بين علامتي تنصيص:
-  const firebaseConfig = {
-    apiKey: "AIzaSyDUeMggyxdnrawWvcDHk8154133dllgtOk",
-    authDomain: "gis-tool-6c519.firebaseapp.com",
-    databaseURL: "https://gis-tool-6c519-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "gis-tool-6c519",
-  };
+  /* ---------- Google Drive Cloud Sync (OAuth حقيقي — نطاق drive.file فقط) ---------- */
+  // كل مستخدم بيسجل دخول بحساب Google بتاعه، وشغله بيتحفظ في ملف واحد جوه درايفه
+  // الشخصي هو بس (نطاق drive.file يخلي الأداة تشوف/تعدّل الملفات اللي هي نفسها
+  // أنشأتها بس — مش أي حاجة تانية في الدرايف).
+  const DRIVE_CLIENT_ID = '815366486434-75k9n9er27ovj8gf12ph94s54bidk1pu.apps.googleusercontent.com';
+  const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+  const DRIVE_FILE_NAME = 'gis-tool-data.json';
 
-  let db = null, driveConnected = false, lastPushTime = 0;
+  let driveConnected = false, driveAccessToken = null, driveFileGoogleId = null, lastPushTime = 0;
+  let drivePushInFlight = false, drivePushPending = false, tokenClient = null;
   const driveMsgEl = document.getElementById('driveMsg');
   const driveControlEl = document.getElementById('driveControl');
-  const driveUpdateBanner = document.getElementById('driveUpdateBanner');
-  const driveImportBtn = document.getElementById('driveImportBtn');
-  const driveDismissBtn = document.getElementById('driveDismissBtn');
-  let pendingRemote = null;
+  const driveConnectBtn = document.getElementById('driveConnectBtn');
+  const driveRefreshBtn = document.getElementById('driveRefreshBtn');
 
   function setDriveMsg(text, connected){
     driveMsgEl.textContent = text;
@@ -8455,24 +8439,80 @@
     driveControlEl.classList.toggle('disconnected', !connected);
   }
 
-  function initFirebase(){
-    if(!firebaseConfig.apiKey || firebaseConfig.apiKey.indexOf('ضع_') === 0){
-      setDriveMsg('لازم تظبط بيانات Firebase في الكود الأول', false);
+  function initDriveAuth(){
+    if(typeof google === 'undefined' || !google.accounts){
+      setDriveMsg('لسه بيحمّل مكتبة Google...', false);
+      setTimeout(initDriveAuth, 500);
       return;
     }
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: DRIVE_CLIENT_ID,
+      scope: DRIVE_SCOPE,
+      callback: async (resp) => {
+        if(resp.error){
+          setDriveMsg('فشل تسجيل الدخول: ' + resp.error, false);
+          return;
+        }
+        driveAccessToken = resp.access_token;
+        driveConnected = true;
+        driveConnectBtn.textContent = 'متصل ✓';
+        driveRefreshBtn.style.display = '';
+        setDriveMsg('جاري تحميل شغلك من Drive...', true);
+        await loadFromDrive();
+        scheduleSave();
+      }
+    });
+  }
+
+  driveConnectBtn.addEventListener('click', ()=>{
+    if(!tokenClient){ setDriveMsg('استنى لحظة، لسه بيتظبط...', false); initDriveAuth(); return; }
+    tokenClient.requestAccessToken({prompt: driveConnected ? '' : 'consent'});
+  });
+
+  driveRefreshBtn.addEventListener('click', ()=>{
+    if(!driveConnected) return;
+    loadFromDrive(true);
+  });
+
+  async function driveApiFetch(url, options){
+    options = options || {};
+    options.headers = Object.assign({}, options.headers, {Authorization: 'Bearer ' + driveAccessToken});
+    const res = await fetch(url, options);
+    if(res.status === 401){
+      driveConnected = false;
+      setDriveMsg('لازم تسجل دخول تاني', false);
+      throw new Error('unauthorized');
+    }
+    return res;
+  }
+
+  async function findDriveFile(){
+    const q = encodeURIComponent(`name='${DRIVE_FILE_NAME}' and trashed=false`);
+    const res = await driveApiFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,modifiedTime)&spaces=drive`);
+    const data = await res.json();
+    return (data.files && data.files[0]) || null;
+  }
+
+  async function loadFromDrive(manual){
     try{
-      firebase.initializeApp(firebaseConfig);
-      db = firebase.database();
-      driveConnected = true;
-      if(!state.driveFileId) state.driveFileId = 'u_' + uid() + Date.now().toString(36);
-      setDriveMsg('✓ متصل بالتخزين السحابي', true);
-      scheduleSave();
-      listenToMyData();
-      state.friendFileIds.forEach(fid => listenToFriend(fid));
-      pushToDrive();
+      const file = await findDriveFile();
+      if(!file){
+        setDriveMsg('✓ متصل — مفيش شغل سابق على Drive، هيتحفظ شغلك أول ما تعدّل', true);
+        pushToDrive();
+        return;
+      }
+      driveFileGoogleId = file.id;
+      const res = await driveApiFetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`);
+      const payload = await res.json();
+      if(payload && payload.geojson){
+        applyRemoteGeoJSON(payload.geojson);
+        setDriveMsg(manual ? '✓ اتحدّث من Drive' : '✓ اتحمّل شغلك من Drive', true);
+      } else {
+        setDriveMsg('✓ متصل بـ Drive', true);
+      }
     }catch(e){
-      setDriveMsg('فشل الاتصال بـ Firebase: ' + e.message, false);
-      console.error('firebase init failed', e);
+      console.error('drive load failed', e);
+      if(driveConnected) setDriveMsg('فشل التحميل من Drive: ' + e.message, true);
     }
   }
 
@@ -8580,25 +8620,46 @@
   }
   document.getElementById('exportKmzBtn').addEventListener('click', exportAsKMZ);
 
-  let drivePushInFlight=false;
-  function pushToDrive(){
-    if(!driveConnected || !db || drivePushInFlight) return;
+  async function pushToDrive(){
+    if(!driveConnected) return;
+    if(drivePushInFlight){ drivePushPending = true; return; }
     drivePushInFlight = true;
-    const payload = {
-      name: state.userName || null,
-      geojson: buildGeoJSON(),
-      updatedAt: firebase.database.ServerValue.TIMESTAMP
-    };
-    db.ref('gis-users/' + state.driveFileId).set(payload)
-      .then(()=>{
-        lastPushTime = Date.now();
-        setDriveMsg('✓ محفوظ سحابيًا الآن', true);
-      })
-      .catch(e=>{
-        setDriveMsg('فشل الرفع: ' + e.message, true);
-        console.error('push failed', e);
-      })
-      .finally(()=>{ drivePushInFlight = false; });
+    try{
+      const payload = { geojson: buildGeoJSON(), updatedAt: Date.now() };
+      const body = JSON.stringify(payload);
+      if(!driveFileGoogleId){
+        const existing = await findDriveFile();
+        if(existing) driveFileGoogleId = existing.id;
+      }
+      if(!driveFileGoogleId){
+        const metadata = {name: DRIVE_FILE_NAME, mimeType: 'application/json'};
+        const boundary = 'gistoolboundary';
+        const multipartBody =
+          `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+          `--${boundary}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${boundary}--`;
+        const res = await driveApiFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+          method: 'POST',
+          headers: {'Content-Type': `multipart/related; boundary=${boundary}`},
+          body: multipartBody
+        });
+        const data = await res.json();
+        driveFileGoogleId = data.id;
+      } else {
+        await driveApiFetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileGoogleId}?uploadType=media`, {
+          method: 'PATCH',
+          headers: {'Content-Type': 'application/json'},
+          body
+        });
+      }
+      lastPushTime = Date.now();
+      setDriveMsg('✓ محفوظ في Drive الآن', true);
+    }catch(e){
+      console.error('push failed', e);
+      if(driveConnected) setDriveMsg('فشل الرفع لـ Drive: ' + e.message, true);
+    }finally{
+      drivePushInFlight = false;
+      if(drivePushPending){ drivePushPending = false; pushToDrive(); }
+    }
   }
 
   document.getElementById('exportBtn').addEventListener('click', ()=>{
@@ -8759,38 +8820,11 @@
     document.getElementById('stHint').textContent = '✅ اتحمّل سكريبت الـ ArcPy — شغّله من ArcGIS Pro Python Window أو IDLE بعد تعديل مسار الجيوداتا بيز';
   });
 
-  document.getElementById('driveNameBtn').addEventListener('click', ()=>{
-    const name = prompt('اكتب اسمك (هيظهر لأصدقائك عشان يعرفوا رسمتك بسهولة):', state.userName || '');
-    if(name===null) return;
-    const trimmed = name.trim();
-    if(!trimmed) return;
-    state.userName = trimmed;
-    scheduleSave();
-    if(driveConnected) pushToDrive();
-  });
-
-  document.getElementById('driveJoinBtn').addEventListener('click', ()=>{
-    const id = prompt('الصق الـ ID بتاع صديقك عشان تشوف رسمه على الخريطة (للعرض فقط، مش هيتعدل):');
-    if(!id) return;
-    const fid = id.trim();
-    if(state.friendFileIds.includes(fid)){ alert('انت متربط بالصديق ده بالفعل.'); return; }
-    state.friendFileIds.push(fid); scheduleSave();
-    if(driveConnected) listenToFriend(fid);
-    else alert('التخزين السحابي لسه مش متظبط. راجع إعدادات Firebase في الكود.');
-  });
-
-  document.getElementById('driveCopyIdBtn').addEventListener('click', ()=>{
-    if(!state.driveFileId){ alert('استنى ثانية لحد ما يتظبط الاتصال، وبعدين جرب تاني.'); return; }
-    navigator.clipboard.writeText(state.driveFileId).then(()=>{
-      alert('تم نسخ الـ ID بتاعك:\n' + state.driveFileId + '\n\nابعته لصاحبك عشان يربط بيه ويشوف رسمتك.');
-    }).catch(()=>{ alert('الـ ID بتاعك:\n' + state.driveFileId); });
-  });
-
-  function applyRemoteGeoJSON(geojson, remoteTime){
+  function applyRemoteGeoJSON(geojson){
     if(!geojson || !geojson.features) return;
     const byLayer = {};
     geojson.features.forEach(feat=>{
-      const layerName = (feat.properties && feat.properties.layer) || 'طبقة مشتركة';
+      const layerName = (feat.properties && feat.properties.layer) || 'طبقة من Drive';
       if(!byLayer[layerName]) byLayer[layerName]=[];
       byLayer[layerName].push(feat);
     });
@@ -8815,95 +8849,10 @@
       newLayers.push({id:'L'+name+ci, name, color, visible, features});
     });
     if(newLayers.length){ state.layers = newLayers; if(!getLayer(state.activeLayerId)) state.activeLayerId = state.layers[0].id; }
-    state.lastPulledTime = remoteTime; selection=null;
+    selection=null;
     closeMobileEditPad();
     renderLayerList(); renderFeatures(); renderAttrPanel();
     doSave();
-    setDriveMsg('✓ تم تحديث الرسم من جهازك التاني', true);
-  }
-
-  let myDataListenerAttached = false;
-  function listenToMyData(){
-    if(!db || myDataListenerAttached) return;
-    myDataListenerAttached = true;
-    db.ref('gis-users/' + state.driveFileId).on('value', snap=>{
-      const val = snap.val();
-      if(!val || !val.geojson) return;
-      const remoteTime = val.updatedAt || 0;
-      if(remoteTime <= lastPushTime + 3000) return; // صدى رفعتنا احنا — تجاهله
-      if(remoteTime <= (state.lastPulledTime||0)) return;
-      pendingRemote = {geojson: val.geojson, remoteTime};
-      // متبقاش تظهر رسالة/بانر تلقائي فوق الخريطة — بس نعلّم نقطة صغيرة على زر الدرايف،
-      // والاستيراد بيبقى فقط لما المستخدم يفتح قائمة الدرايف بنفسه ويضغط "استيراد"
-      document.getElementById('driveMenuToggleBtn').classList.add('has-drive-update');
-      document.getElementById('mobileDriveToggle').classList.add('has-drive-update');
-    }, err=>{ console.error('my-data listen failed', err); });
-  }
-
-  driveImportBtn.addEventListener('click', ()=>{
-    if(pendingRemote){ applyRemoteGeoJSON(pendingRemote.geojson, pendingRemote.remoteTime); }
-    pendingRemote=null; driveUpdateBanner.style.display='none';
-    document.getElementById('driveMenuToggleBtn').classList.remove('has-drive-update');
-    document.getElementById('mobileDriveToggle').classList.remove('has-drive-update');
-  });
-  driveDismissBtn.addEventListener('click', ()=>{
-    if(pendingRemote){ state.lastPulledTime = pendingRemote.remoteTime; doSave(); }
-    pendingRemote=null; driveUpdateBanner.style.display='none';
-    document.getElementById('driveMenuToggleBtn').classList.remove('has-drive-update');
-    document.getElementById('mobileDriveToggle').classList.remove('has-drive-update');
-  });
-
-  /* ---------- Friend read-only data (Firebase realtime listener بدل الـ polling القديم) ---------- */
-  function applyFriendGeoJSON(fid, geojson, remoteTime){
-    if(!geojson || !geojson.features) return;
-    const byLayer = {};
-    geojson.features.forEach(feat=>{
-      const layerName = (feat.properties && feat.properties.layer) || 'طبقة الصديق';
-      if(!byLayer[layerName]) byLayer[layerName]=[];
-      byLayer[layerName].push(feat);
-    });
-    const newFriendLayersForThisFriend = []; let ci=0;
-    Object.keys(byLayer).forEach(name=>{
-      const color = palette[(ci+3) % palette.length]; ci++;
-      const features = byLayer[name].map(feat=>{
-        const props = Object.assign({}, feat.properties);
-        const rectInfo = props.rect_info, circleInfo = props.circle_info;
-        delete props.layer; delete props.type; delete props.rect_info; delete props.circle_info;
-        let coords, type = feat.properties.type;
-        if(feat.geometry.type==='Point'){ type=type||'point'; coords=[[feat.geometry.coordinates[1], feat.geometry.coordinates[0]]]; }
-        else if(feat.geometry.type==='LineString'){ type=type||'line'; coords=feat.geometry.coordinates.map(c=>[c[1],c[0]]); }
-        else { coords=feat.geometry.coordinates[0].slice(0,-1).map(c=>[c[1],c[0]]); type=type||'polygon'; }
-        const nf={id:uid(), type, coords, attrs:props};
-        if(type==='rectangle' && rectInfo){ nf.rect=rectInfo; syncRectCoords(nf); }
-        if(type==='circle' && circleInfo){ nf.circle=circleInfo; syncCircleCoords(nf); }
-        return nf;
-      });
-      newFriendLayersForThisFriend.push({id:'FR'+name+ci, fid, name, color, features, visible:true});
-    });
-    state.friendLastPulled[fid] = remoteTime;
-    friendLayers = friendLayers.filter(l=>l.fid!==fid).concat(newFriendLayersForThisFriend);
-    renderFriendLayers();
-    renderLayerList();
-    scheduleSave();
-    setDriveMsg('✓ تم تحديث رسم صديقك', true);
-  }
-
-  let friendListeners = {};
-  function listenToFriend(fid){
-    if(!db || friendListeners[fid]) return;
-    friendListeners[fid] = true;
-    db.ref('gis-users/' + fid).on('value', snap=>{
-      const val = snap.val();
-      if(!val || !val.geojson) return;
-      const remoteTime = val.updatedAt || Date.now();
-      applyFriendGeoJSON(fid, val.geojson, remoteTime);
-    }, err=>{
-      console.error('friend listen failed', err);
-      setDriveMsg('فشل قراءة بيانات الصديق — تأكد من الـ ID', true);
-    });
-  }
-  function detachFriendListener(fid){
-    if(db && friendListeners[fid]){ db.ref('gis-users/' + fid).off(); delete friendListeners[fid]; }
   }
 
   const origScheduleSaveForDrive = scheduleSave;
@@ -8914,7 +8863,7 @@
   };
 
   loadState();
-  initFirebase(); // بعد loadState عشان state.driveFileId يكون محمّل من localStorage
+  initDriveAuth(); // بعد loadState — التحميل الفعلي من Drive بيحصل بعد ما المستخدم يضغط "اتصال بـ Drive"
 
   // ── Search Place (Nominatim) ──────────────────────────────────────────
   const searchPlaceHud    = document.getElementById('searchPlaceHud');
