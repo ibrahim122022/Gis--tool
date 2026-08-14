@@ -679,7 +679,7 @@
               </svg><span>سكريبت GDB</span>
             </button>
             <input type="file" id="importFileInput" accept=".geojson,.json,.kml,.kmz,.dxf,.zip" style="display:none;">
-            <button class="tool-btn" id="importBtn" title="استيراد ملف: GeoJSON / KML / KMZ / DXF (أوتوكاد) / Shapefile (.zip)">استيراد</button>
+            <button class="tool-btn" id="importBtn" title="استيراد ملف: GeoJSON / KML / KMZ / DXF (أوتوكاد) / Shapefile (.zip)">
               <svg viewBox="0 0 24 24">
                 <path d="M12 15.5V2.5" stroke-width="2.3"/>
                 <path d="M7 7l5-5 5 5" stroke-width="2.3"/>
@@ -8196,10 +8196,9 @@
       return;
     }
 
-    // عدد القطع: كل قطعة بالمساحة المحددة + قطعة أخيرة للباقي
-    let nParts = Math.floor(totalArea / areaPerPart);
-    const remainder = totalArea - (nParts * areaPerPart);
-    if(remainder > areaPerPart * 0.02) nParts += 1;
+    // عدد القطع: كل قطعة (عدا الأخيرة) = المساحة المحددة بالظبط، والباقي (لو فيه) بيبقى قطعة أخيرة مستقلة —
+    // من غير ما يتضاف على القطعة اللي قبلها، عشان محدش يزيد عن المساحة المطلوبة أبدًا
+    let nParts = Math.ceil((totalArea / areaPerPart) - 1e-7); // الطرح البسيط بيمنع فروق الفاصلة العشرية من زيادة قطعة إضافية لما يكون القسمة مضبوطة بالظبط
     if(nParts < 1) nParts = 1;
 
     // حساب مواضع القطع تراكمياً — كل قطعة (عدا الأخيرة) = areaPerPart بالضبط
@@ -8301,12 +8300,11 @@
       byLayer[lName].push(feat);
     });
     Object.keys(byLayer).forEach(lName=>{
-      let layer = state.layers.find(l=>l.name===lName);
-      if(!layer){
-        const id='L'+uid(), color=palette[state.nextColorIdx++%palette.length];
-        layer={id, name:lName, color, visible:true, features:[]};
-        state.layers.push(layer);
-      }
+      let finalName = lName, n = 2;
+      while(state.layers.some(l=>l.name===finalName)){ finalName = `${lName} (${n})`; n++; }
+      const id='L'+uid(), color=palette[state.nextColorIdx++%palette.length];
+      const layer={id, name:finalName, color, visible:true, features:[]};
+      state.layers.push(layer);
       byLayer[lName].forEach(feat=>{
         try{
           const props=Object.assign({},feat.properties||{});
