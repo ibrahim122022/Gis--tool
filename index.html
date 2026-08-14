@@ -16,6 +16,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+<script src="https://unpkg.com/dxf-parser@1.1.2/dist/dxf-parser.js"></script>
+<script src="https://unpkg.com/shpjs@6.2.0/dist/shp.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root{
@@ -676,8 +678,8 @@
                 <path d="M16 3.5l4.5 4.5-4.5 4.5" stroke-width="1.6" fill="none" opacity=".85"/>
               </svg><span>سكريبت GDB</span>
             </button>
-            <input type="file" id="importFileInput" accept=".geojson,.json" style="display:none;">
-            <button class="tool-btn" id="importBtn" title="استيراد ملف GeoJSON">
+            <input type="file" id="importFileInput" accept=".geojson,.json,.kml,.kmz,.dxf,.zip" style="display:none;">
+            <button class="tool-btn" id="importBtn" title="استيراد ملف: GeoJSON / KML / KMZ / DXF (أوتوكاد) / Shapefile (.zip)">استيراد</button>
               <svg viewBox="0 0 24 24">
                 <path d="M12 15.5V2.5" stroke-width="2.3"/>
                 <path d="M7 7l5-5 5 5" stroke-width="2.3"/>
@@ -1348,6 +1350,25 @@
               <button class="btn-cancel" id="rasterGcpCancelBtn" style="flex:1;">إلغاء</button>
               <button class="btn-create" id="rasterGcpComputeBtn" style="flex:1;">✅ احسب وضع الخريطة</button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── نافذة اختيار نظام إحداثيات ملف DXF ── -->
+      <div id="dxfCrsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:950;align-items:center;justify-content:center;">
+        <div style="background:var(--bg-panel);border:1.5px solid #D4A020;border-radius:10px;padding:16px;max-width:92vw;width:340px;">
+          <h4 style="color:#D4A020;margin-top:0;">📐 نظام إحداثيات ملف DXF</h4>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">ملفات الأوتوكاد مش بتحمل نظام الإحداثيات جوّاها — اختار النظام اللي اترسم بيه الملف عشان يتظبط مكانه صح فوق الخريطة.</div>
+          <label>نظام الإحداثيات</label>
+          <select id="dxfCrsSelect"></select>
+          <div id="dxfCrsManualWrap" style="display:none;margin-top:8px;">
+            <label>اكتب كود EPSG (مثال: 32636)</label>
+            <input type="text" id="dxfCrsManualInput" placeholder="32636" style="width:100%;">
+          </div>
+          <div style="font-size:10.5px;color:var(--text-muted);margin:8px 0;">لو مش متأكد من النظام، جرّب "UTM Zone 36N" (الأكثر شيوعًا في مصر)، ولو الرسم ظهر في مكان غلط جرب نظام تاني.</div>
+          <div class="row-btns" style="margin-top:6px;">
+            <button class="btn-cancel" id="dxfCrsCancelBtn" style="flex:1;">إلغاء</button>
+            <button class="btn-create" id="dxfCrsConfirmBtn" style="flex:1;">✅ استيراد</button>
           </div>
         </div>
       </div>
@@ -8318,14 +8339,186 @@
   document.getElementById('importBtn').addEventListener('click',()=>{
     document.getElementById('importFileInput').click();
   });
-  document.getElementById('importFileInput').addEventListener('change', e=>{
-    const file=e.target.files[0]; if(!file) return;
-    const reader=new FileReader();
-    reader.onload=ev=>{
-      try{ importGeoJSON(JSON.parse(ev.target.result)); }
-      catch(err){ alert('خطأ في تحليل الملف:\n'+err.message); }
+
+  /* ---------- تحويل KML نصي إلى GeoJSON (Placemarks: Point/LineString/Polygon، وMultiGeometry) ---------- */
+  function kmlTextToGeoJSON(kmlText){
+    const xml = new DOMParser().parseFromString(kmlText, 'text/xml');
+    if(xml.querySelector('parsererror')) throw new Error('ملف KML غير صالح');
+    const features = [];
+    const parseCoords = (txt)=> txt.trim().split(/\s+/).map(pair=>{
+      const parts = pair.split(',').map(Number);
+      return [parts[0], parts[1]]; // [lon, lat] — نتجاهل الارتفاع لو موجود
+    });
+    const geomFromNode = (node)=>{
+      const point = node.querySelector(':scope > Point');
+      if(point){
+        const c = point.querySelector('coordinates');
+        if(c) return {type:'Point', coordinates: parseCoords(c.textContent)[0]};
+      }
+      const line = node.querySelector(':scope > LineString');
+      if(line){
+        const c = line.querySelector('coordinates');
+        if(c) return {type:'LineString', coordinates: parseCoords(c.textContent)};
+      }
+      const poly = node.querySelector(':scope > Polygon');
+      if(poly){
+        const outer = poly.querySelector('outerBoundaryIs LinearRing coordinates');
+        if(outer) return {type:'Polygon', coordinates: [parseCoords(outer.textContent)]};
+      }
+      return null;
     };
-    reader.readAsText(file);
+    xml.querySelectorAll('Placemark').forEach(pm=>{
+      const nameEl = pm.querySelector(':scope > name');
+      const name = nameEl ? nameEl.textContent.trim() : '';
+      let geom = geomFromNode(pm);
+      if(!geom){
+        const multi = pm.querySelector('MultiGeometry');
+        if(multi){
+          // لكل geometry جوه الـ MultiGeometry، نستخرجها بنفس الطريقة كل واحدة لوحدها
+          multi.children && Array.from(multi.children).forEach(childNode=>{
+            let single = null;
+            if(childNode.tagName==='Point'){ const c=childNode.querySelector('coordinates'); if(c) single={type:'Point',coordinates:parseCoords(c.textContent)[0]}; }
+            else if(childNode.tagName==='LineString'){ const c=childNode.querySelector('coordinates'); if(c) single={type:'LineString',coordinates:parseCoords(c.textContent)}; }
+            else if(childNode.tagName==='Polygon'){ const outer=childNode.querySelector('outerBoundaryIs LinearRing coordinates'); if(outer) single={type:'Polygon',coordinates:[parseCoords(outer.textContent)]}; }
+            if(single) features.push({type:'Feature', properties:{layer:'مستورد من KML', name}, geometry: single});
+          });
+        }
+        return;
+      }
+      features.push({type:'Feature', properties:{layer:'مستورد من KML', name}, geometry: geom});
+    });
+    return {type:'FeatureCollection', features};
+  }
+
+  async function kmzToGeoJSON(arrayBuffer){
+    if(typeof JSZip === 'undefined') throw new Error('مكتبة فك الضغط (JSZip) لسه بتحمّل، جرب تاني بعد شوية');
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    let kmlEntry = null;
+    zip.forEach((path, entry)=>{ if(!kmlEntry && /\.kml$/i.test(path)) kmlEntry = entry; });
+    if(!kmlEntry) throw new Error('مفيش ملف KML جوه ملف KMZ ده');
+    const kmlText = await kmlEntry.async('text');
+    return kmlTextToGeoJSON(kmlText);
+  }
+
+  /* ---------- Shapefile (.zip يحتوي shp+dbf+prj) عبر مكتبة shpjs — بتتولى الإسقاط الجغرافي تلقائيًا ---------- */
+  async function shpZipToGeoJSON(arrayBuffer){
+    if(typeof shp === 'undefined') throw new Error('مكتبة قراءة الـ Shapefile لسه بتحمّل، جرب تاني بعد شوية');
+    const result = await shp(arrayBuffer);
+    const collections = Array.isArray(result) ? result : [result];
+    const features = [];
+    collections.forEach((fc, i)=>{
+      const layerName = (fc.fileName ? fc.fileName : `شيب فايل ${i+1}`);
+      (fc.features||[]).forEach(f=>{
+        f.properties = Object.assign({layer: layerName}, f.properties||{});
+        features.push(f);
+      });
+    });
+    return {type:'FeatureCollection', features};
+  }
+
+  /* ---------- DXF (أوتوكاد) — لازم تحديد نظام الإحداثيات لأن DXF مالوش نظام محفوظ جواه ---------- */
+  let pendingDxfText = null;
+  const dxfCrsSelect = document.getElementById('dxfCrsSelect');
+  RASTER_CRS_OPTIONS.forEach(o=>{ if(o.code!=='EPSG:4326'){ const opt=document.createElement('option'); opt.value=o.code; opt.textContent=o.label; dxfCrsSelect.appendChild(opt); } });
+  const manualOpt = document.createElement('option'); manualOpt.value='__manual__'; manualOpt.textContent='نظام تاني (اكتب كود EPSG يدويًا)'; dxfCrsSelect.appendChild(manualOpt);
+  dxfCrsSelect.addEventListener('change', ()=>{ document.getElementById('dxfCrsManualWrap').style.display = dxfCrsSelect.value==='__manual__' ? '' : 'none'; });
+
+  function openDxfCrsModal(dxfText){
+    pendingDxfText = dxfText;
+    document.getElementById('dxfCrsModal').style.display='flex';
+  }
+  document.getElementById('dxfCrsCancelBtn').addEventListener('click', ()=>{
+    pendingDxfText = null;
+    document.getElementById('dxfCrsModal').style.display='none';
+  });
+  document.getElementById('dxfCrsConfirmBtn').addEventListener('click', ()=>{
+    let epsg = dxfCrsSelect.value;
+    if(epsg==='__manual__'){
+      const raw = document.getElementById('dxfCrsManualInput').value.trim().replace(/^EPSG:?/i,'');
+      if(!raw){ alert('اكتب كود EPSG'); return; }
+      epsg = 'EPSG:' + raw;
+      if(!proj4.defs(epsg)){
+        alert('الكود ده مش معرّف في المتصفح. جرب أحد الخيارات الجاهزة، أو استخدم UTM Zone 35N/36N.');
+        return;
+      }
+    }
+    document.getElementById('dxfCrsModal').style.display='none';
+    try{
+      const geojson = dxfToGeoJSON(pendingDxfText, epsg);
+      pendingDxfText = null;
+      importGeoJSON(geojson);
+    }catch(err){ alert('فشل تحويل ملف DXF:\n'+err.message); }
+  });
+
+  function dxfToGeoJSON(dxfText, epsgCode){
+    if(typeof DxfParser === 'undefined') throw new Error('مكتبة قراءة DXF لسه بتحمّل، جرب تاني بعد شوية');
+    const parser = new DxfParser();
+    const dxf = parser.parseSync(dxfText);
+    if(!dxf || !dxf.entities) throw new Error('تعذّر قراءة كيانات الملف');
+    const toWgs = (x,y)=>{ const {lat,lng} = projectedToLatLng(x,y,epsgCode); return [lng,lat]; };
+    const features = [];
+    let skipped = 0;
+    dxf.entities.forEach(ent=>{
+      const layerName = ent.layer || 'DXF مستورد';
+      try{
+        if(ent.type==='LINE' && ent.vertices && ent.vertices.length>=2){
+          features.push({type:'Feature', properties:{layer:layerName, type:'line'}, geometry:{type:'LineString', coordinates: ent.vertices.map(v=>toWgs(v.x,v.y))}});
+        } else if((ent.type==='LWPOLYLINE'||ent.type==='POLYLINE') && ent.vertices && ent.vertices.length>=2){
+          const coords = ent.vertices.map(v=>toWgs(v.x,v.y));
+          if(ent.shape){ // مضلع مقفول
+            features.push({type:'Feature', properties:{layer:layerName, type:'polygon'}, geometry:{type:'Polygon', coordinates:[[...coords, coords[0]]]}});
+          } else {
+            features.push({type:'Feature', properties:{layer:layerName, type:'line'}, geometry:{type:'LineString', coordinates: coords}});
+          }
+        } else if(ent.type==='POINT' && ent.position){
+          features.push({type:'Feature', properties:{layer:layerName, type:'point'}, geometry:{type:'Point', coordinates: toWgs(ent.position.x, ent.position.y)}});
+        } else if(ent.type==='CIRCLE' && ent.center && ent.radius){
+          const cx=ent.center.x, cy=ent.center.y, r=ent.radius;
+          const ring=[];
+          for(let i=0;i<=48;i++){ const a=(i/48)*2*Math.PI; ring.push(toWgs(cx+r*Math.cos(a), cy+r*Math.sin(a))); }
+          features.push({type:'Feature', properties:{layer:layerName, type:'circle', circle_info:{center: (()=>{const c=projectedToLatLng(cx,cy,epsgCode); return [c.lat,c.lng];})(), radius:r}}, geometry:{type:'Polygon', coordinates:[ring]}});
+        } else if(ent.type==='ARC' && ent.center && ent.radius!=null){
+          const cx=ent.center.x, cy=ent.center.y, r=ent.radius;
+          const coords=[];
+          const steps=32; const start=ent.startAngle||0; const len=ent.angleLength||(2*Math.PI);
+          for(let i=0;i<=steps;i++){ const a=start+(len*i/steps); coords.push(toWgs(cx+r*Math.cos(a), cy+r*Math.sin(a))); }
+          features.push({type:'Feature', properties:{layer:layerName, type:'line'}, geometry:{type:'LineString', coordinates: coords}});
+        } else {
+          skipped++;
+        }
+      }catch(e){ skipped++; }
+    });
+    if(skipped>0) console.warn(`تم تجاهل ${skipped} كيان DXF غير مدعوم (نص/بلوكات/إلخ)`);
+    return {type:'FeatureCollection', features};
+  }
+
+  document.getElementById('importFileInput').addEventListener('change', async e=>{
+    const file=e.target.files[0]; if(!file) return;
+    const ext = (file.name.split('.').pop()||'').toLowerCase();
+    document.getElementById('stHint').textContent = '⏳ جاري استيراد الملف...';
+    try{
+      if(ext==='geojson' || ext==='json'){
+        const text = await file.text();
+        importGeoJSON(JSON.parse(text));
+      } else if(ext==='kml'){
+        const text = await file.text();
+        importGeoJSON(kmlTextToGeoJSON(text));
+      } else if(ext==='kmz'){
+        const buf = await file.arrayBuffer();
+        importGeoJSON(await kmzToGeoJSON(buf));
+      } else if(ext==='zip'){
+        const buf = await file.arrayBuffer();
+        importGeoJSON(await shpZipToGeoJSON(buf));
+      } else if(ext==='dxf'){
+        const text = await file.text();
+        openDxfCrsModal(text);
+      } else {
+        alert('صيغة الملف غير مدعومة. المدعوم: GeoJSON, KML, KMZ, DXF, Shapefile (.zip)');
+      }
+    }catch(err){
+      alert('خطأ في استيراد الملف:\n'+err.message);
+      document.getElementById('stHint').textContent='';
+    }
     e.target.value='';
   });
 
