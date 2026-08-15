@@ -1450,6 +1450,7 @@
         <select id="divMode">
           <option value="count">عدد الأجزاء</option>
           <option value="area">مساحة محددة لكل قطعة</option>
+          <option value="frontage">واجهة ومساحة محددة</option>
         </select>
         <div id="divCountRow">
           <label>عدد الأجزاء</label>
@@ -1487,6 +1488,48 @@
             <span>ابدأ من الجهة المقابلة (تجعل القطعة المتبقية في البداية بدل النهاية)</span>
           </label>
         </div>
+        <div id="divFrontageRow" style="display:none;">
+          <label>طول الواجهة (م)</label>
+          <input type="number" id="divFrontageWidth" value="10" min="0.01" step="0.01">
+          <label>وحدة المساحة</label>
+          <select id="divFrontageAreaUnit">
+            <option value="m2">متر مربع (م²)</option>
+            <option value="feddan">فدان / قيراط / سهم</option>
+          </select>
+          <div id="divFrontageAreaM2Row">
+            <label>مساحة كل قطعة (م²)</label>
+            <input type="number" id="divFrontageAreaValue" value="100" min="0.01" step="0.01">
+          </div>
+          <div id="divFrontageAreaFeddanRow" style="display:none;">
+            <label>مساحة كل قطعة</label>
+            <div style="display:flex;gap:5px;">
+              <div style="flex:1;">
+                <input type="number" id="divFrontageAreaFeddan" value="0" min="0" step="1" placeholder="فدان">
+                <label style="font-size:9.5px;text-align:center;margin:2px 0 0;">فدان</label>
+              </div>
+              <div style="flex:1;">
+                <input type="number" id="divFrontageAreaQirat" value="0" min="0" max="23" step="1" placeholder="قيراط">
+                <label style="font-size:9.5px;text-align:center;margin:2px 0 0;">قيراط</label>
+              </div>
+              <div style="flex:1;">
+                <input type="number" id="divFrontageAreaSahm" value="0" min="0" max="23" step="1" placeholder="سهم">
+                <label style="font-size:9.5px;text-align:center;margin:2px 0 0;">سهم</label>
+              </div>
+            </div>
+          </div>
+          <label>نقطة بداية الواجهة</label>
+          <div id="divFrontageStartReadout" style="font-size:12px;color:#8B9686;margin:4px 0 8px;">لم يتم التحديد بعد</div>
+          <button type="button" class="btn-cancel" id="divFrontageStartBtn" style="width:100%;">📍 حدد نقطة البداية على الضلع</button>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;font-weight:400;">
+            <input type="checkbox" id="divFrontageReverse" style="width:14px;height:14px;accent-color:#2a9d5c;cursor:pointer;">
+            <span>اتجاه القطع للناحية التانية على الواجهة</span>
+          </label>
+        </div>
+        <div id="divMaxPiecesRow" style="display:none;">
+          <label>عدد القطع المطلوب قطعها (اختياري)</label>
+          <input type="number" id="divMaxPieces" min="1" step="1" placeholder="بدون حد — قسّم كل الأرض">
+          <div style="font-size:10px;color:var(--text-muted);margin-top:2px;">لو حددت رقم، هيتقطع بس العدد ده من القطع بالمساحة المطلوبة، والباقي من الأرض هيفضل قطعة واحدة زي ما هي من غير تقسيم.</div>
+        </div>
         <label>اتجاه التقسيم</label>
         <select id="divDir">
           <option value="0">أفقي — خطوط عرضية</option>
@@ -1494,7 +1537,8 @@
           <option value="45">قطري 45°</option>
           <option value="custom">مخصص...</option>
           <option value="drawline">✏ ارسم اتجاه التقسيم على الخريطة</option>
-          <option value="edge">📐 اختر ضلعًا من المضلع ليكون التقسيم موازيًا له</option>
+          <option value="edge">📐 اختر ضلعًا ليكون التقسيم موازيًا له (تقطيع بالعمق من الواجهة)</option>
+          <option value="edge_perp">⟂ اختر ضلعًا ليكون التقسيم عموديًا عليه (كل قطعة تاخد نصيبها من الواجهة)</option>
         </select>
         <div id="divCustomRow" style="display:none;">
           <label>الزاوية (°)</label>
@@ -2114,7 +2158,9 @@
   let dimensionsVisible = false;
   // --- Divide tool state ---
   let dividePendingLayerId = null, dividePendingFeatureId = null;
-  let divideAngleMode = null; // null | 'drawline' | 'edge' — وضع تحديد اتجاه التقسيم من الخريطة
+  let divideAngleMode = null; // null | 'drawline' | 'edge' | 'edge_perp' | 'frontage_start' — وضع تحديد اتجاه التقسيم من الخريطة
+  let divideFrontageStart = null; // {lat,lng} نقطة بداية الواجهة في وضع "واجهة ومساحة محددة"
+  let divideFrontageAngle = null; // زاوية الضلع المختار كواجهة (بالدرجات)
 
   // ── حالة أداة القطع (Split) ──
   let splitTargetLayerId = null, splitTargetFeatureId = null;
@@ -7359,16 +7405,30 @@
   /* ── Divide HUD ── */
   document.getElementById('divDir').addEventListener('change', function(){
     document.getElementById('divCustomRow').style.display = this.value==='custom' ? 'block' : 'none';
-    const needsPick = this.value==='drawline' || this.value==='edge';
+    const needsPick = this.value==='drawline' || this.value==='edge' || this.value==='edge_perp';
     document.getElementById('divPickRow').style.display = needsPick ? 'block' : 'none';
     if(!needsPick){ divideComputedAngle = null; divideAngleMode = null; }
     else { updateDivAngleReadout(); }
   });
   document.getElementById('divMode').addEventListener('change', function(){
     const isArea = this.value==='area';
-    document.getElementById('divCountRow').style.display = isArea ? 'none' : 'block';
+    const isFrontage = this.value==='frontage';
+    document.getElementById('divCountRow').style.display = (!isArea && !isFrontage) ? 'block' : 'none';
     document.getElementById('divAreaRow').style.display = isArea ? 'block' : 'none';
-    document.getElementById('divEqualAreaRow').style.display = isArea ? 'none' : 'flex';
+    document.getElementById('divFrontageRow').style.display = isFrontage ? 'block' : 'none';
+    document.getElementById('divMaxPiecesRow').style.display = (isArea || isFrontage) ? 'block' : 'none';
+    document.getElementById('divEqualAreaRow').style.display = (!isArea && !isFrontage) ? 'flex' : 'none';
+    // في وضع الواجهة، اتجاه التقسيم بيتحدد أوتوماتيك من الضلع المختار — مش محتاجين قايمة "اتجاه التقسيم" العادية
+    const dirLabel = Array.from(document.querySelectorAll('#divideHud > label')).find(l=>l.textContent.trim()==='اتجاه التقسيم');
+    if(dirLabel){ dirLabel.style.display = isFrontage ? 'none' : 'block'; }
+    document.getElementById('divDir').style.display = isFrontage ? 'none' : 'block';
+    document.getElementById('divCustomRow').style.display = (isFrontage || document.getElementById('divDir').value!=='custom') ? 'none' : 'block';
+    document.getElementById('divPickRow').style.display = 'none';
+  });
+  document.getElementById('divFrontageAreaUnit').addEventListener('change', function(){
+    const isFeddan = this.value==='feddan';
+    document.getElementById('divFrontageAreaM2Row').style.display = isFeddan ? 'none' : 'block';
+    document.getElementById('divFrontageAreaFeddanRow').style.display = isFeddan ? 'block' : 'none';
   });
   document.getElementById('divAreaUnit').addEventListener('change', function(){
     const isFeddan = this.value==='feddan';
@@ -7380,20 +7440,53 @@
     dividePendingLayerId=null; dividePendingFeatureId=null;
     cancelDivideAngleMode();
     divideComputedAngle = null;
+    divideFrontageStart = null; divideFrontageAngle = null;
+    document.getElementById('divFrontageStartReadout').textContent = 'لم يتم التحديد بعد';
     selection=null; renderFeatures(); renderAttrPanel();
     document.getElementById('stHint').textContent='✂ انقر على أي مضلع لتقسيمه إلى أجزاء متساوية';
   });
   document.getElementById('divideApply').addEventListener('click', ()=>{
     if(!dividePendingLayerId || !dividePendingFeatureId) return;
     const divMode = document.getElementById('divMode').value;
+
+    if(divMode==='frontage'){
+      if(divideFrontageStart===null || divideFrontageAngle===null){
+        alert('حدد نقطة بداية الواجهة على الخريطة أولاً (اضغط زر "حدد نقطة البداية على الضلع")');
+        return;
+      }
+      const frontageWidth = parseFloat(document.getElementById('divFrontageWidth').value) || 0;
+      if(frontageWidth <= 0){ alert('اكتب طول واجهة صحيح أكبر من صفر'); return; }
+      const areaUnit = document.getElementById('divFrontageAreaUnit').value;
+      const areaPerPart = areaUnit==='feddan'
+        ? feddanToArea(
+            parseFloat(document.getElementById('divFrontageAreaFeddan').value)||0,
+            parseFloat(document.getElementById('divFrontageAreaQirat').value)||0,
+            parseFloat(document.getElementById('divFrontageAreaSahm').value)||0
+          )
+        : (parseFloat(document.getElementById('divFrontageAreaValue').value)||0);
+      if(areaPerPart <= 0){ alert('يجب إدخال مساحة صحيحة أكبر من صفر'); return; }
+      const reverseStart = document.getElementById('divFrontageReverse').checked;
+      const maxPiecesRaw = parseInt(document.getElementById('divMaxPieces').value);
+      const maxPieces = (maxPiecesRaw && maxPiecesRaw > 0) ? maxPiecesRaw : null;
+      document.getElementById('divideHud').style.display='none';
+      document.getElementById('stHint').textContent='⏳ جاري التقسيم...';
+      setTimeout(async ()=>{
+        await dividePolygonFeatureByFrontage(dividePendingLayerId, dividePendingFeatureId, frontageWidth, areaPerPart, divideFrontageAngle, divideFrontageStart, reverseStart, maxPieces);
+        dividePendingLayerId=null; dividePendingFeatureId=null;
+        divideFrontageStart=null; divideFrontageAngle=null;
+        document.getElementById('divFrontageStartReadout').textContent = 'لم يتم التحديد بعد';
+      }, 30);
+      return;
+    }
+
     const dirVal = document.getElementById('divDir').value;
-    if((dirVal==='drawline' || dirVal==='edge') && divideComputedAngle===null){
+    if((dirVal==='drawline' || dirVal==='edge' || dirVal==='edge_perp') && divideComputedAngle===null){
       alert('حدد اتجاه التقسيم على الخريطة أولاً (اضغط زر "تحديد على الخريطة")');
       return;
     }
     const angleDeg = dirVal==='custom'
       ? (parseFloat(document.getElementById('divAngle').value)||0)
-      : (dirVal==='drawline' || dirVal==='edge')
+      : (dirVal==='drawline' || dirVal==='edge' || dirVal==='edge_perp')
         ? divideComputedAngle
         : parseFloat(dirVal);
     document.getElementById('divideHud').style.display='none';
@@ -7408,9 +7501,11 @@
           )
         : (parseFloat(document.getElementById('divAreaValue').value)||0);
       const reverseStart = document.getElementById('divAreaReverse').checked;
+      const maxPiecesRaw = parseInt(document.getElementById('divMaxPieces').value);
+      const maxPieces = (maxPiecesRaw && maxPiecesRaw > 0) ? maxPiecesRaw : null;
       // نستخدم setTimeout لإتاحة الفرصة للـ UI أن يُحدَّث
       setTimeout(async ()=>{
-        await dividePolygonFeatureByArea(dividePendingLayerId, dividePendingFeatureId, areaPerPart, angleDeg, reverseStart);
+        await dividePolygonFeatureByArea(dividePendingLayerId, dividePendingFeatureId, areaPerPart, angleDeg, reverseStart, maxPieces);
         dividePendingLayerId=null; dividePendingFeatureId=null;
       }, 30);
       return;
@@ -7427,13 +7522,20 @@
   document.getElementById('divPickBtn').addEventListener('click', ()=>{
     if(!dividePendingLayerId || !dividePendingFeatureId) return;
     const dirVal = document.getElementById('divDir').value;
-    if(dirVal!=='drawline' && dirVal!=='edge') return;
+    if(dirVal!=='drawline' && dirVal!=='edge' && dirVal!=='edge_perp') return;
     divideAngleMode = dirVal;
     divideDrawPt1 = null;
     document.getElementById('divideHud').style.display='none';
     document.getElementById('stHint').textContent = dirVal==='drawline'
       ? '✏ انقر نقطتين على الخريطة لتحديد اتجاه التقسيم...'
       : '📐 انقر بالقرب من الضلع المطلوب في المضلع...';
+  });
+
+  document.getElementById('divFrontageStartBtn').addEventListener('click', ()=>{
+    if(!dividePendingLayerId || !dividePendingFeatureId) return;
+    divideAngleMode = 'frontage_start';
+    document.getElementById('divideHud').style.display='none';
+    document.getElementById('stHint').textContent = '📍 انقر عند نقطة بداية الواجهة على حافة المضلع...';
   });
 
   function updateDivAngleReadout(){
@@ -7548,6 +7650,36 @@
       }
       const angle = nearestEdgeAngle(f.coords, latlng);
       finishDivideAngleMode(angle);
+      return true;
+    }
+    if(divideAngleMode==='edge_perp'){
+      const f = getFeature(dividePendingLayerId, dividePendingFeatureId);
+      if(!f || !f.coords || f.coords.length < 2){
+        alert('تعذر العثور على المضلع لاختيار الضلع منه');
+        cancelDivideAngleMode();
+        document.getElementById('divideHud').style.display='block';
+        return true;
+      }
+      // بنضيف 90° عشان خطوط القطع تبقى عمودية على الضلع (كل قطعة تاخد نصيبها من الواجهة) بدل موازية له
+      const angle = (nearestEdgeAngle(f.coords, latlng) + 90) % 180;
+      finishDivideAngleMode(angle);
+      return true;
+    }
+    if(divideAngleMode==='frontage_start'){
+      const f = getFeature(dividePendingLayerId, dividePendingFeatureId);
+      if(!f || !f.coords || f.coords.length < 2){
+        alert('تعذر العثور على المضلع لاختيار الضلع منه');
+        cancelDivideAngleMode();
+        document.getElementById('divideHud').style.display='block';
+        return true;
+      }
+      divideFrontageStart = {lat: latlng.lat, lng: latlng.lng};
+      divideFrontageAngle = nearestEdgeAngle(f.coords, latlng);
+      divideAngleMode = null;
+      if(divideTempMarker){ map.removeLayer(divideTempMarker); divideTempMarker=null; }
+      document.getElementById('divFrontageStartReadout').textContent = `✓ تم تحديد نقطة البداية (اتجاه الواجهة: ${divideFrontageAngle.toFixed(1)}°)`;
+      document.getElementById('divideHud').style.display='block';
+      document.getElementById('stHint').textContent = '✓ تم تحديد نقطة بداية الواجهة — اضغط تطبيق';
       return true;
     }
     return false;
@@ -8138,7 +8270,7 @@
     document.getElementById('stHint').textContent = `✓ تم تقسيم المضلع إلى ${newFeatures.length} جزء`;
   }
 
-  async function dividePolygonFeatureByArea(layerId, featureId, areaPerPart, angleDeg, reverseStart){
+  async function dividePolygonFeatureByArea(layerId, featureId, areaPerPart, angleDeg, reverseStart, maxPieces){
     if(!window.turf){ alert('مكتبة Turf.js لم تُحمَّل — تحقق من الاتصال بالإنترنت'); return; }
     const layer = getLayer(layerId);
     if(!layer) return;
@@ -8196,10 +8328,13 @@
       return;
     }
 
-    // عدد القطع: كل قطعة (عدا الأخيرة) = المساحة المحددة بالظبط، والباقي (لو فيه) بيبقى قطعة أخيرة مستقلة —
+    // عدد القطع الطبيعي: كل قطعة (عدا الأخيرة) = المساحة المحددة بالظبط، والباقي (لو فيه) بيبقى قطعة أخيرة مستقلة —
     // من غير ما يتضاف على القطعة اللي قبلها، عشان محدش يزيد عن المساحة المطلوبة أبدًا
     let nParts = Math.ceil((totalArea / areaPerPart) - 1e-7); // الطرح البسيط بيمنع فروق الفاصلة العشرية من زيادة قطعة إضافية لما يكون القسمة مضبوطة بالظبط
     if(nParts < 1) nParts = 1;
+    // لو المستخدم حدد حد أقصى لعدد القطع، بنقطع بس العدد ده، والباقي من الأرض (اللي ممكن يكون أكبر بكتير
+    // من المساحة المطلوبة) بيفضل قطعة واحدة مستقلة زي ما هي من غير تقسيم إضافي
+    if(maxPieces && maxPieces > 0 && maxPieces < nParts) nParts = maxPieces;
 
     // حساب مواضع القطع تراكمياً — كل قطعة (عدا الأخيرة) = areaPerPart بالضبط
     let cutYs = [minY - eps];
@@ -8285,6 +8420,166 @@
     selection = null;
     renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
     document.getElementById('stHint').textContent = `✓ تم تقسيم المضلع إلى ${newFeatures.length} جزء بمساحة ${areaPerPart} م² لكل قطعة (والقطعة الأخيرة قد تحمل الباقي)`;
+  }
+
+  /* ---------- تقسيم بواجهة ثابتة + مساحة محددة لكل قطعة (كل قطعة = عرض واجهة معيّن × عمق يحقق المساحة المطلوبة) ---------- */
+  // بيشتغل بالكامل بإحداثيات UTM بالمتر (مش درجات lng/lat) عشان التدوير يحافظ على المسافات والمساحات
+  // بدقة تامة من غير أي تشويه إسقاطي، ومحتاجينه هنا تحديدًا لأن عرض الواجهة قيمة مسافة حقيقية بالمتر
+  function ringAreaXY(ring){
+    let a=0; const n=ring.length;
+    for(let i=0;i<n;i++){ const [x1,y1]=ring[i], [x2,y2]=ring[(i+1)%n]; a += x1*y2 - x2*y1; }
+    return Math.abs(a)/2;
+  }
+  function turfPolyAreaXY(turfPoly){
+    if(!turfPoly || !turfPoly.geometry) return 0;
+    const geom = turfPoly.geometry;
+    const rings = geom.type==='MultiPolygon' ? geom.coordinates.map(mp=>mp[0]) : [geom.coordinates[0]];
+    let total=0;
+    rings.forEach(r=> total += ringAreaXY(r));
+    return total;
+  }
+
+  async function dividePolygonFeatureByFrontage(layerId, featureId, frontageWidth, areaPerPart, edgeAngleDeg, startLatLng, reverseStart, maxPieces){
+    if(!window.turf){ alert('مكتبة Turf.js لم تُحمَّل — تحقق من الاتصال بالإنترنت'); return; }
+    const layer = getLayer(layerId);
+    if(!layer) return;
+    const f = getFeature(layerId, featureId);
+    if(!f) return;
+
+    const zone = utmZoneForLng(f.coords.reduce((s,c)=>s+c[1],0)/f.coords.length);
+    const hemisphere = f.coords[0][0] >= 0 ? 'N' : 'S';
+    const toXY = (lat,lng)=>{ const u = latLngToUTM(lat,lng,zone); return [u.easting, u.northing]; };
+    const toLL = (x,y)=>{ const ll = utmToLatLng(zone, hemisphere, x, y); return [ll.lat, ll.lng]; };
+
+    let ring = f.coords.map(c=>toXY(c[0],c[1]));
+    ring.push(ring[0]);
+    let turfPoly;
+    try{ turfPoly = turf.polygon([ring]); } catch(e){ alert('المضلع غير صالح للتقسيم'); return; }
+
+    const totalArea = ringAreaXY(ring);
+    if(areaPerPart >= totalArea){
+      alert('المساحة المحددة أكبر من (أو تساوي) مساحة المضلع الكلية — لا يمكن التقسيم بهذه القيمة');
+      return;
+    }
+
+    const centroid = turf.centroid(turfPoly).geometry.coordinates; // [x,y] بالمتر
+    let rotated;
+    try{ rotated = turf.transformRotate(turfPoly, -edgeAngleDeg, {pivot: centroid}); } catch(e){ rotated = turfPoly; }
+
+    const bbox = turf.bbox(rotated);
+    const [minX, minY, maxX, maxY] = bbox;
+    const totalH = maxY - minY;
+    const eps = Math.max(totalH * 0.00005, 0.001);
+
+    // نقطة بداية الواجهة، محوَّلة لنفس الفضاء المدوَّر (بنستخدم turf.transformRotate على نقطة عشان نضمن نفس اصطلاح الدوران بالظبط)
+    let startRotPt;
+    try{
+      const rotatedPt = turf.transformRotate(turf.point(toXY(startLatLng.lat, startLatLng.lng)), -edgeAngleDeg, {pivot: centroid});
+      startRotPt = rotatedPt.geometry.coordinates;
+    }catch(e){ startRotPt = toXY(startLatLng.lat, startLatLng.lng); }
+    const x0 = startRotPt[0];
+    const dir = reverseStart ? -1 : 1;
+
+    function areaOfBand(xlo, xhi, y2){
+      const strip = turf.polygon([[
+        [xlo, minY-eps],[xhi, minY-eps],[xhi, y2+eps],[xlo, y2+eps],[xlo, minY-eps]
+      ]]);
+      try{
+        const inter = turf.intersect(rotated, strip);
+        if(!inter) return 0;
+        return turfPolyAreaXY(inter); // التدوير محافظ على المساحة تمامًا، فمفيش داعي نرجّع ندوّر قبل القياس
+      }catch(e){ return 0; }
+    }
+
+    // نقطع قطعة قطعة لحد ما نوصل للعدد المطلوب (لو محدد) أو لحد ما تخلص مساحة/واجهة كافية لقطعة كاملة تانية
+    const bands = [];
+    let i = 0;
+    while(true){
+      if(maxPieces && i >= maxPieces) break;
+      const xlo = dir>0 ? (x0 + i*frontageWidth) : (x0 - (i+1)*frontageWidth);
+      const xhi = xlo + frontageWidth;
+      const maxPossible = areaOfBand(xlo, xhi, maxY+eps);
+      if(maxPossible < areaPerPart*0.999) break; // مفيش مساحة كافية لقطعة كاملة تانية بنفس عرض الواجهة ده
+      let lo = minY-eps, hi = maxY+eps;
+      for(let iter=0; iter<64; iter++){
+        const mid = (lo+hi)/2;
+        const a = areaOfBand(xlo, xhi, mid);
+        if(Math.abs(a-areaPerPart)/areaPerPart < 0.00001) break;
+        if(a < areaPerPart) lo=mid; else hi=mid;
+      }
+      bands.push({xlo, xhi, y2:(lo+hi)/2});
+      i++;
+      document.getElementById('stHint').textContent = `⏳ جاري القطع... قطعة ${i}`;
+      await new Promise(r=>setTimeout(r,0));
+    }
+
+    if(bands.length === 0){
+      alert('تعذّر قطع أي قطعة بهذا العرض والمساحة — جرب عرض واجهة أو مساحة أصغر، أو تأكد من نقطة البداية');
+      return;
+    }
+
+    const newFeatures = [];
+    const cutPiecesOriginalOrientation = [];
+    bands.forEach(b=>{
+      const strip = turf.polygon([[
+        [b.xlo, minY-eps],[b.xhi, minY-eps],[b.xhi, b.y2+eps],[b.xlo, b.y2+eps],[b.xlo, minY-eps]
+      ]]);
+      let inter;
+      try{ inter = turf.intersect(rotated, strip); } catch(e){ return; }
+      if(!inter) return;
+      let interReal;
+      try{ interReal = turf.transformRotate(inter, edgeAngleDeg, {pivot: centroid}); } catch(e){ interReal = inter; }
+      cutPiecesOriginalOrientation.push(interReal);
+      const geom = interReal.geometry;
+      const ringsList = geom.type==='MultiPolygon' ? geom.coordinates.map(mp=>mp[0]) : [geom.coordinates[0]];
+      ringsList.forEach(r=>{
+        let pts = r.map(c=>toLL(c[0], c[1])); // [x,y] بالمتر -> [lat,lng]
+        if(pts.length>1){
+          const a=pts[0], b2=pts[pts.length-1];
+          if(Math.abs(a[0]-b2[0])<1e-10 && Math.abs(a[1]-b2[1])<1e-10) pts.pop();
+        }
+        if(pts.length<3) return;
+        newFeatures.push({ id: uid(), type:'polygon', coords: pts, attrs: Object.assign({}, f.attrs), color: f.color });
+      });
+    });
+
+    if(newFeatures.length === 0){
+      alert('لم ينجح التقسيم — جرب عرض واجهة أو مساحة مختلفة');
+      return;
+    }
+
+    // الباقي من الأرض (لو فيه) يفضل قطعة واحدة مستقلة من غير تقسيم إضافي
+    let leftoverFeature = null;
+    try{
+      let unionAll = cutPiecesOriginalOrientation.reduce((acc,p)=> acc ? turf.union(acc,p) : p, null);
+      if(unionAll){
+        const diff = turf.difference(turfPoly, unionAll);
+        if(diff){
+          const dGeom = diff.geometry;
+          const dRings = dGeom.type==='MultiPolygon' ? dGeom.coordinates.map(mp=>mp[0]) : [dGeom.coordinates[0]];
+          dRings.forEach(r=>{
+            let pts = r.map(c=>toLL(c[0], c[1]));
+            if(pts.length>1){
+              const a=pts[0], b2=pts[pts.length-1];
+              if(Math.abs(a[0]-b2[0])<1e-10 && Math.abs(a[1]-b2[1])<1e-10) pts.pop();
+            }
+            if(pts.length<3) return;
+            const area = ringAreaXY(r);
+            if(area < totalArea*0.0001) return; // فتافيت ناتجة عن دقة الحساب — نتجاهلها
+            newFeatures.push({ id: uid(), type:'polygon', coords: pts, attrs: Object.assign({}, f.attrs, {ملاحظة:'باقي الأرض غير مقسّم'}), color: f.color });
+          });
+        }
+      }
+    }catch(e){ console.warn('تعذّر حساب باقي الأرض بعد القطع', e); }
+
+    pushStateToUndo();
+    const fIdx = layer.features.findIndex(x=>x.id===featureId);
+    if(fIdx>=0) layer.features.splice(fIdx, 1, ...newFeatures);
+    else layer.features.push(...newFeatures);
+
+    selection = null;
+    renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
+    document.getElementById('stHint').textContent = `✓ تم قطع ${bands.length} قطعة بواجهة ${frontageWidth} م ومساحة ${areaPerPart} م² لكل قطعة`;
   }
 
   /* ---------- Import GeoJSON from file ---------- */
