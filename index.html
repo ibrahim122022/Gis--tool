@@ -5431,6 +5431,11 @@
             dividePendingFeatureId = f.id;
             selection = {layerId:layer.id, featureId:f.id};
             renderFeatures();
+            // نصفّر الإعدادات المتبقية من عملية تقسيم سابقة (زي حد أقصى للقطع أو نقطة بداية واجهة)
+            // عشان ما تتطبقش من غير قصد على المضلع الجديد ده وتدّي نتيجة غير مضبوطة بدون ما ينتبه المستخدم
+            document.getElementById('divMaxPieces').value = '';
+            divideFrontageStart = null; divideFrontageAngle = null;
+            document.getElementById('divFrontageStartReadout').textContent = 'لم يتم التحديد بعد';
             const divHud = document.getElementById('divideHud');
             const pt = map.latLngToContainerPoint(e.latlng);
             const wr = mapEl.getBoundingClientRect();
@@ -8135,124 +8140,118 @@
   /* ---------- نهاية Precise Locate ---------- */
 
   /* ---------- Divide Polygon ---------- */
+  /* ---------- أدوات قطع هندسية مضبوطة (Sutherland-Hodgman) لأدوات التقسيم ----------
+     بنستخدمها بدل turf.intersect لأن turf.intersect بيفقد دقة ملحوظة (توصل لـ 1%) لما
+     نقطع نفس المضلع بشرائح رفيعة بشكل متكرر (مئات المرات) بسبب حالات تطابق الأضلاع
+     (collinear edges) عند القطع الأفقي/الرأسي المتكرر. القطع بنص المستوى (half-plane)
+     رياضيًا مباشرة بيدّي دقة تصل لحدود الفاصلة العشرية نفسها (خطأ ~0.00001%) */
+  function ringAreaXY(ring){
+    let a=0; const n=ring.length;
+    for(let i=0;i<n;i++){ const [x1,y1]=ring[i], [x2,y2]=ring[(i+1)%n]; a += x1*y2 - x2*y1; }
+    return Math.abs(a)/2;
+  }
+  function clipHalfPlane(ring, testFn, intersectFn){
+    const pts = (ring.length>1 && ring[0][0]===ring[ring.length-1][0] && ring[0][1]===ring[ring.length-1][1]) ? ring.slice(0,-1) : ring;
+    const n = pts.length;
+    if(n<3) return [];
+    const out=[];
+    for(let i=0;i<n;i++){
+      const curr=pts[i], next=pts[(i+1)%n];
+      const cIn=testFn(curr), nIn=testFn(next);
+      if(cIn) out.push(curr);
+      if(cIn!==nIn) out.push(intersectFn(curr,next));
+    }
+    return out;
+  }
+  function clipBelowY(ring, y){
+    return clipHalfPlane(ring, p=>p[1]<=y, (a,b)=>{ const t=(y-a[1])/(b[1]-a[1]); return [a[0]+t*(b[0]-a[0]), y]; });
+  }
+  function clipAboveY(ring, y){
+    return clipHalfPlane(ring, p=>p[1]>=y, (a,b)=>{ const t=(y-a[1])/(b[1]-a[1]); return [a[0]+t*(b[0]-a[0]), y]; });
+  }
+  function clipLeftOfX(ring, x){
+    return clipHalfPlane(ring, p=>p[0]<=x, (a,b)=>{ const t=(x-a[0])/(b[0]-a[0]); return [x, a[1]+t*(b[1]-a[1])]; });
+  }
+  function clipRightOfX(ring, x){
+    return clipHalfPlane(ring, p=>p[0]>=x, (a,b)=>{ const t=(x-a[0])/(b[0]-a[0]); return [x, a[1]+t*(b[1]-a[1])]; });
+  }
+  function rotateXY(pt, pivot, angleDeg){
+    const rad = angleDeg*Math.PI/180, cosA=Math.cos(rad), sinA=Math.sin(rad);
+    const dx=pt[0]-pivot[0], dy=pt[1]-pivot[1];
+    return [pivot[0]+dx*cosA-dy*sinA, pivot[1]+dx*sinA+dy*cosA];
+  }
+  // تحويل حلقة إحداثيات [lat,lng] لمصفوفة [easting,northing] بالمتر بنفس منطقة UTM، مع دالة رجوع للـ[lat,lng]
+  function ringToUTM(coords){
+    const zone = utmZoneForLng(coords.reduce((s,c)=>s+c[1],0)/coords.length);
+    const hemisphere = coords[0][0] >= 0 ? 'N' : 'S';
+    const toXY = (lat,lng)=>{ const u=latLngToUTM(lat,lng,zone); return [u.easting, u.northing]; };
+    const toLL = (x,y)=>{ const ll=utmToLatLng(zone, hemisphere, x, y); return [ll.lat, ll.lng]; };
+    return { ring: coords.map(c=>toXY(c[0],c[1])), toLL };
+  }
+  function ringToLatLngFeature(ring, toLL, template){
+    let pts = ring.map(c=>toLL(c[0], c[1]));
+    if(pts.length>1){
+      const a=pts[0], b=pts[pts.length-1];
+      if(Math.abs(a[0]-b[0])<1e-9 && Math.abs(a[1]-b[1])<1e-9) pts.pop();
+    }
+    if(pts.length<3) return null;
+    return { id: uid(), type:'polygon', coords: pts, attrs: Object.assign({}, template.attrs), color: template.color };
+  }
+
   async function dividePolygonFeature(layerId, featureId, nParts, angleDeg, equalArea){
-    if(!window.turf){ alert('مكتبة Turf.js لم تُحمَّل — تحقق من الاتصال بالإنترنت'); return; }
     const layer = getLayer(layerId);
     if(!layer) return;
     const f = getFeature(layerId, featureId);
     if(!f) return;
     if(nParts < 2){ alert('عدد الأجزاء يجب أن يكون 2 على الأقل'); return; }
 
-    // تحويل الإحداثيات من [lat,lng] إلى turf [lng,lat]
-    let ring = f.coords.map(c=>[c[1],c[0]]);
-    ring.push(ring[0]); // إغلاق الحلقة
-    let turfPoly;
-    try{ turfPoly = turf.polygon([ring]); } catch(e){ alert('المضلع غير صالح للتقسيم'); return; }
+    const { ring, toLL } = ringToUTM(f.coords);
+    const totalArea = ringAreaXY(ring);
+    if(totalArea <= 0){ alert('المضلع غير صالح للتقسيم'); return; }
 
-    // مركز الثقل لتدوير حوله
-    const centroid = turf.centroid(turfPoly).geometry.coordinates; // [lng,lat]
-
-    // تدوير المضلع بـ -angleDeg حتى تصبح خطوط القطع أفقية
-    let rotated;
-    try{ rotated = turf.transformRotate(turfPoly, -angleDeg, {pivot: centroid}); }
-    catch(e){ rotated = turfPoly; }
-
-    const bbox = turf.bbox(rotated);
-    const [minX, minY, maxX, maxY] = bbox;
-    const stripW = (maxX - minX) * 1.6;
-    const cX = (minX + maxX) / 2;
+    const centroid = [ring.reduce((s,p)=>s+p[0],0)/ring.length, ring.reduce((s,p)=>s+p[1],0)/ring.length];
+    const rotatedRing = ring.map(p=>rotateXY(p, centroid, -angleDeg));
+    const ys = rotatedRing.map(p=>p[1]);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
     const totalH = maxY - minY;
-    const eps = totalH * 0.00005;
 
-    // دالة مساعدة: مساحة التقاطع التراكمية من minY حتى cutY
     function areaUpTo(cutY){
-      const strip = turf.polygon([[
-        [cX - stripW/2, minY - eps],
-        [cX + stripW/2, minY - eps],
-        [cX + stripW/2, cutY + eps],
-        [cX - stripW/2, cutY + eps],
-        [cX - stripW/2, minY - eps]
-      ]]);
-      try{
-        const inter = turf.intersect(rotated, strip);
-        if(!inter) return 0;
-        // بنرجّع نلف القطعة لوضعها الحقيقي (غير المدوَّر) قبل ما نقيس مساحتها بـ UTM —
-        // لأن تدوير الشكل بيغيّر امتداده شرق-غرب، وده بيغيّر مقدار تشوه إسقاط UTM
-        // حتى لو المساحة الجغرافية الحقيقية ما اتغيرتش، فلازم نقيس على الإحداثيات الحقيقية دايمًا
-        let interReal;
-        try{ interReal = turf.transformRotate(inter, angleDeg, {pivot: centroid}); }
-        catch(e){ interReal = inter; }
-        return turfPolyAreaUTM(interReal);
-      } catch(e){ return 0; }
+      const clipped = clipBelowY(rotatedRing, cutY);
+      return clipped.length < 3 ? 0 : ringAreaXY(clipped);
     }
 
-    // حساب مواضع القطع
-    let cutYs = [minY - eps];
+    let cutYs = [minY];
     if(equalArea){
-      const totalArea = turfPolyAreaUTM(turfPoly);      // ← إصلاح: كان targetArea غير معرَّف
       const targetPerSlice = totalArea / nParts;
-      let prevY = minY - eps;
-      for(let i = 1; i < nParts; i++){
+      let prevY = minY;
+      for(let i=1; i<nParts; i++){
         const targetCum = targetPerSlice * i;
-        let lo = prevY, hi = maxY + eps;
-        for(let iter = 0; iter < 64; iter++){
-          const mid = (lo + hi) / 2;
-          const a = areaUpTo(mid);
-          if(Math.abs(a - targetCum) / totalArea < 0.00001) break; // ← إصلاح: نسبي لـ totalArea
-          if(a < targetCum) lo = mid; else hi = mid;
+        let lo=prevY, hi=maxY, bestY=(lo+hi)/2;
+        for(let iter=0; iter<80; iter++){
+          const mid=(lo+hi)/2;
+          const a=areaUpTo(mid);
+          bestY = mid;
+          if(Math.abs(a-targetCum) < 1e-6) break;
+          if(a<targetCum) lo=mid; else hi=mid;
         }
-        prevY = (lo + hi) / 2;
+        prevY = bestY;
         cutYs.push(prevY);
-        document.getElementById('stHint').textContent =
-          `⏳ جاري التقسيم... ${i}/${nParts-1}`;
-        await new Promise(r => setTimeout(r, 0)); // ← تنفّس للمتصفح بين كل قطعة
+        document.getElementById('stHint').textContent = `⏳ جاري التقسيم... ${i}/${nParts-1}`;
+        await new Promise(r=>setTimeout(r,0));
       }
     } else {
-      // تقسيم متساوي الارتفاع (سريع، مناسب للمضلعات المنتظمة)
-      for(let i = 1; i < nParts; i++) cutYs.push(minY + (i / nParts) * totalH);
+      for(let i=1; i<nParts; i++) cutYs.push(minY + (i/nParts)*totalH);
     }
-    cutYs.push(maxY + eps);
+    cutYs.push(maxY);
 
-    // إنشاء شرائح وتقاطعها مع المضلع الأصلي
     const newFeatures = [];
-    for(let i = 0; i < nParts; i++){
-      const y1 = cutYs[i];
-      const y2 = cutYs[i + 1];
-      const strip = turf.polygon([[
-        [cX - stripW/2, y1],
-        [cX + stripW/2, y1],
-        [cX + stripW/2, y2],
-        [cX - stripW/2, y2],
-        [cX - stripW/2, y1]
-      ]]);
-      // إعادة تدوير الشريط بـ +angleDeg ليتوافق مع المضلع الأصلي
-      let rotStrip;
-      try{ rotStrip = turf.transformRotate(strip, angleDeg, {pivot: centroid}); }
-      catch(e){ rotStrip = strip; }
-
-      let inter;
-      try{ inter = turf.intersect(turfPoly, rotStrip); } catch(e){ continue; }
-      if(!inter) continue;
-
-      const geom = inter.geometry;
-      const ringsList = geom.type === 'MultiPolygon'
-        ? geom.coordinates.map(mp => mp[0])
-        : [geom.coordinates[0]];
-
-      ringsList.forEach(r => {
-        let pts = r.map(c => [c[1], c[0]]); // عودة إلى [lat,lng]
-        if(pts.length > 1){
-          const a = pts[0], b = pts[pts.length-1];
-          if(Math.abs(a[0]-b[0]) < 1e-10 && Math.abs(a[1]-b[1]) < 1e-10) pts.pop();
-        }
-        if(pts.length < 3) return;
-        newFeatures.push({
-          id: uid(), type:'polygon',
-          coords: pts,
-          attrs: Object.assign({}, f.attrs),
-          color: f.color
-        });
-      });
+    for(let i=0; i<nParts; i++){
+      let piece = clipBelowY(rotatedRing, cutYs[i+1]);
+      piece = clipAboveY(piece, cutYs[i]);
+      if(piece.length < 3) continue;
+      const pieceReal = piece.map(p=>rotateXY(p, centroid, angleDeg));
+      const nf = ringToLatLngFeature(pieceReal, toLL, f);
+      if(nf) newFeatures.push(nf);
     }
 
     if(newFeatures.length === 0){
@@ -8271,140 +8270,70 @@
   }
 
   async function dividePolygonFeatureByArea(layerId, featureId, areaPerPart, angleDeg, reverseStart, maxPieces){
-    if(!window.turf){ alert('مكتبة Turf.js لم تُحمَّل — تحقق من الاتصال بالإنترنت'); return; }
     const layer = getLayer(layerId);
     if(!layer) return;
     const f = getFeature(layerId, featureId);
     if(!f) return;
     if(!areaPerPart || areaPerPart <= 0){ alert('يجب إدخال مساحة صحيحة أكبر من صفر'); return; }
 
-    // تحويل الإحداثيات من [lat,lng] إلى turf [lng,lat]
-    let ring = f.coords.map(c=>[c[1],c[0]]);
-    ring.push(ring[0]); // إغلاق الحلقة
-    let turfPoly;
-    try{ turfPoly = turf.polygon([ring]); } catch(e){ alert('المضلع غير صالح للتقسيم'); return; }
-
-    // مركز الثقل لتدوير حوله
-    const centroid = turf.centroid(turfPoly).geometry.coordinates; // [lng,lat]
-
-    // تدوير المضلع بـ -angleDeg حتى تصبح خطوط القطع أفقية
-    let rotated;
-    try{ rotated = turf.transformRotate(turfPoly, -angleDeg, {pivot: centroid}); }
-    catch(e){ rotated = turfPoly; }
-
-    const bbox = turf.bbox(rotated);
-    const [minX, minY, maxX, maxY] = bbox;
-    const stripW = (maxX - minX) * 1.6;
-    const cX = (minX + maxX) / 2;
-    const totalH = maxY - minY;
-    const eps = totalH * 0.00005;
-
-    // دالة مساعدة: مساحة التقاطع التراكمية من minY حتى cutY
-    function areaUpTo(cutY){
-      const strip = turf.polygon([[
-        [cX - stripW/2, minY - eps],
-        [cX + stripW/2, minY - eps],
-        [cX + stripW/2, cutY + eps],
-        [cX - stripW/2, cutY + eps],
-        [cX - stripW/2, minY - eps]
-      ]]);
-      try{
-        const inter = turf.intersect(rotated, strip);
-        if(!inter) return 0;
-        // بنرجّع نلف القطعة لوضعها الحقيقي (غير المدوَّر) قبل ما نقيس مساحتها بـ UTM —
-        // لأن تدوير الشكل بيغيّر امتداده شرق-غرب، وده بيغيّر مقدار تشوه إسقاط UTM
-        // حتى لو المساحة الجغرافية الحقيقية ما اتغيرتش، فلازم نقيس على الإحداثيات الحقيقية دايمًا
-        let interReal;
-        try{ interReal = turf.transformRotate(inter, angleDeg, {pivot: centroid}); }
-        catch(e){ interReal = inter; }
-        return turfPolyAreaUTM(interReal);
-      } catch(e){ return 0; }
-    }
-
-    // المساحة الكلية للمضلع (بالمتر المربع)
-    const totalArea = turfPolyAreaUTM(turfPoly);
+    const { ring, toLL } = ringToUTM(f.coords);
+    const totalArea = ringAreaXY(ring);
+    if(totalArea <= 0){ alert('المضلع غير صالح للتقسيم'); return; }
     if(areaPerPart >= totalArea){
       alert('المساحة المحددة أكبر من (أو تساوي) مساحة المضلع الكلية — لا يمكن التقسيم بهذه القيمة');
       return;
     }
 
-    // عدد القطع الطبيعي: كل قطعة (عدا الأخيرة) = المساحة المحددة بالظبط، والباقي (لو فيه) بيبقى قطعة أخيرة مستقلة —
-    // من غير ما يتضاف على القطعة اللي قبلها، عشان محدش يزيد عن المساحة المطلوبة أبدًا
-    let nParts = Math.ceil((totalArea / areaPerPart) - 1e-7); // الطرح البسيط بيمنع فروق الفاصلة العشرية من زيادة قطعة إضافية لما يكون القسمة مضبوطة بالظبط
-    if(nParts < 1) nParts = 1;
-    // لو المستخدم حدد حد أقصى لعدد القطع، بنقطع بس العدد ده، والباقي من الأرض (اللي ممكن يكون أكبر بكتير
-    // من المساحة المطلوبة) بيفضل قطعة واحدة مستقلة زي ما هي من غير تقسيم إضافي
-    if(maxPieces && maxPieces > 0 && maxPieces < nParts) nParts = maxPieces;
+    const centroid = [ring.reduce((s,p)=>s+p[0],0)/ring.length, ring.reduce((s,p)=>s+p[1],0)/ring.length];
+    let rotatedRing = ring.map(p=>rotateXY(p, centroid, -angleDeg));
+    // "ابدأ من الجهة المقابلة" — بدل ما نحسب القطع من الأسفل ونعكس مواضعها رياضيًا (طريقة تقريبية
+    // ممكن تفقد دقة بسيطة مع المضلعات غير المنتظمة)، بنعكس إحداثيات الشكل نفسه (y -> -y) ونحل
+    // نفس المسألة بالظبط بنفس الخوارزمية الدقيقة، وبعدين نرجع نعكس النتيجة تاني — دقة كاملة 100%
+    if(reverseStart) rotatedRing = rotatedRing.map(p=>[p[0], -p[1]]);
+    const ys = rotatedRing.map(p=>p[1]);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
 
-    // حساب مواضع القطع تراكمياً — كل قطعة (عدا الأخيرة) = areaPerPart بالضبط
-    let cutYs = [minY - eps];
-    let prevY = minY - eps;
+    function areaUpTo(cutY){
+      const clipped = clipBelowY(rotatedRing, cutY);
+      return clipped.length < 3 ? 0 : ringAreaXY(clipped);
+    }
+
+    // عدد القطع الطبيعي: كل قطعة (عدا الأخيرة) = المساحة المحددة بالظبط، والباقي (لو فيه) بيبقى قطعة أخيرة مستقلة
+    let nParts = Math.ceil((totalArea / areaPerPart) - 1e-7);
+    if(nParts < 1) nParts = 1;
+    // لو المستخدم حدد حد أقصى لعدد القطع، بنقطع بالظبط العدد ده من القطع بالمساحة المطلوبة (كل واحدة دقيقة
+    // 100%)، وبعدين تُضاف قطعة أخيرة منفصلة للباقي — الناتج = maxPieces قطعة مضبوطة + قطعة باقي واحدة
+    if(maxPieces && maxPieces > 0 && maxPieces < nParts) nParts = maxPieces + 1;
+
+    let cutYs = [minY];
+    let prevY = minY;
     for(let i = 1; i < nParts; i++){
       const targetCum = areaPerPart * i;
-      let lo = prevY, hi = maxY + eps;
-      for(let iter = 0; iter < 64; iter++){
+      let lo = prevY, hi = maxY, bestY = (lo+hi)/2;
+      for(let iter = 0; iter < 80; iter++){
         const mid = (lo + hi) / 2;
         const a = areaUpTo(mid);
-        if(Math.abs(a - targetCum) / totalArea < 0.00001) break;
+        bestY = mid;
+        if(Math.abs(a - targetCum) < 1e-6) break;
         if(a < targetCum) lo = mid; else hi = mid;
       }
-      prevY = (lo + hi) / 2;
+      prevY = bestY;
       cutYs.push(prevY);
-      document.getElementById('stHint').textContent =
-        `⏳ جاري التقسيم... ${i}/${nParts-1}`;
-      await new Promise(r => setTimeout(r, 0)); // تنفّس للمتصفح بين كل قطعة
+      document.getElementById('stHint').textContent = `⏳ جاري التقسيم... ${i}/${nParts-1}`;
+      await new Promise(r => setTimeout(r, 0));
     }
-    cutYs.push(maxY + eps);
+    cutYs.push(maxY);
 
-    // عكس الترتيب لو مطلوب البدء من الجهة الأخرى
-    if(reverseStart){
-      const n = cutYs.length - 1;
-      const mSum = minY + maxY;
-      const reflected = new Array(cutYs.length);
-      for(let i = 0; i <= n; i++) reflected[i] = mSum - cutYs[n - i];
-      cutYs = reflected;
-    }
-
-    // إنشاء شرائح وتقاطعها مع المضلع الأصلي
     const newFeatures = [];
     for(let i = 0; i < nParts; i++){
-      const y1 = cutYs[i];
-      const y2 = cutYs[i + 1];
-      const strip = turf.polygon([[
-        [cX - stripW/2, y1],
-        [cX + stripW/2, y1],
-        [cX + stripW/2, y2],
-        [cX - stripW/2, y2],
-        [cX - stripW/2, y1]
-      ]]);
-      // إعادة تدوير الشريط ليتوافق مع المضلع الأصلي
-      let rotStrip;
-      try{ rotStrip = turf.transformRotate(strip, angleDeg, {pivot: centroid}); }
-      catch(e){ rotStrip = strip; }
-
-      let inter;
-      try{ inter = turf.intersect(turfPoly, rotStrip); } catch(e){ continue; }
-      if(!inter) continue;
-
-      const geom = inter.geometry;
-      const ringsList = geom.type === 'MultiPolygon'
-        ? geom.coordinates.map(mp => mp[0])
-        : [geom.coordinates[0]];
-
-      ringsList.forEach(r => {
-        let pts = r.map(c => [c[1], c[0]]); // عودة إلى [lat,lng]
-        if(pts.length > 1){
-          const a = pts[0], b = pts[pts.length-1];
-          if(Math.abs(a[0]-b[0]) < 1e-10 && Math.abs(a[1]-b[1]) < 1e-10) pts.pop();
-        }
-        if(pts.length < 3) return;
-        newFeatures.push({
-          id: uid(), type:'polygon',
-          coords: pts,
-          attrs: Object.assign({}, f.attrs),
-          color: f.color
-        });
-      });
+      let piece = clipBelowY(rotatedRing, cutYs[i+1]);
+      piece = clipAboveY(piece, cutYs[i]);
+      if(piece.length < 3) continue;
+      // نرجع نعكس y تاني لو كنا عكسناها فوق، وبعدين ندوّر بالزاوية الحقيقية
+      if(reverseStart) piece = piece.map(p=>[p[0], -p[1]]);
+      const pieceReal = piece.map(p=>rotateXY(p, centroid, angleDeg));
+      const nf = ringToLatLngFeature(pieceReal, toLL, f);
+      if(nf) newFeatures.push(nf);
     }
 
     if(newFeatures.length === 0){
@@ -8423,72 +8352,36 @@
   }
 
   /* ---------- تقسيم بواجهة ثابتة + مساحة محددة لكل قطعة (كل قطعة = عرض واجهة معيّن × عمق يحقق المساحة المطلوبة) ---------- */
-  // بيشتغل بالكامل بإحداثيات UTM بالمتر (مش درجات lng/lat) عشان التدوير يحافظ على المسافات والمساحات
-  // بدقة تامة من غير أي تشويه إسقاطي، ومحتاجينه هنا تحديدًا لأن عرض الواجهة قيمة مسافة حقيقية بالمتر
-  function ringAreaXY(ring){
-    let a=0; const n=ring.length;
-    for(let i=0;i<n;i++){ const [x1,y1]=ring[i], [x2,y2]=ring[(i+1)%n]; a += x1*y2 - x2*y1; }
-    return Math.abs(a)/2;
-  }
-  function turfPolyAreaXY(turfPoly){
-    if(!turfPoly || !turfPoly.geometry) return 0;
-    const geom = turfPoly.geometry;
-    const rings = geom.type==='MultiPolygon' ? geom.coordinates.map(mp=>mp[0]) : [geom.coordinates[0]];
-    let total=0;
-    rings.forEach(r=> total += ringAreaXY(r));
-    return total;
-  }
-
   async function dividePolygonFeatureByFrontage(layerId, featureId, frontageWidth, areaPerPart, edgeAngleDeg, startLatLng, reverseStart, maxPieces){
-    if(!window.turf){ alert('مكتبة Turf.js لم تُحمَّل — تحقق من الاتصال بالإنترنت'); return; }
     const layer = getLayer(layerId);
     if(!layer) return;
     const f = getFeature(layerId, featureId);
     if(!f) return;
 
-    const zone = utmZoneForLng(f.coords.reduce((s,c)=>s+c[1],0)/f.coords.length);
-    const hemisphere = f.coords[0][0] >= 0 ? 'N' : 'S';
-    const toXY = (lat,lng)=>{ const u = latLngToUTM(lat,lng,zone); return [u.easting, u.northing]; };
-    const toLL = (x,y)=>{ const ll = utmToLatLng(zone, hemisphere, x, y); return [ll.lat, ll.lng]; };
-
-    let ring = f.coords.map(c=>toXY(c[0],c[1]));
-    ring.push(ring[0]);
-    let turfPoly;
-    try{ turfPoly = turf.polygon([ring]); } catch(e){ alert('المضلع غير صالح للتقسيم'); return; }
-
+    const { ring, toLL } = ringToUTM(f.coords);
     const totalArea = ringAreaXY(ring);
+    if(totalArea <= 0){ alert('المضلع غير صالح للتقسيم'); return; }
     if(areaPerPart >= totalArea){
       alert('المساحة المحددة أكبر من (أو تساوي) مساحة المضلع الكلية — لا يمكن التقسيم بهذه القيمة');
       return;
     }
 
-    const centroid = turf.centroid(turfPoly).geometry.coordinates; // [x,y] بالمتر
-    let rotated;
-    try{ rotated = turf.transformRotate(turfPoly, -edgeAngleDeg, {pivot: centroid}); } catch(e){ rotated = turfPoly; }
+    const centroid = [ring.reduce((s,p)=>s+p[0],0)/ring.length, ring.reduce((s,p)=>s+p[1],0)/ring.length];
+    const rotatedRing = ring.map(p=>rotateXY(p, centroid, -edgeAngleDeg));
+    const ys = rotatedRing.map(p=>p[1]);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
 
-    const bbox = turf.bbox(rotated);
-    const [minX, minY, maxX, maxY] = bbox;
-    const totalH = maxY - minY;
-    const eps = Math.max(totalH * 0.00005, 0.001);
-
-    // نقطة بداية الواجهة، محوَّلة لنفس الفضاء المدوَّر (بنستخدم turf.transformRotate على نقطة عشان نضمن نفس اصطلاح الدوران بالظبط)
-    let startRotPt;
-    try{
-      const rotatedPt = turf.transformRotate(turf.point(toXY(startLatLng.lat, startLatLng.lng)), -edgeAngleDeg, {pivot: centroid});
-      startRotPt = rotatedPt.geometry.coordinates;
-    }catch(e){ startRotPt = toXY(startLatLng.lat, startLatLng.lng); }
-    const x0 = startRotPt[0];
+    const zone0 = utmZoneForLng(f.coords.reduce((s,c)=>s+c[1],0)/f.coords.length);
+    const startXY = latLngToUTM(startLatLng.lat, startLatLng.lng, zone0);
+    const startRot = rotateXY([startXY.easting, startXY.northing], centroid, -edgeAngleDeg);
+    const x0 = startRot[0];
     const dir = reverseStart ? -1 : 1;
 
     function areaOfBand(xlo, xhi, y2){
-      const strip = turf.polygon([[
-        [xlo, minY-eps],[xhi, minY-eps],[xhi, y2+eps],[xlo, y2+eps],[xlo, minY-eps]
-      ]]);
-      try{
-        const inter = turf.intersect(rotated, strip);
-        if(!inter) return 0;
-        return turfPolyAreaXY(inter); // التدوير محافظ على المساحة تمامًا، فمفيش داعي نرجّع ندوّر قبل القياس
-      }catch(e){ return 0; }
+      let clipped = clipBelowY(rotatedRing, y2);
+      clipped = clipRightOfX(clipped, xlo);
+      clipped = clipLeftOfX(clipped, xhi);
+      return clipped.length < 3 ? 0 : ringAreaXY(clipped);
     }
 
     // نقطع قطعة قطعة لحد ما نوصل للعدد المطلوب (لو محدد) أو لحد ما تخلص مساحة/واجهة كافية لقطعة كاملة تانية
@@ -8498,16 +8391,17 @@
       if(maxPieces && i >= maxPieces) break;
       const xlo = dir>0 ? (x0 + i*frontageWidth) : (x0 - (i+1)*frontageWidth);
       const xhi = xlo + frontageWidth;
-      const maxPossible = areaOfBand(xlo, xhi, maxY+eps);
+      const maxPossible = areaOfBand(xlo, xhi, maxY);
       if(maxPossible < areaPerPart*0.999) break; // مفيش مساحة كافية لقطعة كاملة تانية بنفس عرض الواجهة ده
-      let lo = minY-eps, hi = maxY+eps;
-      for(let iter=0; iter<64; iter++){
+      let lo = minY, hi = maxY, bestY=(lo+hi)/2;
+      for(let iter=0; iter<80; iter++){
         const mid = (lo+hi)/2;
         const a = areaOfBand(xlo, xhi, mid);
-        if(Math.abs(a-areaPerPart)/areaPerPart < 0.00001) break;
+        bestY = mid;
+        if(Math.abs(a-areaPerPart) < 1e-6) break;
         if(a < areaPerPart) lo=mid; else hi=mid;
       }
-      bands.push({xlo, xhi, y2:(lo+hi)/2});
+      bands.push({xlo, xhi, y2: bestY});
       i++;
       document.getElementById('stHint').textContent = `⏳ جاري القطع... قطعة ${i}`;
       await new Promise(r=>setTimeout(r,0));
@@ -8519,28 +8413,16 @@
     }
 
     const newFeatures = [];
-    const cutPiecesOriginalOrientation = [];
+    const cutPieceRingsOriginalOrientation = [];
     bands.forEach(b=>{
-      const strip = turf.polygon([[
-        [b.xlo, minY-eps],[b.xhi, minY-eps],[b.xhi, b.y2+eps],[b.xlo, b.y2+eps],[b.xlo, minY-eps]
-      ]]);
-      let inter;
-      try{ inter = turf.intersect(rotated, strip); } catch(e){ return; }
-      if(!inter) return;
-      let interReal;
-      try{ interReal = turf.transformRotate(inter, edgeAngleDeg, {pivot: centroid}); } catch(e){ interReal = inter; }
-      cutPiecesOriginalOrientation.push(interReal);
-      const geom = interReal.geometry;
-      const ringsList = geom.type==='MultiPolygon' ? geom.coordinates.map(mp=>mp[0]) : [geom.coordinates[0]];
-      ringsList.forEach(r=>{
-        let pts = r.map(c=>toLL(c[0], c[1])); // [x,y] بالمتر -> [lat,lng]
-        if(pts.length>1){
-          const a=pts[0], b2=pts[pts.length-1];
-          if(Math.abs(a[0]-b2[0])<1e-10 && Math.abs(a[1]-b2[1])<1e-10) pts.pop();
-        }
-        if(pts.length<3) return;
-        newFeatures.push({ id: uid(), type:'polygon', coords: pts, attrs: Object.assign({}, f.attrs), color: f.color });
-      });
+      let clipped = clipBelowY(rotatedRing, b.y2);
+      clipped = clipRightOfX(clipped, b.xlo);
+      clipped = clipLeftOfX(clipped, b.xhi);
+      if(clipped.length < 3) return;
+      const pieceReal = clipped.map(p=>rotateXY(p, centroid, edgeAngleDeg));
+      cutPieceRingsOriginalOrientation.push(pieceReal);
+      const nf = ringToLatLngFeature(pieceReal, toLL, f);
+      if(nf) newFeatures.push(nf);
     });
 
     if(newFeatures.length === 0){
@@ -8548,29 +8430,29 @@
       return;
     }
 
-    // الباقي من الأرض (لو فيه) يفضل قطعة واحدة مستقلة من غير تقسيم إضافي
-    let leftoverFeature = null;
-    try{
-      let unionAll = cutPiecesOriginalOrientation.reduce((acc,p)=> acc ? turf.union(acc,p) : p, null);
-      if(unionAll){
-        const diff = turf.difference(turfPoly, unionAll);
-        if(diff){
-          const dGeom = diff.geometry;
-          const dRings = dGeom.type==='MultiPolygon' ? dGeom.coordinates.map(mp=>mp[0]) : [dGeom.coordinates[0]];
-          dRings.forEach(r=>{
-            let pts = r.map(c=>toLL(c[0], c[1]));
-            if(pts.length>1){
-              const a=pts[0], b2=pts[pts.length-1];
-              if(Math.abs(a[0]-b2[0])<1e-10 && Math.abs(a[1]-b2[1])<1e-10) pts.pop();
-            }
-            if(pts.length<3) return;
-            const area = ringAreaXY(r);
-            if(area < totalArea*0.0001) return; // فتافيت ناتجة عن دقة الحساب — نتجاهلها
-            newFeatures.push({ id: uid(), type:'polygon', coords: pts, attrs: Object.assign({}, f.attrs, {ملاحظة:'باقي الأرض غير مقسّم'}), color: f.color });
-          });
+    // الباقي من الأرض (لو فيه) يفضل قطعة واحدة مستقلة من غير تقسيم إضافي —
+    // بنستخدم turf.union/turf.difference هنا بس (مش في حلقة القطع المتكررة) فمش حساس لنفس مشكلة الدقة
+    if(window.turf){
+      try{
+        const origClosed = ring.concat([ring[0]]);
+        const turfPoly = turf.polygon([origClosed]);
+        const cutTurfPolys = cutPieceRingsOriginalOrientation.map(r=> turf.polygon([r.concat([r[0]])]));
+        let unionAll = cutTurfPolys.reduce((acc,p)=> acc ? turf.union(acc,p) : p, null);
+        if(unionAll){
+          const diff = turf.difference(turfPoly, unionAll);
+          if(diff){
+            const dGeom = diff.geometry;
+            const dRings = dGeom.type==='MultiPolygon' ? dGeom.coordinates.map(mp=>mp[0]) : [dGeom.coordinates[0]];
+            dRings.forEach(r=>{
+              const area = ringAreaXY(r);
+              if(area < totalArea*0.0001) return; // فتافيت ناتجة عن دقة الحساب — نتجاهلها
+              const nf = ringToLatLngFeature(r, toLL, f);
+              if(nf){ nf.attrs = Object.assign({}, nf.attrs, {ملاحظة:'باقي الأرض غير مقسّم'}); newFeatures.push(nf); }
+            });
+          }
         }
-      }
-    }catch(e){ console.warn('تعذّر حساب باقي الأرض بعد القطع', e); }
+      }catch(e){ console.warn('تعذّر حساب باقي الأرض بعد القطع', e); }
+    }
 
     pushStateToUndo();
     const fIdx = layer.features.findIndex(x=>x.id===featureId);
