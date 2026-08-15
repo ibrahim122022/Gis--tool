@@ -159,7 +159,7 @@
   #map.tool-draw{cursor:crosshair;}
 
   .basemap-toggle{position:absolute;top:10px;left:10px;z-index:450;background:rgba(255,255,255,.95);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:10px;display:flex;padding:3px;gap:3px;box-shadow:0 4px 18px rgba(0,120,140,.18);}
-  .scale-input-ctrl{margin-top:5px !important;}
+  .scale-input-ctrl{margin-top:48px !important;}
   .scale-input-wrap{display:flex;align-items:center;background:#fff;border-radius:4px;padding:3px 6px;gap:3px;box-shadow:0 1px 5px rgba(0,0,0,.4);}
   .scale-input-prefix{font-size:12px;font-weight:800;color:#2d3748;font-family:var(--sans);white-space:nowrap;}
   .scale-input-box{width:58px;border:1px solid var(--border);border-radius:4px;font-size:12px;text-align:center;padding:2px 3px;direction:ltr;font-family:var(--mono);color:#2d3748;background:#fdfdfb;}
@@ -395,6 +395,15 @@
     /* في الموبايل: نخفي تبويبات الريبون بس (مش زرار الوضع الداكن) ونعرض كل الأدوات في شريط واحد قابل للتمرير */
     .ribbon-tab{display:none;}
     .ribbon-tabs{padding:4px 8px;}
+    /* زرار الوضع الداكن/الفاتح في الموبايل بيتثبت في أعلى الركن الأيمن من الشاشة بدل شريط الأدوات السفلي */
+    #themeToggleBtn{
+      position:fixed !important;
+      top:calc(env(safe-area-inset-top,0px) + 8px) !important;
+      right:10px !important; inset-inline-end:10px !important;
+      left:auto !important; margin:0 !important;
+      width:auto !important; height:34px !important;
+      z-index:970; box-shadow:0 2px 10px rgba(0,0,0,.25);
+    }
     .ribbon-panels{display:flex;flex-direction:row;border-top:none;background:transparent;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
     .ribbon-panel{display:flex !important;flex-direction:row;padding:0;gap:0;overflow-x:visible;}
     .ribbon-group{flex-direction:row;padding:0 4px;gap:0;align-items:center;}
@@ -572,7 +581,7 @@
       <button class="ribbon-tab" data-ribbon-tab="insert">إدراج</button>
       <button class="ribbon-tab" data-ribbon-tab="analysis">تحليل</button>
       <button class="ribbon-tab" data-ribbon-tab="view">عرض</button>
-      <button class="tool-btn" id="themeToggleBtn" title="تبديل الوضع الداكن / الفاتح" style="position:fixed;top:10px;right:14px;width:auto;height:32px;flex-direction:row;padding:0 12px;z-index:970;box-shadow:0 2px 10px rgba(0,0,0,.18);">
+      <button class="tool-btn" id="themeToggleBtn" title="تبديل الوضع الداكن / الفاتح" style="margin-inline-start:auto;width:auto;height:30px;flex-direction:row;padding:0 10px;">
         <svg viewBox="0 0 24 24" style="width:15px;height:15px;">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke-width="1.8"/>
         </svg><span style="font-size:10.5px;">الوضع الداكن</span>
