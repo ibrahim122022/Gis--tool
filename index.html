@@ -3686,6 +3686,30 @@
     }
   }
 
+  function duplicateLayoutPage(pageId){
+    const page = state.layoutPages.find(p=>p.id===pageId);
+    if(!page) return;
+    pushStateToUndo();
+    // نسخة كاملة عميقة من اللوحة (المقاس، الاتجاه، الكرتوش، وربط القطعة) — بيانات عادية فمفيش مشكلة في JSON clone
+    const clone = JSON.parse(JSON.stringify(page));
+    clone.id = uid();
+    clone.name = page.name + ' - نسخة';
+    // كل عنصر في اللوحة (إطار خريطة/جدول/سهم شمال...) لازم ID جديد يميّزه عن الأصلي
+    clone.elements = (clone.elements||[]).map(el=>{
+      const oldId = el.id;
+      el.id = uid();
+      // لو العنصر ده كان له لقطة خريطة محفوظة (mapFrame)، بنسخها هي كمان تحت الـ ID الجديد
+      if(state.layoutSnapshots[oldId] !== undefined){
+        state.layoutSnapshots[el.id] = state.layoutSnapshots[oldId];
+      }
+      return el;
+    });
+    const idx = state.layoutPages.findIndex(p=>p.id===pageId);
+    state.layoutPages.splice(idx+1, 0, clone);
+    renderLayoutPageList();
+    scheduleSave();
+  }
+
   function renderLayoutPageList(){
     const container = document.getElementById('layoutPageList');
     if(!container) return;
@@ -3712,6 +3736,7 @@
         return b;
       }
       row.appendChild(mk('✏️', 'فتح اللوحة', ()=> openLayoutPageEditor(page.id)));
+      row.appendChild(mk('⧉', 'دوبلكيت — نسخ اللوحة بكل خصائصها (المقاس، الكرتوش، العناصر، اللقطة)', ()=> duplicateLayoutPage(page.id)));
       row.appendChild(mk('🖼️', 'تصدير JPG', ()=> exportPageAsFile(page.id, 'jpg')));
       row.appendChild(mk('📕', 'تصدير PDF', ()=> exportPageAsFile(page.id, 'pdf')));
       row.appendChild(mk('🗑️', 'حذف اللوحة', ()=>{
@@ -3730,6 +3755,11 @@
     currentLayoutEditPageId = null;
     selectedElementId = null;
     renderLayoutPageList();
+    // نرجّع منيو الخلفية ومقياس الرسم بتوع الخريطة الحية اللي كانوا مخفيين وقت لوحة الإخراج
+    const bt = document.querySelector('.basemap-toggle');
+    if(bt) bt.style.display = '';
+    const sc = document.querySelector('.scale-input-ctrl');
+    if(sc) sc.style.display = '';
   }
 
   function openLayoutPageEditor(pageId){
@@ -3744,6 +3774,12 @@
     const f = getFeatureByRef(page.featureRef);
     document.getElementById('lyLinkedFeatureName').textContent = f ? ('✓ ' + featureLabel(f)) : '';
     document.getElementById('layoutView').style.display = 'flex';
+    // منيو الخلفية ومقياس الرسم بتوع الخريطة الحية بيبقى ترتيبهم فوق شاشة لوحة الإخراج (z-index)
+    // فبيظهروا طافيين فوقها غلط — بنخفيهم صراحة طول ما إحنا في شاشة اللوحة دي
+    const bt = document.querySelector('.basemap-toggle');
+    if(bt) bt.style.display = 'none';
+    const sc = document.querySelector('.scale-input-ctrl');
+    if(sc) sc.style.display = 'none';
     selectLayoutElement(null, page);
     renderLayoutCanvas(page);
   }
