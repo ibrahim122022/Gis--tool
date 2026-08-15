@@ -212,8 +212,12 @@
   .dms-row .dms-dir{width:44px;background:var(--bg-panel-2);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 3px;font-family:var(--mono);font-size:11px;}
   .dms-row .dms-sym{font-size:11px;color:var(--text-muted);flex-shrink:0;}
 
-  .sidebar{width:280px;background:linear-gradient(180deg,#FFFFFF 0%,#edf2f7 100%);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
-  .tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;background:#edf2f7;}
+  .sidebar{width:var(--sidebar-w, 280px);position:relative;background:linear-gradient(180deg,#FFFFFF 0%,#edf2f7 100%);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
+  .sidebar-resizer{position:absolute;top:0;bottom:0;inset-inline-start:-3px;width:6px;cursor:ew-resize;z-index:30;background:transparent;touch-action:none;}
+  .sidebar-resizer:hover, .sidebar-resizer.dragging{background:var(--accent-soft);}
+  .sidebar-resizer::after{content:'';position:absolute;top:50%;inset-inline-start:1.5px;transform:translateY(-50%);width:3px;height:38px;border-radius:3px;background:var(--border);}
+  .sidebar-resizer:hover::after, .sidebar-resizer.dragging::after{background:var(--accent);}
+  .tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg-panel-2);}
   .tab{flex:1;text-align:center;padding:12px 0;font-size:12px;color:var(--text-muted);cursor:pointer;font-weight:600;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;}
   .tab.active{color:var(--teal);border-bottom-color:var(--teal);}
   .tab:hover:not(.active){color:var(--text);border-bottom-color:rgba(0,0,0,.12);}
@@ -224,6 +228,9 @@
   .layer-row{display:flex;align-items:center;gap:8px;padding:8px;border-radius:10px;background:rgba(255,255,255,.9);margin-bottom:6px;border:1px solid var(--border);cursor:pointer;transition:all .15s;box-shadow:0 1px 4px rgba(0,120,140,.08);}
   .layer-row:hover{border-color:rgba(0,180,166,.35);background:rgba(0,180,166,.05);}
   .layer-row.active{border-color:var(--teal);background:rgba(0,180,166,.1);box-shadow:0 0 10px rgba(0,180,166,.15);}
+  [data-theme="dark"] .layer-row{background:var(--bg-panel-2);color:var(--text);}
+  [data-theme="dark"] .layer-row:hover{background:rgba(96,165,250,.12);}
+  [data-theme="dark"] .layer-row.active{background:rgba(96,165,250,.18);}
   .swatch{width:16px;height:16px;border-radius:5px;flex-shrink:0;border:1px solid rgba(0,0,0,.15);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15);}
   .layer-row .lname{flex:1;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .layer-row .lcount{font-size:10.5px;color:var(--text-muted);font-family:var(--mono);}
@@ -357,6 +364,17 @@
   .mobile-pad-btn.active { background: var(--teal-soft); border-color: var(--teal); color: var(--teal); }
   .mobile-pad-btn.action-btn { background: var(--accent); color: #fff; border: none; }
 
+  /* ── تكبير الأيقونات وضبط حجم الأزرار في وضع التابلت واللاب توب (شاشات أعرض من 760px) ── */
+  @media (min-width: 761px){
+    .icon-btn{padding:5px;}
+    .icon-btn svg{width:19px !important;height:19px !important;}
+    .layer-expand-btn{padding:4px 5px;}
+    .layer-expand-btn svg{width:16px !important;height:16px !important;}
+    .swatch{width:20px;height:20px;}
+    .layer-row{padding:10px;gap:10px;}
+    .layer-row .lname{font-size:13.5px;}
+  }
+
   @media (max-width: 760px){
     .app{flex-direction:column;}
     .toolbar{
@@ -391,6 +409,7 @@
       transform:translateX(100%);transition:transform .25s ease;box-shadow:-8px 0 24px rgba(0,0,0,.45);
     }
     .sidebar.open{transform:translateX(0);}
+    .sidebar-resizer{display:none;}
     .mobile-sidebar-toggle{display:flex;}
     #driveMenuToggleBtn{display:none;}
     .leaflet-control-zoom{display:none !important;}
@@ -1915,6 +1934,7 @@
   </div>
 
   <div class="sidebar">
+    <div class="sidebar-resizer" id="sidebarResizer" title="اسحب لتوسيع/تضييق اللوحة"></div>
     <div class="tabs">
       <div class="tab active" data-panel="layersPanel">الطبقات</div>
       <div class="tab" data-panel="attrPanel">الخصائص</div>
@@ -6355,6 +6375,59 @@
     });
   })();
 
+  /* ===== توسيع/تضييق لوحة الطبقات بالسحب (وضع اللاب توب/التابلت) — بيتحفظ العرض في localStorage ===== */
+  (function initSidebarResizer(){
+    const resizer = document.getElementById('sidebarResizer');
+    const sidebarEl = document.querySelector('.sidebar');
+    if(!resizer || !sidebarEl) return;
+    const MIN_W = 230, MAX_W = 560;
+    let startX = 0, startWidth = 0, dragging = false;
+
+    try{
+      const saved = parseFloat(localStorage.getItem('sidebarWidth'));
+      if(saved && saved>=MIN_W && saved<=MAX_W){
+        document.documentElement.style.setProperty('--sidebar-w', saved+'px');
+      }
+    }catch(e){}
+
+    function onPointerMove(e){
+      if(!dragging) return;
+      const x = e.touches ? e.touches[0].clientX : e.clientX;
+      // السايدبار على الشمال والخريطة على اليمين — السحب لليمين (بعيد عن السايدبار) بيوسّعها
+      const delta = x - startX;
+      const newWidth = Math.min(MAX_W, Math.max(MIN_W, startWidth + delta));
+      document.documentElement.style.setProperty('--sidebar-w', newWidth+'px');
+      if(e.cancelable) e.preventDefault();
+    }
+    function onPointerUp(){
+      if(!dragging) return;
+      dragging = false;
+      resizer.classList.remove('dragging');
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      try{ localStorage.setItem('sidebarWidth', Math.round(sidebarEl.getBoundingClientRect().width)); }catch(e){}
+      if(typeof map !== 'undefined' && map && map.invalidateSize) setTimeout(()=>map.invalidateSize(), 50);
+      document.removeEventListener('mousemove', onPointerMove);
+      document.removeEventListener('mouseup', onPointerUp);
+      document.removeEventListener('touchmove', onPointerMove);
+      document.removeEventListener('touchend', onPointerUp);
+    }
+    function onPointerDown(e){
+      dragging = true;
+      startX = e.touches ? e.touches[0].clientX : e.clientX;
+      startWidth = sidebarEl.getBoundingClientRect().width;
+      resizer.classList.add('dragging');
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'ew-resize';
+      document.addEventListener('mousemove', onPointerMove);
+      document.addEventListener('mouseup', onPointerUp);
+      document.addEventListener('touchmove', onPointerMove, {passive:false});
+      document.addEventListener('touchend', onPointerUp);
+      e.preventDefault();
+    }
+    resizer.addEventListener('mousedown', onPointerDown);
+    resizer.addEventListener('touchstart', onPointerDown, {passive:false});
+  })();
 
   document.getElementById('toolbar').addEventListener('click', e=>{
     const btn=e.target.closest('.tool-btn');
