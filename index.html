@@ -117,6 +117,8 @@
   .search-loading{text-align:center;color:var(--teal);font-size:11.5px;padding:14px 0;}
   .tool-btn[data-tool="divide"]{--tc:#2a9d5c;}
   .tool-btn[data-tool="split"]{--tc:#c0392b;}
+  .tool-btn[data-tool="difference"]{--tc:#8e44ad;}
+  .tool-btn[data-tool="buffer"]{--tc:#16a085;}
 
   .tool-btn:hover:not(:disabled){
     color:var(--tc, var(--teal));
@@ -824,12 +826,24 @@
                 <circle cx="20.5" cy="14.5" r="1.8" fill="currentColor" stroke="none"/>
               </svg><span>تقسيم</span>
             </button>
-            <button class="tool-btn" data-tool="split" title="قطع مضلع بخط حر ترسمه، أو تقطيع خط من نقطة (زي أداة Split في ArcGIS Pro)">
+            <button class="tool-btn" data-tool="split" title="قطع مضلع بخط حر ترسمه (ممكن يكون خط منكسر بعدة نقط وحتى يتقاطع مع الحدود أكتر من مرتين وينتج أكتر من قطعتين)، أو تقطيع خط من نقطة (زي أداة Split في ArcGIS Pro)">
               <svg viewBox="0 0 24 24">
                 <polygon points="12,3 21,9 18,20 6,20 3,9" fill="currentColor" opacity=".14" stroke-width="1.8" stroke-linejoin="round"/>
                 <line x1="2" y1="12" x2="22" y2="12" stroke-width="2.2" stroke-dasharray="3 2.2"/>
                 <path d="M9 8.5l-3 3.5 3 3.5M15 8.5l3 3.5-3 3.5" stroke-width="1.8" fill="none"/>
               </svg><span>قطع (Split)</span>
+            </button>
+            <button class="tool-btn" data-tool="difference" title="اطرح مضلع من مضلع تاني (Boolean Difference) — دوس على المضلع الأساسي (اللي هيفضل) وبعدين على المضلع اللي عايز تطرحه منه">
+              <svg viewBox="0 0 24 24">
+                <circle cx="9.5" cy="12" r="7" fill="currentColor" opacity=".16" stroke-width="1.8"/>
+                <circle cx="15.5" cy="12" r="7" fill="none" stroke-width="1.8" stroke-dasharray="2.5 2"/>
+              </svg><span>طرح</span>
+            </button>
+            <button class="tool-btn" data-tool="buffer" title="هامش/إزاحة حوالين عنصر بمسافة ثابتة (Buffer) — للخارج بمسافة موجبة، أو للداخل بمسافة سالبة (مضلعات فقط)">
+              <svg viewBox="0 0 24 24">
+                <polygon points="12,4 19,9 16.5,18 7.5,18 5,9" fill="currentColor" opacity=".16" stroke-width="1.6"/>
+                <polygon points="12,7 16.3,10.2 14.7,15.8 9.3,15.8 7.7,10.2" fill="none" stroke-width="1.6" stroke-dasharray="2 1.8"/>
+              </svg><span>هامش</span>
             </button>
             <button class="tool-btn" data-tool="measure" title="قياس المسافة بين نقطتين">
               <svg viewBox="0 0 24 24">
@@ -1568,6 +1582,27 @@
         </div>
       </div>
 
+      <!-- ── Difference (طرح) HUD ── -->
+      <div class="rect-hud" id="diffHud" style="width:250px;border-color:#8e44ad;display:none;position:fixed;top:56px;left:50%;transform:translateX(-50%);z-index:965;">
+        <h4 style="color:#8e44ad;">➖ طرح مضلع من مضلع</h4>
+        <div id="diffHudMsg" style="font-size:11.5px;color:var(--text-muted);line-height:1.6;margin-bottom:8px;">اضغط على المضلع الأساسي (اللي هيفضل بعد الطرح)</div>
+        <div class="row-btns" style="margin-top:6px;">
+          <button class="btn-cancel" id="diffCancelBtn">إلغاء</button>
+        </div>
+      </div>
+
+      <!-- ── Buffer (هامش) HUD ── -->
+      <div class="rect-hud" id="bufferHud" style="width:250px;border-color:#16a085;display:none;">
+        <h4 style="color:#16a085;">◎ هامش / إزاحة</h4>
+        <label>المسافة (متر)</label>
+        <input type="number" id="bufferDist" value="5" step="0.1">
+        <div style="font-size:10px;color:var(--text-muted);margin-top:5px;">قيمة موجبة = هامش للخارج حوالين العنصر — قيمة سالبة = تقليص للداخل (للمضلعات فقط)</div>
+        <div class="row-btns" style="margin-top:10px;">
+          <button class="btn-cancel" id="bufferCancelBtn">إلغاء</button>
+          <button class="btn-create" id="bufferApply" style="background:#16a085;">تطبيق</button>
+        </div>
+      </div>
+
       <!-- ── لوحة التحديد المتعدد ── -->
       <div class="rect-hud" id="bulkSelectHud" style="width:250px;border-color:#C9973F;display:none;position:fixed;top:56px;left:50%;transform:translateX(-50%);z-index:965;">
         <h4 style="color:#C9973F;">🔲 تحديد متعدد</h4>
@@ -2170,6 +2205,12 @@
   let divideDrawPt1 = null;   // أول نقطة عند رسم خط الاتجاه
   let divideTempMarker = null, divideTempLine = null; // عناصر مؤقتة أثناء الرسم/الاختيار
   let divideComputedAngle = null; // الزاوية المحسوبة من الرسم أو من الضلع المختار
+
+  // ── حالة أداة الطرح (Boolean Difference) ──
+  let diffBaseLayerId = null, diffBaseFeatureId = null; // المضلع الأساسي اللي هيفضل بعد الطرح
+
+  // ── حالة أداة الهامش / الإزاحة (Buffer/Offset) ──
+  let bufferPendingLayerId = null, bufferPendingFeatureId = null;
 
   const mapEl = document.getElementById('map');
   const rectHud = document.getElementById('rectHud');
@@ -5445,6 +5486,45 @@
             document.getElementById('stHint').textContent='✂ حدد إعدادات التقسيم ثم اضغط تطبيق';
             return;
           }
+          if(tool==='difference'){
+            L.DomEvent.stopPropagation(e);
+            if(f.type!=='polygon' && f.type!=='rectangle'){
+              document.getElementById('stHint').textContent='⚠️ أداة الطرح تعمل على المضلعات فقط';
+              return;
+            }
+            if(!diffBaseFeatureId){
+              diffBaseLayerId = layer.id; diffBaseFeatureId = f.id;
+              selection = {layerId:layer.id, featureId:f.id};
+              renderFeatures();
+              document.getElementById('diffHudMsg').textContent = 'تمام — دلوقتي اضغط على المضلع اللي عايز تطرحه من المضلع الأساسي';
+              document.getElementById('stHint').textContent = '➖ اضغط على المضلع اللي هيتطرح';
+              return;
+            }
+            if(layer.id===diffBaseLayerId && f.id===diffBaseFeatureId){
+              document.getElementById('stHint').textContent = '⚠️ اختر مضلع مختلف عن المضلع الأساسي';
+              return;
+            }
+            performBooleanDifference(diffBaseLayerId, diffBaseFeatureId, layer.id, f.id);
+            return;
+          }
+          if(tool==='buffer'){
+            L.DomEvent.stopPropagation(e);
+            if(f.type!=='polygon' && f.type!=='rectangle' && f.type!=='line'){
+              document.getElementById('stHint').textContent='⚠️ أداة الهامش تعمل على مضلع أو خط فقط';
+              return;
+            }
+            bufferPendingLayerId = layer.id; bufferPendingFeatureId = f.id;
+            selection = {layerId:layer.id, featureId:f.id};
+            renderFeatures();
+            const bHud = document.getElementById('bufferHud');
+            const pt2 = map.latLngToContainerPoint(e.latlng);
+            const wr2 = mapEl.getBoundingClientRect();
+            bHud.style.left = Math.min(Math.max(pt2.x+18,8), wr2.width-260)+'px';
+            bHud.style.top  = Math.min(Math.max(pt2.y-80,8), wr2.height-200)+'px';
+            bHud.style.display='block';
+            document.getElementById('stHint').textContent='◎ حدد مسافة الهامش ثم اضغط تطبيق';
+            return;
+          }
           if(tool==='split'){
             L.DomEvent.stopPropagation(e);
             if(!splitTargetFeatureId){
@@ -6254,6 +6334,8 @@
     document.getElementById('divideHud').style.display='none';
     dividePendingLayerId=null; dividePendingFeatureId=null;
     resetSplitState();
+    diffBaseLayerId=null; diffBaseFeatureId=null; document.getElementById('diffHud').style.display='none';
+    bufferPendingLayerId=null; bufferPendingFeatureId=null; document.getElementById('bufferHud').style.display='none';
     document.getElementById('stTemp').textContent='';
     document.getElementById('penHud').style.display = (tool==='pen') ? 'block' : 'none';
     penDrawing = null;
@@ -6267,6 +6349,12 @@
       document.getElementById('splitHudMsg').textContent='اضغط على المضلع أو الخط اللي عايز تقطعه';
       document.getElementById('splitFinishBtn').style.display='none';
       document.getElementById('stHint').textContent = '✂ اضغط على المضلع أو الخط اللي عايز تقطعه';
+    } else if (tool === 'difference') {
+      document.getElementById('diffHud').style.display='block';
+      document.getElementById('diffHudMsg').textContent = 'اضغط على المضلع الأساسي (اللي هيفضل بعد الطرح)';
+      document.getElementById('stHint').textContent = '➖ اضغط على المضلع الأساسي أولاً';
+    } else if (tool === 'buffer') {
+      document.getElementById('stHint').textContent = '◎ اضغط على العنصر (مضلع أو خط) اللي عايز تعمله هامش/إزاحة';
     } else if (tool === 'pen') {
       document.getElementById('stHint').textContent = '✏️ ارسم حر بالماوس أو بصباعك — اختار نوع الفرشة واللون والنعومة من اللوحة';
     } else {
@@ -7830,6 +7918,29 @@
     return [[nf[1],nf[0]], ...coords.slice(1,-1), [nl[1],nl[0]]];
   }
 
+  // نسخة معمّمة لقطع مضلع بخط ممكن يعدّي حدوده أكتر من مرتين (خط منكسر بعدة نقط) — بتنتج أكتر من قطعتين
+  // على عكس splitPolygonByLine الدقيقة اللي مقصورة على تقاطعتين بالظبط. بنستخدمها هنا كـ fallback بس،
+  // عشان الحالة العادية (تقاطعتين) تفضل تاخد الطريقة الدقيقة صفر-الفجوة أولاً
+  function splitPolygonByLineMulti(polyCoordsLatLng, cutCoordsLatLng){
+    try{
+      const ring = polyCoordsLatLng.map(c=>[c[1], c[0]]);
+      if(ring[0][0]!==ring[ring.length-1][0] || ring[0][1]!==ring[ring.length-1][1]) ring.push(ring[0]);
+      const polyTurf = turf.polygon([ring]);
+      const extended = extendLineEnds(cutCoordsLatLng, 0.15);
+      const cutLineTurf = turf.lineString(extended.map(c=>[c[1], c[0]]));
+      // شريط رفيع جدًا حوالين خط القطع — عرضه أصغر بكتير من أي بعد متوقع للمضلع عشان ميأثرش على المساحة
+      const bbox = turf.bbox(polyTurf);
+      const diag = turf.distance(turf.point([bbox[0],bbox[1]]), turf.point([bbox[2],bbox[3]]), {units:'kilometers'});
+      const halfWidth = Math.max(diag/200000, 0.0000005); // كيلومتر
+      const strip = turf.buffer(cutLineTurf, halfWidth, {units:'kilometers'});
+      const diffResult = turf.difference(polyTurf, strip);
+      if(!diffResult) return null;
+      const geoms = diffResult.geometry.type==='MultiPolygon' ? diffResult.geometry.coordinates : [diffResult.geometry.coordinates];
+      const pieces = geoms.map(polyCoords=> polyCoords[0].map(c=>[c[1],c[0]]) ).filter(r=>r.length>=4);
+      return pieces.length>=2 ? pieces : null;
+    }catch(err){ console.error(err); return null; }
+  }
+
   function finishPolygonSplit(){
     if(splitCutCoords.length<2){
       document.getElementById('stHint').textContent='⚠️ لازم ترسم خط قطع نقطتين على الأقل';
@@ -7841,9 +7952,12 @@
       resetSplitState(); document.querySelector('.tool-btn[data-tool="select"]').click();
       return;
     }
-    const pieces = splitPolygonByLine(f.coords, splitCutCoords);
+    // بنجرب الطريقة الدقيقة (صفر-الفجوة) الأول — بتشتغل بس لو الخط قطع الحدود بالظبط مرتين.
+    // لو الخط منكسر وقطع الحدود أكتر من مرتين (عدد زوجي)، بنستخدم الطريقة المعمّمة اللي بتنتج أكتر من قطعتين
+    let pieces = splitPolygonByLine(f.coords, splitCutCoords);
+    if(!pieces) pieces = splitPolygonByLineMulti(f.coords, splitCutCoords);
     if(!pieces){
-      document.getElementById('stHint').textContent='⚠️ خط القطع لازم يعدّي حدود المضلع مرتين بالظبط (يدخل من ضلع ويخرج من ضلع تاني) — تأكد إن الخط بسيط وميعديش أكتر من مرتين، وجرّب تاني';
+      document.getElementById('stHint').textContent='⚠️ خط القطع لازم يعدّي حدود المضلع بعدد زوجي من المرات (مرتين على الأقل) — تأكد إن الخط بسيط وجرّب تاني';
       return;
     }
     pushStateToUndo();
@@ -7868,6 +7982,122 @@
     resetSplitState();
     document.getElementById('stHint').textContent='تم إلغاء القطع';
     document.querySelector('.tool-btn[data-tool="select"]').click();
+  });
+
+  /* ========== أداة الطرح (Boolean Difference) — بتطرح مضلع من مضلع تاني باستخدام turf.difference ========== */
+  function resetDifferenceState(){
+    diffBaseLayerId = null; diffBaseFeatureId = null;
+    document.getElementById('diffHud').style.display='none';
+  }
+  function performBooleanDifference(baseLayerId, baseFeatureId, subLayerId, subFeatureId){
+    const baseLayer = getLayer(baseLayerId);
+    const baseF = getFeature(baseLayerId, baseFeatureId);
+    const subF = getFeature(subLayerId, subFeatureId);
+    if(!baseLayer || !baseF || !subF) return;
+    try{
+      const ringBase = baseF.coords.map(c=>[c[1],c[0]]);
+      if(ringBase[0][0]!==ringBase[ringBase.length-1][0] || ringBase[0][1]!==ringBase[ringBase.length-1][1]) ringBase.push(ringBase[0]);
+      const ringSub = subF.coords.map(c=>[c[1],c[0]]);
+      if(ringSub[0][0]!==ringSub[ringSub.length-1][0] || ringSub[0][1]!==ringSub[ringSub.length-1][1]) ringSub.push(ringSub[0]);
+      const polyBase = turf.polygon([ringBase]);
+      const polySub = turf.polygon([ringSub]);
+      const result = turf.difference(polyBase, polySub);
+      if(!result){
+        document.getElementById('stHint').textContent='⚠️ الطرح أدى لإلغاء المضلع الأساسي بالكامل (مفيش مساحة متبقية)';
+        resetDifferenceState();
+        return;
+      }
+      // الناتج ممكن يبقى Polygon واحد أو MultiPolygon (لو الطرح فصل المضلع لأكتر من جزء) — بنفكهم لعناصر منفصلة
+      const geoms = result.geometry.type==='MultiPolygon' ? result.geometry.coordinates : [result.geometry.coordinates];
+      const baseName = (baseF.attrs && baseF.attrs.name) ? baseF.attrs.name : null;
+      const newFeatures = geoms.map((polyCoords, i)=>{
+        const outer = polyCoords[0].map(c=>[c[1], c[0]]);
+        const coords = outer.slice(0,-1);
+        const nf = {id:uid(), type:'polygon', coords, attrs:Object.assign({}, baseF.attrs||{}), color: baseF.color};
+        if(baseName && geoms.length>1) nf.attrs.name = baseName+' - '+(i+1);
+        return nf;
+      }).filter(nf=>nf.coords.length>=3);
+      if(!newFeatures.length){
+        document.getElementById('stHint').textContent='⚠️ تعذر إتمام عملية الطرح';
+        resetDifferenceState();
+        return;
+      }
+      pushStateToUndo();
+      const idxInLayer = baseLayer.features.findIndex(x=>x.id===baseFeatureId);
+      if(idxInLayer>=0) baseLayer.features.splice(idxInLayer, 1, ...newFeatures);
+      else baseLayer.features.push(...newFeatures);
+      selection = {layerId: baseLayer.id, featureId: newFeatures[0].id};
+      renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
+      document.getElementById('stHint').textContent = `✅ تم الطرح — الناتج ${newFeatures.length} ${newFeatures.length>1?'أجزاء':'مضلع'}`;
+    }catch(err){
+      console.error(err);
+      document.getElementById('stHint').textContent = '❌ حصل خطأ أثناء الطرح: '+(err&&err.message?err.message:err)+' — تأكد إن المضلعين متقاطعين فعلاً';
+    }
+    resetDifferenceState();
+  }
+  document.getElementById('diffCancelBtn').addEventListener('click', ()=>{
+    resetDifferenceState();
+    selection=null; renderFeatures();
+    document.getElementById('stHint').textContent='تم إلغاء الطرح';
+    document.querySelector('.tool-btn[data-tool="select"]').click();
+  });
+
+  /* ========== أداة الهامش / الإزاحة (Buffer/Offset) — باستخدام turf.buffer ========== */
+  function performBufferOffset(layerId, featureId, distMeters){
+    const layer = getLayer(layerId);
+    const f = getFeature(layerId, featureId);
+    if(!layer || !f) return;
+    try{
+      let turfFeature;
+      if(f.type==='point'){
+        turfFeature = turf.point([f.coords[0][1], f.coords[0][0]]);
+      } else if(f.type==='line'){
+        turfFeature = turf.lineString(f.coords.map(c=>[c[1],c[0]]));
+      } else {
+        const ring = f.coords.map(c=>[c[1],c[0]]);
+        if(ring[0][0]!==ring[ring.length-1][0] || ring[0][1]!==ring[ring.length-1][1]) ring.push(ring[0]);
+        turfFeature = turf.polygon([ring]);
+      }
+      const buffered = turf.buffer(turfFeature, distMeters/1000, {units:'kilometers'});
+      if(!buffered || !buffered.geometry){
+        document.getElementById('stHint').textContent='⚠️ مسافة الهامش دي كبيرة قوي وألغت الشكل بالكامل (جرّب قيمة سالبة أصغر)';
+        return;
+      }
+      const geoms = buffered.geometry.type==='MultiPolygon' ? buffered.geometry.coordinates : [buffered.geometry.coordinates];
+      const baseName = (f.attrs && f.attrs.name) ? f.attrs.name : null;
+      const label = (distMeters>0?'هامش +':'هامش ') + distMeters + 'م';
+      const newFeatures = geoms.map((polyCoords)=>{
+        const outer = polyCoords[0].map(c=>[c[1], c[0]]);
+        const attrs = Object.assign({}, f.attrs||{});
+        attrs.name = (baseName ? baseName+' — ' : '') + label;
+        return {id:uid(), type:'polygon', coords: outer.slice(0,-1), attrs, color: f.color};
+      }).filter(nf=>nf.coords.length>=3);
+      if(!newFeatures.length){
+        document.getElementById('stHint').textContent='⚠️ تعذر إنشاء هامش بهذه المسافة';
+        return;
+      }
+      pushStateToUndo();
+      layer.features.push(...newFeatures);
+      selection = {layerId: layer.id, featureId: newFeatures[0].id};
+      renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
+      document.getElementById('stHint').textContent = `✅ تم إنشاء هامش بمسافة ${distMeters} م كعنصر جديد`;
+    }catch(err){
+      console.error(err);
+      document.getElementById('stHint').textContent = '❌ حصل خطأ أثناء إنشاء الهامش: '+(err&&err.message?err.message:err);
+    }
+  }
+  document.getElementById('bufferApply').addEventListener('click', ()=>{
+    if(!bufferPendingLayerId || !bufferPendingFeatureId) return;
+    const dist = parseFloat(document.getElementById('bufferDist').value);
+    if(!dist){ alert('اكتب مسافة هامش غير صفرية'); return; }
+    performBufferOffset(bufferPendingLayerId, bufferPendingFeatureId, dist);
+    document.getElementById('bufferHud').style.display='none';
+    bufferPendingLayerId=null; bufferPendingFeatureId=null;
+  });
+  document.getElementById('bufferCancelBtn').addEventListener('click', ()=>{
+    bufferPendingLayerId=null; bufferPendingFeatureId=null;
+    document.getElementById('bufferHud').style.display='none';
+    selection=null; renderFeatures();
   });
 
   document.getElementById('circleCreate').addEventListener('click', ()=>{
