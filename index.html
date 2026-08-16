@@ -2288,6 +2288,14 @@
   let mobileRotatePivot = null;       // [lat,lng] مركز التدوير — للمضلعات/الخطوط (المستطيل له منطقه الخاص)
   let mobileRotateStartAngle = 0;
   let mobileRotateOrigCoords = null;  // نسخة من الإحداثيات الأصلية وقت الدخول لوضع التدوير
+  // نقل وتدوير المضلعات في الموبايل — بخطوات بيحددها المستخدم بنفسه (مش تلقائي زي المستطيل/الدائرة):
+  // نقل: خطوة 0 = تحديد نقطة مرجعية، خطوة 1 = تحديد الوجهة وتنفيذ النقل
+  // تدوير: خطوة 0 = تحديد مركز الدوران، خطوة 1 = تحديد نقطة القبضة، خطوة 2 = تحريك الخريطة وتنفيذ التدوير
+  let mobilePolyMoveStep = 0;
+  let mobilePolyMoveRef = null;       // [lat,lng]
+  let mobilePolyRotateStep = 0;
+  let mobilePolyRotateCenter = null;  // [lat,lng]
+  let mobilePolyRotateHandle = null;  // [lat,lng]
   let isMobileEnv = false;
 
   let undoStack = [];
@@ -2343,6 +2351,7 @@
   const btnPadAddVertex = document.getElementById('btnPadAddVertex');
   const btnPadRotate = document.getElementById('btnPadRotate');
   const btnPadScale = document.getElementById('btnPadScale');
+  const btnPadApply = document.getElementById('btnPadApply');
 
   const map = L.map('map', {zoomControl:false, zoomSnap:0, zoomDelta:1, wheelPxPerZoomLevel:100, maxZoom:24, center:[29.9792, 31.1342], zoom:16, worldCopyJump:true, preferCanvas:true});
   // ملحوظة: أزرار الزوم (+/-) اتشالت بطلب المستخدم — التكبير/التصغير بالماوس سكرول أو بحركة القرص (pinch) على اللمس
@@ -5569,6 +5578,8 @@
     mobileEditPad.style.display = 'none';
     mobileVertexRow.style.display = 'none';
     if(snapMarker) { map.removeLayer(snapMarker); snapMarker = null; }
+    mobilePolyMoveStep = 0; mobilePolyMoveRef = null;
+    mobilePolyRotateStep = 0; mobilePolyRotateCenter = null; mobilePolyRotateHandle = null;
   }
 
   function setMobileEditMode(mode) {
@@ -5580,20 +5591,33 @@
 
     if(mode === 'move') {
       btnPadMove.classList.add('active');
-      mobilePadTitle.textContent = "⚙️ اسحب الخريطة لنقل العنصر بالكامل";
       mobileVertexRow.style.display = 'none';
+      if(f.type === 'polygon'){
+        mobilePolyMoveStep = 0; mobilePolyMoveRef = null;
+        mobilePadTitle.textContent = "🎯 حرك الخريطة لتحديد نقطة مرجعية على الشكل، وبعدين دوس تحديد";
+        btnPadApply.textContent = "تحديد المرجع";
+      } else {
+        mobilePadTitle.textContent = "⚙️ اسحب الخريطة لنقل العنصر بالكامل";
+        btnPadApply.textContent = "تطبيق التغيير هنا";
+      }
     } 
     else if(mode === 'vertex') {
       btnPadVertex.classList.add('active');
       mobileVertexRow.style.display = 'flex';
       mobileActiveVertexIdx = 0;
       focusOnMobileVertex(f);
+      btnPadApply.textContent = "تطبيق التغيير هنا";
     }
     else if(mode === 'rotate') {
       btnPadRotate.classList.add('active');
       mobileVertexRow.style.display = 'none';
       if(f.type === 'rectangle'){
         mobilePadTitle.textContent = "🔄 حرك الخريطة لتدوير المستطيل حول مركزه";
+        btnPadApply.textContent = "تطبيق التغيير هنا";
+      } else if(f.type === 'polygon'){
+        mobilePolyRotateStep = 0; mobilePolyRotateCenter = null; mobilePolyRotateHandle = null;
+        mobilePadTitle.textContent = "🎯 حرك الخريطة لتحديد مركز الدوران، وبعدين دوس تحديد";
+        btnPadApply.textContent = "تحديد المركز";
       } else {
         mobilePadTitle.textContent = "🔄 حرك الخريطة لتدوير الشكل حول مركزه";
         let cLat=0, cLng=0;
@@ -5602,12 +5626,14 @@
         mobileRotatePivot = [cLat, cLng];
         mobileRotateStartAngle = metricAngleRad({lat:cLat, lng:cLng}, map.getCenter());
         mobileRotateOrigCoords = JSON.parse(JSON.stringify(f.coords));
+        btnPadApply.textContent = "تطبيق التغيير هنا";
       }
     }
     else if(mode === 'scale') {
       btnPadScale.classList.add('active');
       mobilePadTitle.textContent = "📐 حرك الخريطة لتغيير حجم وأبعاد المستطيل";
       mobileVertexRow.style.display = 'none';
+      btnPadApply.textContent = "تطبيق التغيير هنا";
     }
   }
 
@@ -5673,9 +5699,59 @@
   document.getElementById('btnPadApply').addEventListener('click', () => {
     const f = getFeature(selection.layerId, selection.featureId);
     if(!f) return;
+    const centerLatLng = map.getCenter();
+
+    // نقل المضلع بخطوتين: تحديد مرجع، ثم تحديد الوجهة — بدل الحساب التلقائي لمركز الشكل
+    if(f.type === 'polygon' && mobileMode === 'move'){
+      if(mobilePolyMoveStep === 0){
+        mobilePolyMoveRef = [centerLatLng.lat, centerLatLng.lng];
+        mobilePolyMoveStep = 1;
+        mobilePadTitle.textContent = "📍 دلوقتي حرك الخريطة للمكان اللي عايز تنقل له، وبعدين دوس نقل";
+        btnPadApply.textContent = "نقل";
+        return;
+      } else {
+        pushStateToUndo();
+        const dLat = centerLatLng.lat - mobilePolyMoveRef[0];
+        const dLng = centerLatLng.lng - mobilePolyMoveRef[1];
+        f.coords = f.coords.map(c => [c[0] + dLat, c[1] + dLng]);
+        renderFeatures(); renderAttrPanel(); scheduleSave();
+        mobilePolyMoveStep = 0; mobilePolyMoveRef = null;
+        mobilePadTitle.textContent = "🎯 حرك الخريطة لتحديد نقطة مرجعية على الشكل، وبعدين دوس تحديد";
+        btnPadApply.textContent = "تحديد المرجع";
+        return;
+      }
+    }
+
+    // تدوير المضلع بـ3 خطوات: تحديد المركز، تحديد نقطة القبضة، ثم تحريك الخريطة والتطبيق
+    if(f.type === 'polygon' && mobileMode === 'rotate'){
+      if(mobilePolyRotateStep === 0){
+        mobilePolyRotateCenter = [centerLatLng.lat, centerLatLng.lng];
+        mobilePolyRotateStep = 1;
+        mobilePadTitle.textContent = "🖐️ حرك الخريطة لتحديد النقطة اللي هتمسكها وتلف بيها، وبعدين دوس تحديد";
+        btnPadApply.textContent = "تحديد نقطة القبضة";
+        return;
+      } else if(mobilePolyRotateStep === 1){
+        mobilePolyRotateHandle = [centerLatLng.lat, centerLatLng.lng];
+        mobileRotateStartAngle = metricAngleRad({lat:mobilePolyRotateCenter[0], lng:mobilePolyRotateCenter[1]}, centerLatLng);
+        mobileRotateOrigCoords = JSON.parse(JSON.stringify(f.coords));
+        mobilePolyRotateStep = 2;
+        mobilePadTitle.textContent = "🔄 حرك الخريطة عشان تلف الشكل حوالين النقطة اللي حددتها، وبعدين دوس تدوير";
+        btnPadApply.textContent = "تدوير";
+        return;
+      } else {
+        pushStateToUndo();
+        const newAngle = metricAngleRad({lat:mobilePolyRotateCenter[0], lng:mobilePolyRotateCenter[1]}, centerLatLng);
+        const deltaAngle = newAngle - mobileRotateStartAngle;
+        f.coords = mobileRotateOrigCoords.map(c=> rotateCoordAroundPivot(c, mobilePolyRotateCenter, deltaAngle));
+        renderFeatures(); renderAttrPanel(); scheduleSave();
+        mobilePolyRotateStep = 0; mobilePolyRotateCenter = null; mobilePolyRotateHandle = null;
+        mobilePadTitle.textContent = "🎯 حرك الخريطة لتحديد مركز الدوران، وبعدين دوس تحديد";
+        btnPadApply.textContent = "تحديد المركز";
+        return;
+      }
+    }
 
     pushStateToUndo();
-    const centerLatLng = map.getCenter();
 
     if(mobileMode === 'move') {
       let oldCenterLat = 0, oldCenterLng = 0;
@@ -6031,61 +6107,67 @@
   }
 
   /* ---------- Drag handling ---------- */
+  function applyPenMove(latlng){
+    const sp = snapPenPointToGrid(latlng.lat, latlng.lng);
+    penDrawing.points.push([sp.lat, sp.lng]);
+    if(penTempLine) map.removeLayer(penTempLine);
+    penTempLine = L.polyline(penDrawing.points, penBrushStyle(penSettings.brush, penSettings.color, penSettings.width, false)).addTo(map);
+    document.getElementById('stTemp').textContent = '✏️ بيرسم...';
+  }
+  function applyDragMove(latlng){
+    const snapped = dragCtx.mode==='vertex' ? effectiveLatLng({latlng}, dragCtx.feature.id) : latlng;
+    if(dragCtx.mode==='vertex'){
+      dragCtx.feature.coords[dragCtx.idx] = [snapped.lat, snapped.lng];
+    }
+    else if(dragCtx.mode==='rect-rotate'){
+      const currentAngle = metricAngleRad({lat:dragCtx.center[0], lng:dragCtx.center[1]}, latlng);
+      const angleDiff = toDeg(currentAngle - dragCtx.startAngle);
+      dragCtx.feature.rect.rotation = Math.round((dragCtx.origRotation - angleDiff) % 360);
+      syncRectCoords(dragCtx.feature);
+    }
+    else if(dragCtx.mode==='rect-scale'){
+      const currentDistToAnchor = haversine(dragCtx.anchor[0], dragCtx.anchor[1], latlng.lat, latlng.lng);
+      const startDistToAnchor = haversine(dragCtx.anchor[0], dragCtx.anchor[1], dragCtx.startLatLng.lat, dragCtx.startLatLng.lng);
+      const ratio = startDistToAnchor > 0 ? (currentDistToAnchor / startDistToAnchor) : 1;
+
+      dragCtx.feature.rect.width = Math.max(0.5, parseFloat((dragCtx.origWidth * ratio).toFixed(1)));
+      dragCtx.feature.rect.length = Math.max(0.5, parseFloat((dragCtx.origLength * ratio).toFixed(1)));
+      syncRectCoords(dragCtx.feature);
+    }
+    else if(dragCtx.mode==='poly-rotate'){
+      const currentAngle = metricAngleRad({lat:dragCtx.center[0], lng:dragCtx.center[1]}, latlng);
+      const angleDiff = currentAngle - dragCtx.startAngle;
+      dragCtx.feature.coords = dragCtx.origCoords.map(c=> rotateCoordAroundPivot(c, dragCtx.center, angleDiff));
+    }
+    else if(dragCtx.mode==='move'){
+      const dLat = latlng.lat - dragCtx.startLatLng.lat;
+      const dLng = latlng.lng - dragCtx.startLatLng.lng;
+      if(dragCtx.feature.type==='rectangle'){
+        dragCtx.feature.rect.lat = dragCtx.origRect.lat + dLat;
+        dragCtx.feature.rect.lng = dragCtx.origRect.lng + dLng;
+        syncRectCoords(dragCtx.feature);
+      } else if(dragCtx.feature.type==='circle'){
+        dragCtx.feature.circle.lat = dragCtx.origCircle.lat + dLat;
+        dragCtx.feature.circle.lng = dragCtx.origCircle.lng + dLng;
+        syncCircleCoords(dragCtx.feature);
+      } else {
+        dragCtx.feature.coords = dragCtx.origCoords.map(c=>[c[0]+dLat, c[1]+dLng]);
+      }
+    }
+    renderFeatures();
+  }
   map.on('mousemove', e => {
     document.getElementById('stLat').textContent = e.latlng.lat.toFixed(6);
     document.getElementById('stLng').textContent = e.latlng.lng.toFixed(6);
     lastCursorLatLng = e.latlng;
 
     if(tool==='pen' && penDrawing){
-      const sp = snapPenPointToGrid(e.latlng.lat, e.latlng.lng);
-      penDrawing.points.push([sp.lat, sp.lng]);
-      if(penTempLine) map.removeLayer(penTempLine);
-      penTempLine = L.polyline(penDrawing.points, penBrushStyle(penSettings.brush, penSettings.color, penSettings.width, false)).addTo(map);
-      document.getElementById('stTemp').textContent = '✏️ بيرسم...';
+      applyPenMove(e.latlng);
       return;
     }
     
     if(dragCtx) {
-      const snapped = dragCtx.mode==='vertex' ? effectiveLatLng(e, dragCtx.feature.id) : e.latlng;
-      if(dragCtx.mode==='vertex'){
-        dragCtx.feature.coords[dragCtx.idx] = [snapped.lat, snapped.lng];
-      } 
-      else if(dragCtx.mode==='rect-rotate'){
-        const currentAngle = metricAngleRad({lat:dragCtx.center[0], lng:dragCtx.center[1]}, e.latlng);
-        const angleDiff = toDeg(currentAngle - dragCtx.startAngle);
-        dragCtx.feature.rect.rotation = Math.round((dragCtx.origRotation - angleDiff) % 360);
-        syncRectCoords(dragCtx.feature);
-      }
-      else if(dragCtx.mode==='rect-scale'){
-        const currentDistToAnchor = haversine(dragCtx.anchor[0], dragCtx.anchor[1], e.latlng.lat, e.latlng.lng);
-        const startDistToAnchor = haversine(dragCtx.anchor[0], dragCtx.anchor[1], dragCtx.startLatLng.lat, dragCtx.startLatLng.lng);
-        const ratio = startDistToAnchor > 0 ? (currentDistToAnchor / startDistToAnchor) : 1;
-        
-        dragCtx.feature.rect.width = Math.max(0.5, parseFloat((dragCtx.origWidth * ratio).toFixed(1)));
-        dragCtx.feature.rect.length = Math.max(0.5, parseFloat((dragCtx.origLength * ratio).toFixed(1)));
-        syncRectCoords(dragCtx.feature);
-      }
-      else if(dragCtx.mode==='poly-rotate'){
-        const currentAngle = metricAngleRad({lat:dragCtx.center[0], lng:dragCtx.center[1]}, e.latlng);
-        const angleDiff = currentAngle - dragCtx.startAngle;
-        dragCtx.feature.coords = dragCtx.origCoords.map(c=> rotateCoordAroundPivot(c, dragCtx.center, angleDiff));
-      }
-      else if(dragCtx.mode==='move'){
-        const dLat = e.latlng.lat - dragCtx.startLatLng.lat;
-        const dLng = e.latlng.lng - dragCtx.startLatLng.lng;
-        if(dragCtx.feature.type==='rectangle'){
-          dragCtx.feature.rect.lat = dragCtx.origRect.lat + dLat;
-          dragCtx.feature.rect.lng = dragCtx.origRect.lng + dLng;
-          syncRectCoords(dragCtx.feature);
-        } else if(dragCtx.feature.type==='circle'){
-          dragCtx.feature.circle.lat = dragCtx.origCircle.lat + dLat;
-          dragCtx.feature.circle.lng = dragCtx.origCircle.lng + dLng;
-          syncCircleCoords(dragCtx.feature);
-        } else {
-          dragCtx.feature.coords = dragCtx.origCoords.map(c=>[c[0]+dLat, c[1]+dLng]);
-        }
-      }
-      renderFeatures();
+      applyDragMove(e.latlng);
     } 
     else if(tool==='rectangle' && rect3Point.step > 0) {
       const snapped = effectiveLatLng(e);
@@ -6223,6 +6305,49 @@
   };
   map.on('mouseup', endPenStroke);
   document.addEventListener('mouseup', endPenStroke);
+
+  /* ===== دعم اللمس الموثوق لأدوات السحب فوق الخريطة (نقل شكل / تدوير / تحجيم / تعديل رؤوس / القلم الحر) =====
+     الأحداث اللي فوق (mousedown/mousemove/mouseup) بتشتغل تمام مع الماوس، ومع اللمسة الأولى كمان (Leaflet
+     بيترجمها). لكن السحب المستمر بعد اللمسة الأولى مش بيتابع الإصبع لأن touchmove مش بيتحول تلقائيًا
+     لـ mousemove. الكود ده إضافي بالكامل فوق اللي فوق (مش بيغيّر أو يلغي حاجة من مسار الماوس) وبيستخدم
+     Pointer Events الأصلية (اللي بتشتغل مضمون مع اللمس) عشان يضمن إن السحب بيتابع الإصبع بدقة */
+  (function(){
+    const mapEl = map.getContainer();
+    let touchPointerId = null;
+
+    mapEl.addEventListener('pointerdown', (e)=>{
+      if(e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+      // بنسيب اللمسة تفتح dragCtx / penDrawing عادي زي ما هي (عن طريق Leaflet)، وبعد لحظة بسيطة
+      // بنربط الإصبع ده بمتابعة السحب لو فعلاً بدأ سحب أو رسم.
+      // مسجّل في مرحلة الـ capture عشان يضمن إنه يشتغل حتى لو الماركر بتاع Leaflet بيوقف
+      // انتشار الحدث (L.DomEvent.stopPropagation) في مرحلة الـ bubble العادية
+      setTimeout(()=>{
+        if(dragCtx || penDrawing){
+          touchPointerId = e.pointerId;
+          try{ mapEl.setPointerCapture(e.pointerId); }catch(err){}
+        }
+      }, 0);
+    }, {passive:true, capture:true});
+
+    mapEl.addEventListener('pointermove', (e)=>{
+      if(e.pointerId !== touchPointerId) return;
+      if(!dragCtx && !penDrawing) return;
+      e.preventDefault();
+      const latlng = map.mouseEventToLatLng(e);
+      if(penDrawing) applyPenMove(latlng);
+      else if(dragCtx) applyDragMove(latlng);
+    }, {passive:false});
+
+    function endTouchTracking(e){
+      if(e.pointerId !== touchPointerId) return;
+      try{ mapEl.releasePointerCapture(e.pointerId); }catch(err){}
+      touchPointerId = null;
+      if(dragCtx) endDrag();
+      if(penDrawing) endPenStroke();
+    }
+    mapEl.addEventListener('pointerup', endTouchTracking);
+    mapEl.addEventListener('pointercancel', endTouchTracking);
+  })();
 
   /* ---------- Map click ---------- */
   map.on('click', e=>{
