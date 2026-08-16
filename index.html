@@ -325,6 +325,22 @@
   #mobileDriveToggle{left:auto;right:12px;box-shadow:0 6px 16px rgba(0,120,140,.35);}
   .mobile-sidebar-toggle svg{width:22px;height:22px;}
 
+  .mobile-quick-menu{
+    display:none; flex-direction:column; gap:10px; position:fixed;
+    bottom:calc(76px + env(safe-area-inset-bottom, 0px) + 52px + 58px); left:12px; z-index:901;
+  }
+  .mobile-quick-menu.open{display:flex;}
+  .mobile-quick-btn{
+    width:46px; height:46px; border-radius:50%; border:none; color:#fff;
+    display:flex; align-items:center; justify-content:center; font-size:20px;
+    box-shadow:0 6px 14px rgba(0,0,0,.35); touch-action:manipulation;
+  }
+  .mobile-quick-btn svg{width:21px;height:21px;}
+  #mqbLayers{background:var(--accent);}
+  #mqbAttrs{background:#8b5cf6;}
+  #mqbLayout{background:#f59e0b;}
+  #mqbBookmarks{background:#10b981;}
+
   .mobile-finish-btn {
     display: none; position: absolute; bottom: 20px; right: 20px; z-index: 999;
     background: var(--teal); color: #fff; border: none; border-radius: 30px;
@@ -493,7 +509,7 @@
   #lyAddElMenu .ly-add-item:hover{ background:var(--bg-panel-2); }
   .ly-el{
     position:absolute; box-sizing:border-box; overflow:hidden; cursor:move;
-    border:1.5px dashed transparent;
+    border:1.5px dashed transparent; touch-action:none;
   }
   .ly-el:hover{ border-color:rgba(0,120,140,.4); }
   .ly-el.selected{ border-color:var(--teal); border-style:solid; }
@@ -501,7 +517,7 @@
   .ly-el-image .ly-el-placeholder{ background:#f0f0f0; }
   .ly-el .ly-resize-handle{
     position:absolute; left:-6px; bottom:-6px; width:14px; height:14px; border-radius:50%;
-    background:var(--teal); border:2px solid #fff; cursor:nwse-resize; display:none; z-index:5;
+    background:var(--teal); border:2px solid #fff; cursor:nwse-resize; display:none; z-index:5; touch-action:none;
   }
   .ly-el.selected .ly-resize-handle{ display:block; }
   .ly-el-mapframe{ background:#e4e4e4; }
@@ -585,12 +601,28 @@
   body.notebook-print-mode .app,
   body.notebook-print-mode .main,
   body.notebook-print-mode .canvas-wrap{height:100vh!important;display:block!important;}
-  body.notebook-print-mode #map{height:100vh!important;width:100vw!important;}
+  /* الأبعاد الفعلية بتتحدد في JS وقت اللقطة (captureCurrentMapView) عشان تطابق نسبة إطار
+     الخريطة في اللوحة بالظبط — مفيش مقاس ثابت هنا عشان منحطش نسبة أبعاد غلط بتتمدد بعدين */
+  body.notebook-print-mode #map{position:fixed!important; top:0!important; left:0!important; z-index:1!important;}
 </style>
 </head>
 <body>
 <div class="app">
 
+  <div class="mobile-quick-menu" id="mobileQuickMenu">
+    <button class="mobile-quick-btn" id="mqbLayers" title="الطبقات">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>
+    </button>
+    <button class="mobile-quick-btn" id="mqbAttrs" title="الخصائص">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>
+    </button>
+    <button class="mobile-quick-btn" id="mqbLayout" title="إخراج اللوحات">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="1.5"/><path d="M3 8h18M8 8v13"/></svg>
+    </button>
+    <button class="mobile-quick-btn" id="mqbBookmarks" title="Bookmarks">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h12v18l-6-4-6 4V3z"/></svg>
+    </button>
+  </div>
   <button class="mobile-sidebar-toggle" id="mobileSidebarToggle" title="الطبقات والخصائص">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
   </button>
@@ -1223,7 +1255,9 @@
           <button class="btn-cancel" id="lyExportPdfBtn">📕 PDF</button>
         </div>
         <div id="layoutViewBody" style="flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:30px;">
-          <div id="lyCanvasWrap" style="position:relative;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.5);flex-shrink:0;"></div>
+          <div id="lyCanvasScaleBox" style="position:relative;flex-shrink:0;overflow:hidden;">
+            <div id="lyCanvasWrap" style="position:relative;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.5);transform-origin:top left;"></div>
+          </div>
         </div>
         <!-- لوحة خصائص العنصر المحدد حاليًا على اللوحة -->
         <div id="lyElementProps" style="display:none;position:fixed;left:12px;top:64px;width:260px;background:var(--bg-panel);border:1px solid var(--accent);border-radius:10px;padding:10px;max-height:calc(100vh - 90px);overflow-y:auto;z-index:860;box-shadow:0 8px 24px rgba(0,0,0,.4);">
@@ -3608,6 +3642,7 @@
 
   function renderLayoutCanvas(page){
     const wrap = document.getElementById('lyCanvasWrap');
+    const scaleBox = document.getElementById('lyCanvasScaleBox');
     if(!wrap) return;
     wrap.innerHTML = '';
     const dims = PAPER_SIZES_MM[page.paper] || PAPER_SIZES_MM.A4;
@@ -3616,15 +3651,27 @@
     const hMM = page.orientation === 'landscape' ? shortMM : longMM;
     const bodyEl = document.getElementById('layoutViewBody');
     const availW = Math.max(200, bodyEl.clientWidth - 60), availH = Math.max(200, bodyEl.clientHeight - 60);
-    let pageWpx = Math.min(availW, availH*(wMM/hMM));
-    pageWpx = Math.max(280, pageWpx);
-    const pageHpx = pageWpx * (hMM/wMM);
-    wrap.style.width = pageWpx+'px';
-    wrap.style.height = pageHpx+'px';
+
+    // بنستخدم دايمًا نفس المقاس الحقيقي بالمليمتر (بمعامل تحويل ثابت زي التصدير بالظبط:
+    // wMM*3.78) كمرجع لحساب حجم كل العناصر والخطوط — بدل ما نحسبها من العرض الفعلي على
+    // الشاشة (اللي بيبقى ضيق على الموبايل ويخلي الحد الأدنى لحجم الخط يتفعّل بدري فيبان
+    // الخط كبير نسبيًا للصندوق الصغير). وبعدين "نزوم" اللوحة كلها بصريًا (عناصر وخطوط
+    // مع بعض بنفس النسبة) لتناسب الشاشة — فالنتيجة مطابقة تمامًا لملف التصدير على أي جهاز
+    const fixedWpx = Math.round(wMM * 3.78);
+    const fixedHpx = Math.round(hMM * 3.78);
+    const fitScale = Math.min(availW/fixedWpx, availH/fixedHpx, 1.4);
+
+    wrap.style.width = fixedWpx+'px';
+    wrap.style.height = fixedHpx+'px';
+    wrap.style.transform = 'scale('+fitScale+')';
+    if(scaleBox){
+      scaleBox.style.width = Math.round(fixedWpx*fitScale)+'px';
+      scaleBox.style.height = Math.round(fixedHpx*fitScale)+'px';
+    }
 
     const allEls = getOrderedLayoutElements(page);
     allEls.forEach(el=>{
-      const box = renderElementDOM(el, page, {interactive:true, pageWidthPx:pageWpx});
+      const box = renderElementDOM(el, page, {interactive:true, pageWidthPx:fixedWpx});
       if(isSharedLayoutElement(el.id)) box.classList.add('ly-el-shared');
       box.addEventListener('pointerdown', e=>{
         if(!e.target.classList.contains('ly-resize-handle')) selectLayoutElement(el.id, page);
@@ -3640,6 +3687,7 @@
     box.addEventListener('pointerdown', e=>{
       const mode = e.target.classList.contains('ly-resize-handle') ? 'resize' : 'move';
       e.stopPropagation();
+      e.preventDefault();
       box.setPointerCapture(e.pointerId);
       const r = canvasEl.getBoundingClientRect();
       const startX = e.clientX, startY = e.clientY;
@@ -4345,8 +4393,27 @@
     document.getElementById('stHint').textContent = '📸 بيلتقط لقطة من منظور الخريطة الحالي...';
     setTimeout(async ()=>{
       let labelsLayer = null;
+      const mapEl = document.getElementById('map');
+      const prevInlineStyle = mapEl.getAttribute('style') || '';
       try{
+        // نسبة أبعاد "صندوق" إطار الخريطة الفعلي في اللوحة (مش شاشة الجهاز) — ده اللي بيحدد
+        // شكل اللقطة الصح عشان متتمدّدش أو تتشد لما تتحط جوه الصندوق بعدين
+        const dims0 = PAPER_SIZES_MM[page.paper] || PAPER_SIZES_MM.A4;
+        const [longMM0, shortMM0] = dims0;
+        const pageWMM = page.orientation === 'landscape' ? longMM0 : shortMM0;
+        const pageHMM = page.orientation === 'landscape' ? shortMM0 : longMM0;
+        const boxWMM = pageWMM * (el.wPct/100);
+        const boxHMM = pageHMM * (el.hPct/100);
+        const boxAspect = boxWMM / boxHMM; // عرض/ارتفاع
+
         document.body.classList.add('notebook-print-mode');
+        // بنحدد حجم بكسل حقيقي للخريطة أثناء اللقطة بنفس نسبة أبعاد الصندوق بالظبط (مش أبعاد شاشة
+        // الجهاز)، عشان اللي بيتلقط يطابق شكل المكان اللي هيتحط فيه تمامًا من غير أي تمدد
+        const baseW = 1600;
+        const capW = baseW;
+        const capH = Math.round(baseW / boxAspect);
+        mapEl.style.setProperty('width', capW+'px', 'important');
+        mapEl.style.setProperty('height', capH+'px', 'important');
         map.invalidateSize({pan:false});
         const linkedFeature = getFeatureByRef(page.featureRef);
         labelsLayer = buildPlanLabelsLayer(page, linkedFeature);
@@ -4354,21 +4421,20 @@
         await new Promise(r=>setTimeout(r, 400));
         const b = map.getBounds();
         const groundWidthM = map.distance(L.latLng(b.getCenter().lat, b.getWest()), L.latLng(b.getCenter().lat, b.getEast()));
-        const dims = PAPER_SIZES_MM[page.paper] || PAPER_SIZES_MM.A4;
-        const [longMM, shortMM] = dims;
-        const wMM = page.orientation === 'landscape' ? longMM : shortMM;
-        const mapPhysicalWidthMM = Math.max(1, wMM * (el.wPct/100));
+        const mapPhysicalWidthMM = Math.max(1, boxWMM);
         const scaleDenom = Math.round(1000 * groundWidthM / mapPhysicalWidthMM);
         const targetM = niceScaleLength(groundWidthM/4);
         const label = targetM >= 1000 ? (targetM/1000)+' كم' : targetM+' م';
-        const canvas = await html2canvas(document.getElementById('map'), {useCORS:true, allowTaint:true, scale:2.2, backgroundColor:'#ffffff'});
+        const canvas = await html2canvas(mapEl, {useCORS:true, allowTaint:true, scale:2.2, backgroundColor:'#ffffff', width:capW, height:capH});
         document.body.classList.remove('notebook-print-mode');
+        mapEl.setAttribute('style', prevInlineStyle);
         map.invalidateSize({pan:false});
         map.removeLayer(labelsLayer);
         onDone(canvas.toDataURL('image/jpeg', 0.92), {scaleDenom, label});
       }catch(e){
         console.error(e);
         document.body.classList.remove('notebook-print-mode');
+        mapEl.setAttribute('style', prevInlineStyle);
         map.invalidateSize({pan:false});
         if(labelsLayer) map.removeLayer(labelsLayer);
         if(onError) onError(e);
@@ -6888,18 +6954,37 @@
     updateHistoryButtons();
   });
 
+  function activateTab(panelId){
+    const tabEl = document.querySelector('.tab[data-panel="'+panelId+'"]');
+    if(!tabEl) return;
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    tabEl.classList.add('active');
+    document.getElementById(panelId).classList.add('active');
+  }
   document.querySelectorAll('.tab').forEach(tabEl=>{
-    tabEl.addEventListener('click', ()=>{
-      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-      document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-      tabEl.classList.add('active');
-      document.getElementById(tabEl.dataset.panel).classList.add('active');
-    });
+    tabEl.addEventListener('click', ()=> activateTab(tabEl.dataset.panel));
   });
   
   const sidebarEl = document.querySelector('.sidebar');
-  document.getElementById('mobileSidebarToggle').addEventListener('click', ()=>{
-    sidebarEl.classList.toggle('open');
+  const mobileQuickMenu = document.getElementById('mobileQuickMenu');
+  document.getElementById('mobileSidebarToggle').addEventListener('click', (e)=>{
+    e.stopPropagation();
+    mobileQuickMenu.classList.toggle('open');
+  });
+  function openMobilePanel(panelId){
+    activateTab(panelId);
+    sidebarEl.classList.add('open');
+    mobileQuickMenu.classList.remove('open');
+  }
+  document.getElementById('mqbLayers').addEventListener('click', ()=> openMobilePanel('layersPanel'));
+  document.getElementById('mqbAttrs').addEventListener('click', ()=> openMobilePanel('attrPanel'));
+  document.getElementById('mqbLayout').addEventListener('click', ()=> openMobilePanel('layoutPanel'));
+  document.getElementById('mqbBookmarks').addEventListener('click', ()=> openMobilePanel('bookmarksPanel'));
+  document.addEventListener('click', (e)=>{
+    if(mobileQuickMenu.classList.contains('open') && !mobileQuickMenu.contains(e.target) && e.target.id !== 'mobileSidebarToggle'){
+      mobileQuickMenu.classList.remove('open');
+    }
   });
 
   function toggleDriveMenuPopup(){
