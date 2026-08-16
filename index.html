@@ -440,6 +440,21 @@
     .drive-control button{font-size:9.5px;padding:4px 6px;}
     .rect-hud{left:50% !important;top:50% !important;transform:translate(-50%,-50%);width:82vw;max-width:260px;max-height:calc(100vh - 190px) !important;overflow-y:auto !important;}
     .statusbar{font-size:10px;gap:10px;padding:0 8px;flex-wrap:wrap;height:auto;min-height:28px;}
+
+    /* ── شاشة لوحة الإخراج (Layout) في وضع الموبايل — شريط مضغوط، ولوحة خصائص العنصر تبقى Bottom Sheet ── */
+    #layoutViewToolbar{padding:6px 8px !important;gap:5px !important;}
+    #layoutViewToolbar button{font-size:10.5px !important;padding:6px 8px !important;}
+    #lyName{width:96px !important;font-size:11px !important;}
+    #lyPaper{width:48px !important;font-size:11px !important;}
+    #lyOrientation{width:70px !important;font-size:11px !important;}
+    #lyLinkedFeatureName{max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    #layoutViewBody{padding:10px !important;}
+    #lyElementProps{
+      left:0 !important; right:0 !important; top:auto !important; bottom:0 !important;
+      width:100% !important; border-radius:14px 14px 0 0 !important;
+      max-height:55vh !important; z-index:960 !important;
+      box-shadow:0 -8px 24px rgba(0,0,0,.45) !important;
+    }
   }
 
   /* ---- Feature label tooltips ---- */
@@ -3911,11 +3926,14 @@
     currentLayoutEditPageId = null;
     selectedElementId = null;
     renderLayoutPageList();
-    // نرجّع منيو الخلفية ومقياس الرسم بتوع الخريطة الحية اللي كانوا مخفيين وقت لوحة الإخراج
+    // نرجّع منيو الخلفية ومقياس الرسم وزراير الموبايل العائمة ونسبة Leaflet اللي كانوا مخفيين وقت لوحة الإخراج
     const bt = document.querySelector('.basemap-toggle');
     if(bt) bt.style.display = '';
     const sc = document.querySelector('.scale-input-ctrl');
     if(sc) sc.style.display = '';
+    document.querySelectorAll('.mobile-sidebar-toggle').forEach(el=> el.style.display = '');
+    const attr = document.querySelector('.leaflet-control-attribution');
+    if(attr) attr.style.display = '';
   }
 
   function openLayoutPageEditor(pageId){
@@ -3930,12 +3948,15 @@
     const f = getFeatureByRef(page.featureRef);
     document.getElementById('lyLinkedFeatureName').textContent = f ? ('✓ ' + featureLabel(f)) : '';
     document.getElementById('layoutView').style.display = 'flex';
-    // منيو الخلفية ومقياس الرسم بتوع الخريطة الحية بيبقى ترتيبهم فوق شاشة لوحة الإخراج (z-index)
+    // منيو الخلفية ومقياس الرسم بتوع الخريطة الحية، وكمان نسبة Leaflet، ترتيبهم فوق شاشة لوحة الإخراج (z-index)
     // فبيظهروا طافيين فوقها غلط — بنخفيهم صراحة طول ما إحنا في شاشة اللوحة دي
+    // (زرار الطبقات المستدير بالثلاث خطوط فضّلناه ظاهر — المستخدم عايزه يفضل شغال جوه شاشة اللوحة كمان)
     const bt = document.querySelector('.basemap-toggle');
     if(bt) bt.style.display = 'none';
     const sc = document.querySelector('.scale-input-ctrl');
     if(sc) sc.style.display = 'none';
+    const attr = document.querySelector('.leaflet-control-attribution');
+    if(attr) attr.style.display = 'none';
     selectLayoutElement(null, page);
     renderLayoutCanvas(page);
   }
