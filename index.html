@@ -254,8 +254,14 @@
   .feature-item:hover{background:var(--teal-soft);color:var(--teal);}
   .feature-item .fi-type{font-size:9px;font-family:var(--mono);background:var(--bg-panel-2);padding:1px 5px;border-radius:3px;border:1px solid var(--border);color:var(--text-muted);flex-shrink:0;box-shadow:0 1px 2px rgba(0,0,0,.06);}
   .feature-item .fi-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--mono);}
-  .feature-item .fi-zoom{opacity:0;font-size:10px;color:var(--teal);}
+  .feature-item .fi-zoom{opacity:0;font-size:10px;color:var(--teal);flex-shrink:0;}
   .feature-item:hover .fi-zoom{opacity:1;}
+  .feature-item .fi-hide, .feature-item .fi-del{opacity:0;font-size:11px;flex-shrink:0;cursor:pointer;padding:1px 2px;border-radius:3px;}
+  .feature-item:hover .fi-hide, .feature-item:hover .fi-del{opacity:.85;}
+  .feature-item .fi-hide:hover, .feature-item .fi-del:hover{opacity:1 !important;}
+  .feature-item .fi-del:hover{color:var(--danger);}
+  .feature-item.fi-is-hidden{opacity:.5;}
+  .feature-item.fi-is-hidden .fi-hide{opacity:1;color:var(--accent);}
   .attr-block{background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px;}
   .attr-block .ftype{color:var(--accent);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
   .stat-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11.5px;color:var(--text-muted);margin-top:6px;}
@@ -1966,6 +1972,8 @@
     <div class="panel" id="layoutPanel">
       <div class="section-title">لوحات الإخراج (Layout)</div>
       <div id="layoutPageList"></div>
+      <input type="file" id="importLayoutPageInput" accept=".json,application/json" style="display:none;">
+      <button class="add-btn" id="importLayoutPageBtn" style="background:transparent;border:1px solid var(--teal);color:var(--teal);">⬆️ استيراد لوحة من ملف</button>
       <button class="add-btn" id="addLayoutPageBtn">+ لوحة جديدة</button>
       <button class="add-btn" id="openMapSeriesBtn" style="margin-top:6px;">🧩 سلسلة صفحات تلقائية (Map Series)</button>
     </div>
@@ -3723,6 +3731,68 @@
     scheduleSave();
   }
 
+  /* ========== حفظ/استيراد لوحة إخراج كملف مستقل — لنقلها بين الأجهزة (لاب ↔ موبايل) ========== */
+  function exportLayoutPageAsFile(pageId){
+    const page = state.layoutPages.find(p=>p.id===pageId);
+    if(!page) return;
+    const snapshots = {};
+    (page.elements||[]).forEach(el=>{
+      if(state.layoutSnapshots[el.id] !== undefined) snapshots[el.id] = state.layoutSnapshots[el.id];
+    });
+    const payload = {
+      __type: 'gis-layout-page-export',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      page: page,
+      snapshots: snapshots
+    };
+    const data = JSON.stringify(payload);
+    const blob = new Blob([data], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const safeName = (page.name || 'لوحة').replace(/[\\/:*?"<>|]/g, '_');
+    a.href = url;
+    a.download = 'لوحة-إخراج-' + safeName + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  }
+
+  function importLayoutPageFromFile(file){
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const payload = JSON.parse(reader.result);
+        if(!payload || payload.__type !== 'gis-layout-page-export' || !payload.page){
+          alert('الملف ده مش ملف لوحة إخراج صحيح'); return;
+        }
+        pushStateToUndo();
+        const clone = JSON.parse(JSON.stringify(payload.page));
+        clone.id = uid();
+        // كل عنصر لازم ID جديد يميّزه، ونرجّع لقطته المحفوظة (لو موجودة) تحت الـ ID الجديد ده
+        clone.elements = (clone.elements||[]).map(el=>{
+          const oldId = el.id;
+          el.id = uid();
+          if(payload.snapshots && payload.snapshots[oldId] !== undefined){
+            state.layoutSnapshots[el.id] = payload.snapshots[oldId];
+          }
+          return el;
+        });
+        // لو اسم اللوحة متكرر أصلاً في اللوحات الحالية، بنضيف "(مستوردة)" للتمييز
+        if(state.layoutPages.some(p=>p.name===clone.name)) clone.name = clone.name + ' (مستوردة)';
+        state.layoutPages.push(clone);
+        renderLayoutPageList();
+        scheduleSave();
+        alert('✅ اتضافت اللوحة "'+clone.name+'"');
+      }catch(err){
+        console.error(err);
+        alert('تعذرت قراءة الملف: ' + (err && err.message ? err.message : err));
+      }
+    };
+    reader.readAsText(file);
+  }
+
   /* ========== Bookmarks — حفظ والرجوع لمواضع الخريطة (زي ArcGIS Pro) ========== */
   function renderBookmarksList(){
     const container = document.getElementById('bookmarksList');
@@ -3786,6 +3856,15 @@
     scheduleSave();
   });
 
+  document.getElementById('importLayoutPageBtn').addEventListener('click', ()=>{
+    document.getElementById('importLayoutPageInput').click();
+  });
+  document.getElementById('importLayoutPageInput').addEventListener('change', e=>{
+    const file = e.target.files && e.target.files[0];
+    if(file) importLayoutPageFromFile(file);
+    e.target.value = ''; // نفضّي القيمة عشان لو استوردت نفس الملف تاني يشتغل الـ change event تاني
+  });
+
   function renderLayoutPageList(){
     const container = document.getElementById('layoutPageList');
     if(!container) return;
@@ -3813,6 +3892,7 @@
       }
       row.appendChild(mk('✏️', 'فتح اللوحة', ()=> openLayoutPageEditor(page.id)));
       row.appendChild(mk('⧉', 'دوبلكيت — نسخ اللوحة بكل خصائصها (المقاس، الكرتوش، العناصر، اللقطة)', ()=> duplicateLayoutPage(page.id)));
+      row.appendChild(mk('💾', 'حفظ اللوحة كملف — تقدري تستورديه في أي جهاز تاني (من اللاب للموبايل أو العكس)', ()=> exportLayoutPageAsFile(page.id)));
       row.appendChild(mk('🖼️', 'تصدير JPG', ()=> exportPageAsFile(page.id, 'jpg')));
       row.appendChild(mk('📕', 'تصدير PDF', ()=> exportPageAsFile(page.id, 'pdf')));
       row.appendChild(mk('🗑️', 'حذف اللوحة', ()=>{
@@ -5635,6 +5715,7 @@
       lg.clearLayers();
       if(layer.visible){ if(!map.hasLayer(lg)) lg.addTo(map); } else { if(map.hasLayer(lg)) map.removeLayer(lg); }
       layer.features.forEach(f=>{
+        if(f.hidden) return; // العنصر ده متخفي بشكل فردي (زرار إخفاء العنصر) — مش بس الطبقة كلها
         const isSel = multiSelectMode
           ? multiSelect.some(c=>c.layerId===layer.id && c.featureId===f.id)
           : (selection && selection.layerId===layer.id && selection.featureId===f.id);
@@ -5647,7 +5728,9 @@
         } else {
           const borderColor = isSel ? '#1d4ed8' : (f.borderColor || color);
           const borderWidth = isSel ? Math.max(3, (f.borderWidth||2)) : (f.borderWidth!=null ? f.borderWidth : 2);
-          shape = L.polygon(f.coords, {color: borderColor, weight: borderWidth, fillColor:color, fillOpacity: isSel?0.3:0.18});
+          const fillOpacity = f.noFill ? 0 : (isSel?0.3:0.18);
+          // fill بيفضل true حتى لو بدون تعبئة، عشان تقدري تدوسي جوّه المضلع فتحددّيه حتى لو شفاف
+          shape = L.polygon(f.coords, {color: borderColor, weight: borderWidth, fillColor:color, fillOpacity, fill:true});
         }
         
         shape.on('click', (e) => {
@@ -6802,7 +6885,7 @@
         layer.features.forEach(f=>{
           const typeAr = {point:'نقطة', line:'خط', polygon:'مضلع', rectangle:'مستطيل', circle:'دائرة'};
           const item = document.createElement('div');
-          item.className = 'feature-item';
+          item.className = 'feature-item' + (f.hidden ? ' fi-is-hidden' : '');
           const isSel = multiSelectMode
             ? multiSelect.some(c=>c.layerId===layer.id && c.featureId===f.id)
             : (selection && selection.layerId===layer.id && selection.featureId===f.id);
@@ -6832,7 +6915,31 @@
           zoomIcon.title = 'تكبير على العنصر';
           zoomIcon.innerHTML = '&#x25CE;';
 
-          item.appendChild(nbCheck); item.appendChild(typeTag); item.appendChild(label); item.appendChild(zoomIcon);
+          const hideIcon = document.createElement('span');
+          hideIcon.className = 'fi-hide';
+          hideIcon.title = f.hidden ? 'إظهار العنصر' : 'إخفاء العنصر';
+          hideIcon.textContent = f.hidden ? '🚫' : '👁';
+          hideIcon.addEventListener('click', e=>{
+            e.stopPropagation(); L.DomEvent.stopPropagation(e);
+            f.hidden = !f.hidden;
+            renderFeatures(); renderLayerList(); scheduleSave();
+          });
+
+          const delIcon = document.createElement('span');
+          delIcon.className = 'fi-del';
+          delIcon.title = 'حذف العنصر';
+          delIcon.textContent = '🗑️';
+          delIcon.addEventListener('click', e=>{
+            e.stopPropagation(); L.DomEvent.stopPropagation(e);
+            if(!confirm('تحذف "'+featureLabel(f)+'" نهائيًا؟')) return;
+            pushStateToUndo();
+            layer.features = layer.features.filter(x=>x.id!==f.id);
+            if(selection && selection.layerId===layer.id && selection.featureId===f.id) selection = null;
+            renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
+          });
+
+          item.appendChild(nbCheck); item.appendChild(typeTag); item.appendChild(label);
+          item.appendChild(zoomIcon); item.appendChild(hideIcon); item.appendChild(delIcon);
 
           item.addEventListener('click', e=>{
             L.DomEvent.stopPropagation(e);
@@ -7452,10 +7559,14 @@
     const _isPoly = (f.type==='polygon' || f.type==='rectangle');
     html += `<div class="fcolor-row">
       <span>${_isPoly ? 'لون التعبئة:' : 'لون العنصر:'}</span>
-      <input type="color" id="fcPicker" value="${f.color || (_fLayer ? _fLayer.color : '#E8A432')}">
+      <input type="color" id="fcPicker" value="${f.color || (_fLayer ? _fLayer.color : '#E8A432')}" ${f.noFill ? 'disabled' : ''}>
       ${f.color ? '<button id="fcReset">↩ لون الطبقة</button>' : ''}
     </div>`;
     if(_isPoly){
+      html += `<div class="field-row" style="align-items:center;">
+        <label style="flex:1;font-size:11px;color:var(--text-muted);cursor:pointer;" id="fNoFillLabel">بدون تعبئة (شفاف تمامًا)</label>
+        <input type="checkbox" id="fNoFillCheck" style="width:auto;flex:none;cursor:pointer;" ${f.noFill ? 'checked' : ''}>
+      </div>`;
       const _defBorderColor = f.borderColor || f.color || (_fLayer ? _fLayer.color : '#E8A432');
       html += `<div class="fcolor-row">
         <span>لون الحدود:</span>
@@ -7626,6 +7737,11 @@
       const w = parseFloat(e.target.value);
       f.borderWidth = (w>0) ? w : 2;
       renderFeatures(); scheduleSave();
+    });
+    const fNoFillCheck = document.getElementById('fNoFillCheck');
+    if(fNoFillCheck) fNoFillCheck.addEventListener('change', e=>{
+      f.noFill = e.target.checked;
+      renderAttrPanel(); renderFeatures(); scheduleSave();
     });
   }
 
