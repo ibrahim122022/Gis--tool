@@ -38,9 +38,12 @@
     --text:#f7fafc; --text-muted:#a0aec0; --danger:#f56565; --border:#4a5568;
   }
   #themeToggleBtn{--tc:#3b82f6;}
-  [data-theme="dark"] .toolbar{background:linear-gradient(180deg,#1a202c 0%,#4a5568 100%);}
+  [data-theme="dark"] .toolbar{background:hsl(218 80% 2%);}
+  [data-theme="dark"] .ribbon-tabs{background:hsl(218 80% 2%);}
   [data-theme="dark"] .sidebar, [data-theme="dark"] .rect-hud, [data-theme="dark"] .panel{background:var(--bg-panel);}
   [data-theme="dark"] .leaflet-container{background:#0f1420;}
+  /* أيقونات التراجع/الإعادة كانت باهتة على خلفية الشريط الغامقة جدًا في الوضع الداكن — لونها أوضح هنا */
+  [data-theme="dark"] #undoBtn, [data-theme="dark"] #redoBtn{color:#cbd5e1;}
   *{box-sizing:border-box;}
   html,body{margin:0;height:100%;height:100dvh;background:var(--bg);color:var(--text);font-family:var(--sans);overflow:hidden;}
   .app{display:flex;flex-direction:column;height:100vh;height:100dvh;width:100vw;}
@@ -1949,6 +1952,7 @@
       <div class="tab active" data-panel="layersPanel">الطبقات</div>
       <div class="tab" data-panel="attrPanel">الخصائص</div>
       <div class="tab" data-panel="layoutPanel">🖼️ إخراج اللوحات</div>
+      <div class="tab" data-panel="bookmarksPanel">🔖 Bookmarks</div>
     </div>
     <div class="panel active" id="layersPanel">
       <div class="section-title">الطبقات</div>
@@ -1964,6 +1968,12 @@
       <div id="layoutPageList"></div>
       <button class="add-btn" id="addLayoutPageBtn">+ لوحة جديدة</button>
       <button class="add-btn" id="openMapSeriesBtn" style="margin-top:6px;">🧩 سلسلة صفحات تلقائية (Map Series)</button>
+    </div>
+    <div class="panel" id="bookmarksPanel">
+      <div class="section-title">🔖 Bookmarks — مواضع محفوظة للخريطة</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;line-height:1.6;">احفظي موضع الخريطة الحالي (المركز + مستوى التكبير + الخلفية) وارجعيله بضغطة واحدة في أي وقت، زي Bookmarks في ArcGIS Pro.</div>
+      <div id="bookmarksList"></div>
+      <button class="add-btn" id="addBookmarkBtn">🔖 + احفظ الموضع الحالي</button>
     </div>
   </div>
 
@@ -1999,7 +2009,8 @@
     userName: null,
     notebookSketches: [], // ضربات القلم الحر المحفوظة: {id, points:[[lat,lng]...], color, brush, width, smoothness}
     layoutPages: [], // لوحات الإخراج (Layout) المحفوظة: {id, name, paper, orientation, showScaleBar, showNorth, showTitle, showAreaTable, showLengthsTable, showVerticesTable, showAttrsTable, tables, titleBlock, featureRef, mapScaleInfo}
-    rasters: [] // خرائط الراستر المضافة: {id, name, show, opacity, dataURL, naturalW, naturalH, corners:[[lat,lng]x4] (TL,TR,BR,BL)}
+    rasters: [], // خرائط الراستر المضافة: {id, name, show, opacity, dataURL, naturalW, naturalH, corners:[[lat,lng]x4] (TL,TR,BR,BL)}
+    bookmarks: [] // إشارات مرجعية لمواضع الخريطة المحفوظة (زي Bookmarks في ArcGIS Pro): {id, name, center:[lat,lng], zoom, basemap}
   };
   let friendLayers = [];      // read-only layers pulled from friends' Drive files (each layer carries .fid = owning friend's File ID)
   let friendLayerGroups = {}; // separate Leaflet layer groups for friend data, keyed by fid+'__'+layer.id
@@ -2413,7 +2424,9 @@
     }
   }
 
+  let currentBasemapMode = 'sat'; // آخر خلفية مختارة (قمر صناعي/خريطة عادية/بيضاء) — بتتسجل مع أي Bookmark جديد
   function setBasemap(mode){
+    currentBasemapMode = mode;
     map.removeLayer(satLayer); map.removeLayer(streetsLayer);
     if(mode === 'sat') map.addLayer(satLayer);
     else if(mode === 'streets') map.addLayer(streetsLayer);
@@ -3709,6 +3722,69 @@
     renderLayoutPageList();
     scheduleSave();
   }
+
+  /* ========== Bookmarks — حفظ والرجوع لمواضع الخريطة (زي ArcGIS Pro) ========== */
+  function renderBookmarksList(){
+    const container = document.getElementById('bookmarksList');
+    if(!container) return;
+    container.innerHTML = '';
+    if(!state.bookmarks.length){
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'لسه معملتيش أي Bookmark — حركي الخريطة للموضع اللي عايزاه واضغطي "احفظ الموضع الحالي"';
+      container.appendChild(empty);
+      return;
+    }
+    const basemapLabel = {sat:'قمر صناعي', streets:'خريطة عادية', blank:'خلفية بيضاء'};
+    state.bookmarks.forEach(bm=>{
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:2px;padding:6px 4px;border-bottom:1px solid var(--border);';
+      const label = document.createElement('span');
+      label.textContent = '🔖 ' + bm.name;
+      label.title = 'زوم ' + (bm.zoom!=null?bm.zoom:'-') + ' · ' + (basemapLabel[bm.basemap] || '');
+      label.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;cursor:pointer;';
+      label.addEventListener('click', ()=> goToBookmark(bm.id));
+      row.appendChild(label);
+      function mk(icon, title, fn){
+        const b = document.createElement('button');
+        b.className = 'icon-btn'; b.title = title; b.textContent = icon;
+        b.addEventListener('click', fn);
+        return b;
+      }
+      row.appendChild(mk('📍', 'روح للموضع ده', ()=> goToBookmark(bm.id)));
+      row.appendChild(mk('✏️', 'إعادة تسمية', ()=>{
+        const newName = prompt('اسم الـ Bookmark:', bm.name);
+        if(newName && newName.trim()){ bm.name = newName.trim(); renderBookmarksList(); scheduleSave(); }
+      }));
+      row.appendChild(mk('🗑️', 'حذف', ()=>{
+        if(!confirm('تحذف Bookmark "'+bm.name+'"؟')) return;
+        state.bookmarks = state.bookmarks.filter(x=>x.id!==bm.id);
+        renderBookmarksList(); scheduleSave();
+      }));
+      container.appendChild(row);
+    });
+  }
+  function goToBookmark(id){
+    const bm = state.bookmarks.find(b=>b.id===id);
+    if(!bm) return;
+    map.setView(bm.center, bm.zoom!=null ? bm.zoom : map.getZoom(), {animate:true});
+    if(bm.basemap) setBasemap(bm.basemap);
+  }
+  document.getElementById('addBookmarkBtn').addEventListener('click', ()=>{
+    const defaultName = 'Bookmark ' + (state.bookmarks.length + 1);
+    const name = prompt('اسم الـ Bookmark:', defaultName);
+    if(!name || !name.trim()) return;
+    const c = map.getCenter();
+    state.bookmarks.push({
+      id: uid(),
+      name: name.trim(),
+      center: [c.lat, c.lng],
+      zoom: map.getZoom(),
+      basemap: currentBasemapMode
+    });
+    renderBookmarksList();
+    scheduleSave();
+  });
 
   function renderLayoutPageList(){
     const container = document.getElementById('layoutPageList');
@@ -5359,10 +5435,12 @@
     if(!Array.isArray(state.sharedLayoutElements)) state.sharedLayoutElements = [];
     if(!state.layoutSnapshots || typeof state.layoutSnapshots !== 'object') state.layoutSnapshots = {};
     if(!Array.isArray(state.rasters)) state.rasters = [];
+    if(!Array.isArray(state.bookmarks)) state.bookmarks = [];
     if(!state.domains || typeof state.domains !== 'object') state.domains = {};
     state.layers.forEach(l=>{ if(!Array.isArray(l.fields)) l.fields = []; });
     seedLegacyDomains();
     renderLayerList(); renderFeatures(); renderPenStrokes(); renderLayoutPageList();
+    renderBookmarksList();
     renderRasters();
     const all=[]; state.layers.forEach(l=>l.features.forEach(f=>f.coords.forEach(c=>all.push(c))));
     if(all.length) map.fitBounds(L.latLngBounds(all), {padding:[40,40]});
@@ -6409,9 +6487,13 @@
   (function initThemeToggle(){
     const btn = document.getElementById('themeToggleBtn');
     const label = btn.querySelector('span');
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    const LIGHT_THEME_COLOR = '#1a73e8';
+    const DARK_THEME_COLOR = 'hsl(0 0% 20%)'; // شريط عنوان النافذة (لما البرنامج مثبّت كتطبيق على اللاب) وشريط حالة المتصفح على الموبايل
     function applyTheme(dark){
       if(dark){ document.documentElement.setAttribute('data-theme','dark'); label.textContent='الوضع الفاتح'; }
       else { document.documentElement.removeAttribute('data-theme'); label.textContent='الوضع الداكن'; }
+      if(metaThemeColor) metaThemeColor.setAttribute('content', dark ? DARK_THEME_COLOR : LIGHT_THEME_COLOR);
     }
     let saved = null;
     try{ saved = localStorage.getItem('appTheme'); }catch(e){}
