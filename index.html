@@ -131,6 +131,7 @@
   .search-empty{text-align:center;color:var(--text-muted);font-size:11.5px;padding:14px 0;}
   .search-loading{text-align:center;color:var(--teal);font-size:11.5px;padding:14px 0;}
   .tool-btn[data-tool="divide"]{--tc:#2a9d5c;}
+  .tool-btn[data-tool="divideline"]{--tc:#7c3aed;}
   .tool-btn[data-tool="split"]{--tc:#c0392b;}
   .tool-btn[data-tool="difference"]{--tc:#8e44ad;}
   .tool-btn[data-tool="buffer"]{--tc:#16a085;}
@@ -325,6 +326,8 @@
   #mobileDriveToggle{left:auto;right:12px;box-shadow:0 6px 16px rgba(0,120,140,.35);}
   .mobile-sidebar-toggle svg{width:22px;height:22px;}
 
+  .sidebar-mobile-close{display:none;}
+
   .mobile-quick-menu{
     display:none; flex-direction:column; gap:10px; position:fixed;
     bottom:calc(76px + env(safe-area-inset-bottom, 0px) + 52px + 58px); left:12px; z-index:901;
@@ -445,6 +448,10 @@
     }
     .sidebar.open{transform:translateX(0);}
     .sidebar-resizer{display:none;}
+    .sidebar-mobile-close{
+      display:block;width:100%;box-sizing:border-box;padding:10px;margin:0;border:none;
+      background:var(--danger,#e53e3e);color:#fff;font-weight:700;font-size:14px;cursor:pointer;
+    }
     .mobile-sidebar-toggle{display:flex;}
     #driveMenuToggleBtn{display:none;}
     .leaflet-control-zoom{display:none !important;}
@@ -932,6 +939,14 @@
                 <circle cx="3.5"  cy="9.5" r="1.8" fill="currentColor" stroke="none"/>
                 <circle cx="20.5" cy="14.5" r="1.8" fill="currentColor" stroke="none"/>
               </svg><span>تقسيم</span>
+            </button>
+            <button class="tool-btn" data-tool="divideline" title="تقسيم خط إلى أجزاء متساوية أو بمسافة محددة">
+              <svg viewBox="0 0 24 24">
+                <line x1="3" y1="12" x2="21" y2="12" stroke-width="2.2"/>
+                <line x1="7" y1="7" x2="7" y2="17" stroke-width="2"/>
+                <line x1="12" y1="7" x2="12" y2="17" stroke-width="2"/>
+                <line x1="17" y1="7" x2="17" y2="17" stroke-width="2"/>
+              </svg><span>تقسيم خط</span>
             </button>
             <button class="tool-btn" data-tool="split" title="قطع مضلع بخط حر ترسمه (ممكن يكون خط منكسر بعدة نقط وحتى يتقاطع مع الحدود أكتر من مرتين وينتج أكتر من قطعتين)، أو تقطيع خط من نقطة (زي أداة Split في ArcGIS Pro)">
               <svg viewBox="0 0 24 24">
@@ -1687,7 +1702,37 @@
         </div>
       </div>
 
-      <!-- ── Split (قطع) HUD ── -->
+      <!-- ── تقسيم خط (إلى أجزاء متساوية أو بمسافة محددة) HUD ── -->
+      <div class="rect-hud" id="divideLineHud" style="width:248px;border-color:#7c3aed;display:none;">
+        <h4 style="color:#7c3aed;">✂ تقسيم الخط</h4>
+        <label>طريقة التقسيم</label>
+        <select id="dlMode">
+          <option value="count">عدد أجزاء متساوية</option>
+          <option value="distance">مسافة محددة</option>
+        </select>
+        <div id="dlCountRow">
+          <label>عدد الأجزاء</label>
+          <input type="number" id="dlN" value="2" min="2" max="500" step="1">
+        </div>
+        <div id="dlDistanceRow" style="display:none;">
+          <label>طول كل قطعة (م)</label>
+          <input type="number" id="dlDistValue" value="10" min="0.01" step="0.01">
+          <label>ابدأ من</label>
+          <select id="dlStartMode">
+            <option value="start">أول الخط</option>
+            <option value="end">آخر الخط</option>
+            <option value="pick">نقطة أحددها على الخط</option>
+          </select>
+          <div id="dlPickRow" style="display:none;margin-top:6px;">
+            <div id="dlPickReadout" style="font-size:12px;color:#8B9686;margin:4px 0 8px;">لم يتم التحديد بعد</div>
+            <button type="button" class="btn-cancel" id="dlPickBtn" style="width:100%;">📍 حدد نقطة البداية على الخط</button>
+          </div>
+        </div>
+        <div class="row-btns" style="margin-top:10px;">
+          <button class="btn-cancel" id="dlCancel">إلغاء</button>
+          <button class="btn-create" id="dlApply" style="background:#7c3aed;">تطبيق</button>
+        </div>
+      </div>
       <div class="rect-hud" id="splitHud" style="width:250px;border-color:#c0392b;display:none;position:fixed;top:56px;left:50%;transform:translateX(-50%);z-index:965;">
         <h4 style="color:#c0392b;">✂ قطع (Split)</h4>
         <div id="splitHudMsg" style="font-size:11.5px;color:var(--text-muted);line-height:1.6;margin-bottom:8px;">اضغط على المضلع أو الخط اللي عايز تقطعه</div>
@@ -2003,6 +2048,7 @@
 
   <div class="sidebar">
     <div class="sidebar-resizer" id="sidebarResizer" title="اسحب لتوسيع/تضييق اللوحة"></div>
+    <button class="sidebar-mobile-close" id="sidebarMobileClose" title="إغلاق">✕ إغلاق</button>
     <div class="tabs">
       <div class="tab active" data-panel="layersPanel">الطبقات</div>
       <div class="tab" data-panel="attrPanel">الخصائص</div>
@@ -2346,6 +2392,11 @@
   let divideAngleMode = null; // null | 'drawline' | 'edge' | 'edge_perp' | 'frontage_start' — وضع تحديد اتجاه التقسيم من الخريطة
   let divideFrontageStart = null; // {lat,lng} نقطة بداية الواجهة في وضع "واجهة ومساحة محددة"
   let divideFrontageAngle = null; // زاوية الضلع المختار كواجهة (بالدرجات)
+
+  // --- Divide LINE tool state ---
+  let divideLinePendingLayerId = null, divideLinePendingFeatureId = null;
+  let dlPickMode = false;       // true وقت انتظار نقرة تحديد نقطة البداية على الخط
+  let dlPickedStart = null;     // {lat,lng} نقطة البداية المختارة يدويًا
 
   // ── حالة أداة القطع (Split) ──
   let splitTargetLayerId = null, splitTargetFeatureId = null;
@@ -5897,6 +5948,32 @@
         }
         
         shape.on('click', (e) => {
+          if(tool==='divideline' && dlPickMode){
+            L.DomEvent.stopPropagation(e);
+            handleDivideLinePickClick(f, e.latlng);
+            return;
+          }
+          if(tool==='divideline'){
+            L.DomEvent.stopPropagation(e);
+            if(f.type!=='line'){
+              document.getElementById('stHint').textContent='⚠️ أداة تقسيم الخط تعمل على الخطوط فقط';
+              return;
+            }
+            divideLinePendingLayerId = layer.id;
+            divideLinePendingFeatureId = f.id;
+            dlPickedStart = null;
+            document.getElementById('dlPickReadout').textContent = 'لم يتم التحديد بعد';
+            selection = {layerId:layer.id, featureId:f.id};
+            renderFeatures();
+            const dlHud = document.getElementById('divideLineHud');
+            const pt = map.latLngToContainerPoint(e.latlng);
+            const wr = mapEl.getBoundingClientRect();
+            dlHud.style.left = Math.min(Math.max(pt.x+18,8), wr.width-260)+'px';
+            dlHud.style.top  = Math.min(Math.max(pt.y-80,8), wr.height-260)+'px';
+            dlHud.style.display='block';
+            document.getElementById('stHint').textContent='✂ حدد إعدادات تقسيم الخط ثم اضغط تطبيق';
+            return;
+          }
           if(tool==='divide' && divideAngleMode){
             L.DomEvent.stopPropagation(e);
             handleDivideMapClick(e.latlng);
@@ -6970,7 +7047,15 @@
   const mobileQuickMenu = document.getElementById('mobileQuickMenu');
   document.getElementById('mobileSidebarToggle').addEventListener('click', (e)=>{
     e.stopPropagation();
-    mobileQuickMenu.classList.toggle('open');
+    if(sidebarEl.classList.contains('open')){
+      sidebarEl.classList.remove('open');
+      mobileQuickMenu.classList.remove('open');
+    } else {
+      mobileQuickMenu.classList.toggle('open');
+    }
+  });
+  document.getElementById('sidebarMobileClose').addEventListener('click', ()=>{
+    sidebarEl.classList.remove('open');
   });
   function openMobilePanel(panelId){
     activateTab(panelId);
@@ -8203,6 +8288,166 @@
     selection=null; renderFeatures(); renderAttrPanel();
     document.getElementById('stHint').textContent='✂ انقر على أي مضلع لتقسيمه إلى أجزاء متساوية';
   });
+
+  /* ===== تقسيم خط (عدد أجزاء متساوية أو مسافة محددة) ===== */
+  document.getElementById('dlMode').addEventListener('change', function(){
+    const isDist = this.value==='distance';
+    document.getElementById('dlCountRow').style.display = isDist ? 'none' : 'block';
+    document.getElementById('dlDistanceRow').style.display = isDist ? 'block' : 'none';
+  });
+  document.getElementById('dlStartMode').addEventListener('change', function(){
+    document.getElementById('dlPickRow').style.display = this.value==='pick' ? 'block' : 'none';
+  });
+  document.getElementById('dlPickBtn').addEventListener('click', ()=>{
+    if(!divideLinePendingLayerId || !divideLinePendingFeatureId) return;
+    dlPickMode = true;
+    document.getElementById('divideLineHud').style.display='none';
+    document.getElementById('stHint').textContent = '📍 انقر على نقطة على الخط تبدأ منها التقسيم...';
+  });
+  function handleDivideLinePickClick(f, latlng){
+    if(f.id !== divideLinePendingFeatureId) return;
+    dlPickedStart = {lat: latlng.lat, lng: latlng.lng};
+    dlPickMode = false;
+    document.getElementById('dlPickReadout').textContent = '✓ تم تحديد نقطة البداية';
+    document.getElementById('divideLineHud').style.display='block';
+    document.getElementById('stHint').textContent = '✓ تم تحديد نقطة البداية — اضبط باقي الإعدادات واضغط تطبيق';
+  }
+  document.getElementById('dlCancel').addEventListener('click', ()=>{
+    document.getElementById('divideLineHud').style.display='none';
+    divideLinePendingLayerId=null; divideLinePendingFeatureId=null;
+    dlPickMode=false; dlPickedStart=null;
+    document.getElementById('dlPickReadout').textContent='لم يتم التحديد بعد';
+    selection=null; renderFeatures(); renderAttrPanel();
+    document.getElementById('stHint').textContent='✂ انقر على أي خط لتقسيمه';
+  });
+  document.getElementById('dlApply').addEventListener('click', ()=>{
+    if(!divideLinePendingLayerId || !divideLinePendingFeatureId) return;
+    const mode = document.getElementById('dlMode').value;
+    document.getElementById('divideLineHud').style.display='none';
+    if(mode==='count'){
+      const n = Math.max(2, parseInt(document.getElementById('dlN').value)||2);
+      divideLineFeature(divideLinePendingLayerId, divideLinePendingFeatureId, {mode:'count', n});
+    } else {
+      const dist = parseFloat(document.getElementById('dlDistValue').value)||0;
+      if(dist<=0){ alert('اكتب طول قطعة صحيح أكبر من صفر'); document.getElementById('divideLineHud').style.display='block'; return; }
+      const startMode = document.getElementById('dlStartMode').value;
+      if(startMode==='pick' && !dlPickedStart){
+        alert('حدد نقطة البداية على الخط أولاً');
+        document.getElementById('divideLineHud').style.display='block';
+        return;
+      }
+      divideLineFeature(divideLinePendingLayerId, divideLinePendingFeatureId, {mode:'distance', dist, startMode, startLatLng: dlPickedStart});
+    }
+    divideLinePendingLayerId=null; divideLinePendingFeatureId=null;
+    dlPickedStart=null;
+    document.getElementById('dlPickReadout').textContent='لم يتم التحديد بعد';
+  });
+
+  function divideLineFeature(layerId, featureId, opts){
+    const layer = getLayer(layerId);
+    if(!layer) return;
+    const f = getFeature(layerId, featureId);
+    if(!f || f.type!=='line' || !f.coords || f.coords.length<2) return;
+
+    const zone = utmZoneForLng(f.coords.reduce((s,c)=>s+c[1],0)/f.coords.length);
+    const hemisphere = f.coords[0][0] >= 0 ? 'N' : 'S';
+    const toXY = (lat,lng)=>{ const u=latLngToUTM(lat,lng,zone); return [u.easting,u.northing]; };
+    const toLL = (x,y)=>{ const ll=utmToLatLng(zone,hemisphere,x,y); return [ll.lat,ll.lng]; };
+
+    let pts = f.coords.map(c=>toXY(c[0],c[1]));
+    let cumLen = [0];
+    for(let i=1;i<pts.length;i++){
+      const dx=pts[i][0]-pts[i-1][0], dy=pts[i][1]-pts[i-1][1];
+      cumLen.push(cumLen[i-1] + Math.sqrt(dx*dx+dy*dy));
+    }
+    const totalLen = cumLen[cumLen.length-1];
+    if(totalLen <= 0){ alert('الخط قصير جدًا للتقسيم'); return; }
+
+    function pointAtArcLength(targetLen){
+      if(targetLen<=0) return pts[0].slice();
+      if(targetLen>=totalLen) return pts[pts.length-1].slice();
+      for(let i=0;i<cumLen.length-1;i++){
+        if(targetLen <= cumLen[i+1] + 1e-9){
+          const segLen = cumLen[i+1]-cumLen[i];
+          const t = segLen>0 ? (targetLen-cumLen[i])/segLen : 0;
+          return [pts[i][0]+t*(pts[i+1][0]-pts[i][0]), pts[i][1]+t*(pts[i+1][1]-pts[i][1])];
+        }
+      }
+      return pts[pts.length-1].slice();
+    }
+    // بيقطع الخط عند مجموعة مواضع أطوال قوسية (arc length) محددة، محافظًا على أي رؤوس أصلية
+    // موجودة بين كل قطعتين — دقة تامة، من غير أي تكرار أو تقريب (الطول عبارة عن مسافة مباشرة)
+    function splitAt(cutLens){
+      const pieces = []; let current=[pts[0].slice()]; let ci=0;
+      for(let i=0;i<pts.length-1;i++){
+        while(ci<cutLens.length && cutLens[ci] > cumLen[i]+1e-9 && cutLens[ci] <= cumLen[i+1]+1e-9){
+          const p = pointAtArcLength(cutLens[ci]);
+          current.push(p); pieces.push(current); current=[p.slice()]; ci++;
+        }
+        current.push(pts[i+1].slice());
+      }
+      pieces.push(current);
+      return pieces.filter(p=>p.length>=2);
+    }
+
+    let cutLens = [];
+    if(opts.mode==='count'){
+      for(let i=1;i<opts.n;i++) cutLens.push(totalLen * i / opts.n);
+    } else {
+      let startOffset = 0;
+      if(opts.startMode==='end'){
+        // بنحسب من آخر الخط: بنبني مصفوفة أطوال جديدة بترتيب معكوس (منستخدمش نفس المصفوفة
+        // القديمة أثناء القراءة، عشان مانقراش قيم اتغيرت بالغلط قبل ما نوصلها)
+        const revCumLen = cumLen.map((_,i)=> totalLen - cumLen[cumLen.length-1-i]);
+        pts = pts.slice().reverse();
+        cumLen = revCumLen;
+        startOffset = 0;
+      } else if(opts.startMode==='pick' && opts.startLatLng){
+        const p0 = toXY(opts.startLatLng.lat, opts.startLatLng.lng);
+        // نلاقي أقرب نقطة على الخط للنقطة اللي المستخدم حددها ونحسب طولها القوسي من بداية الخط
+        let bestLen = 0, bestD = Infinity;
+        for(let i=0;i<pts.length-1;i++){
+          const ax=pts[i][0], ay=pts[i][1], bx=pts[i+1][0], by=pts[i+1][1];
+          const segLen2 = (bx-ax)*(bx-ax)+(by-ay)*(by-ay);
+          let t = segLen2>0 ? ((p0[0]-ax)*(bx-ax)+(p0[1]-ay)*(by-ay))/segLen2 : 0;
+          t = Math.max(0, Math.min(1, t));
+          const px = ax+t*(bx-ax), py = ay+t*(by-ay);
+          const d = Math.hypot(p0[0]-px, p0[1]-py);
+          if(d<bestD){ bestD=d; bestLen = cumLen[i] + t*Math.sqrt(segLen2); }
+        }
+        startOffset = bestLen;
+      }
+      if(startOffset > 1e-6) cutLens.push(startOffset); // الجزء قبل نقطة البداية بيفضل قطعة مستقلة
+      let pos = startOffset;
+      while(pos + opts.dist < totalLen - 1e-6){
+        pos += opts.dist;
+        cutLens.push(pos);
+      }
+    }
+    cutLens = cutLens.filter((v,i,a)=> v>1e-6 && v<totalLen-1e-6 && a.indexOf(v)===i).sort((a,b)=>a-b);
+
+    const pieceRings = splitAt(cutLens);
+    if(pieceRings.length < 2){
+      alert('تعذّر التقسيم بهذه الإعدادات — جرب عدد أجزاء أو مسافة مختلفة');
+      return;
+    }
+
+    const newFeatures = pieceRings.map(ring=>({
+      id: uid(), type:'line',
+      coords: ring.map(p=>toLL(p[0], p[1])),
+      attrs: Object.assign({}, f.attrs),
+      color: f.color
+    }));
+
+    pushStateToUndo();
+    const fIdx = layer.features.findIndex(x=>x.id===featureId);
+    if(fIdx>=0) layer.features.splice(fIdx, 1, ...newFeatures);
+    else layer.features.push(...newFeatures);
+
+    selection = null;
+    renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
+    document.getElementById('stHint').textContent = `✓ تم تقسيم الخط إلى ${newFeatures.length} جزء`;
+  }
   document.getElementById('divideApply').addEventListener('click', ()=>{
     if(!dividePendingLayerId || !dividePendingFeatureId) return;
     const divMode = document.getElementById('divMode').value;
