@@ -207,6 +207,11 @@
   .rect-hud .row-btns button{flex:1;border-radius:6px;border:none;padding:7px 0;font-size:11.5px;cursor:pointer;font-family:var(--sans);font-weight:600;}
   .btn-create{background:var(--accent);color:#fff;}
   .btn-cancel{background:var(--bg-panel-2);color:var(--text-muted);border:1px solid var(--border) !important;}
+  .mf-toggle-btn.active{background:var(--accent) !important;color:#fff !important;border-color:var(--accent) !important;}
+  /* وقت ضبط الزوم من جوه اللاي أوت، الخريطة الحقيقية بتتحط فوق شاشة اللوحة (z-index:900) —
+     أي قائمة أو نافذة صغيرة بتظهر عند اختيار عنصر عليها (زي قائمة تعديل المضلع) لازم تظهر
+     فوقها هي كمان، وإلا هتفضل مستخبية وراء خلفية شاشة اللوحة زي ما كان بيحصل قبل كده */
+  body.mf-live-adjust-active .rect-hud{z-index:930 !important;}
 
   .go-to-hud { width: 280px; border-color: var(--teal); }
   .dms-row{display:flex;gap:3px;align-items:center;margin-bottom:4px;}
@@ -480,6 +485,24 @@
       box-shadow:0 -8px 24px rgba(0,0,0,.45) !important;
     }
   }
+
+  /* ═══ زرار "تنسيق اللاب" داخل شاشة لوحة الإخراج فقط — بيلغي كل تنسيقات الموبايل المصغّرة
+     بتاعة الشاشة دي ويرجّعها لنفس المقاسات المريحة اللي بتظهر على شاشة كمبيوتر عادية، حتى لو
+     الجهاز الحالي موبايل. مش بيأثر على أي شاشة تانية في التطبيق غير شاشة اللوحة دي ═══ */
+  #layoutView.force-desktop #layoutViewToolbar{padding:8px 14px !important;gap:8px !important;}
+  #layoutView.force-desktop #layoutViewToolbar button{font-size:revert !important;padding:revert !important;}
+  #layoutView.force-desktop #lyName{width:150px !important;font-size:revert !important;}
+  #layoutView.force-desktop #lyPaper{width:66px !important;font-size:revert !important;}
+  #layoutView.force-desktop #lyOrientation{width:100px !important;font-size:revert !important;}
+  #layoutView.force-desktop #lyLinkedFeatureName{max-width:none !important;overflow:visible !important;text-overflow:clip !important;}
+  #layoutView.force-desktop #layoutViewBody{padding:30px !important;}
+  #layoutView.force-desktop #lyElementProps{
+    left:12px !important; right:auto !important; top:64px !important; bottom:auto !important;
+    width:260px !important; border-radius:10px !important;
+    max-height:calc(100vh - 90px) !important; z-index:860 !important;
+    box-shadow:0 8px 24px rgba(0,0,0,.4) !important;
+  }
+  #lyDesktopModeBtn.active{background:var(--accent) !important;color:#fff !important;}
 
   /* ---- Feature label tooltips ---- */
   .feature-label-tip{
@@ -1299,11 +1322,19 @@
           <div style="flex:1;"></div>
           <button class="btn-cancel" id="lyExportJpgBtn">🖼️ JPG</button>
           <button class="btn-cancel" id="lyExportPdfBtn">📕 PDF</button>
+          <button class="btn-cancel" id="lyDesktopModeBtn" title="بدّل تنسيق شاشة لوحة الإخراج دي بس بين مقاس الموبايل ومقاس شاشة اللاب">💻 تنسيق اللاب</button>
         </div>
         <div id="layoutViewBody" style="flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:30px;">
-          <div id="lyCanvasScaleBox" style="position:relative;flex-shrink:0;overflow:hidden;">
-            <div id="lyCanvasWrap" style="position:relative;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.5);transform-origin:top left;"></div>
+          <div id="lyCanvasScaleBox" style="position:relative;flex-shrink:0;overflow:hidden;direction:ltr;">
+            <div id="lyCanvasWrap" style="position:relative;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.5);transform-origin:top left;direction:rtl;"></div>
           </div>
+        </div>
+        <!-- شريط عائم بيظهر لما تكون بتظبط الزوم مباشرة جوه إطار الخريطة على اللوحة -->
+        <div id="mfLiveAdjustBar" style="display:none;position:fixed;z-index:950;flex-direction:row;gap:6px;align-items:center;background:var(--bg-panel);border:1px solid var(--accent);border-radius:9px;padding:6px 8px;box-shadow:0 6px 18px rgba(0,0,0,.35);">
+          <button id="mfRectZoomBtn" class="btn-cancel mf-toggle-btn" style="font-size:11px;padding:6px 9px;white-space:nowrap;">🔲 مستطيل الزوم</button>
+          <button id="mfLabelsBtn" class="btn-cancel mf-toggle-btn" style="font-size:11px;padding:6px 9px;white-space:nowrap;" title="إظهار/إخفاء اسم المضلع والنقطة على الخريطة">🏷️ الأسماء</button>
+          <button id="mfDoneBtn" class="btn-create" style="font-size:11px;padding:6px 9px;white-space:nowrap;">✅ تم — التقط اللقطة</button>
+          <button id="mfCancelBtn" class="btn-cancel" style="font-size:11px;padding:6px 9px;white-space:nowrap;">✖ إلغاء</button>
         </div>
         <!-- لوحة خصائص العنصر المحدد حاليًا على اللوحة -->
         <div id="lyElementProps" style="display:none;position:fixed;left:12px;top:64px;width:260px;background:var(--bg-panel);border:1px solid var(--accent);border-radius:10px;padding:10px;max-height:calc(100vh - 90px);overflow-y:auto;z-index:860;box-shadow:0 8px 24px rgba(0,0,0,.4);">
@@ -1318,8 +1349,9 @@
             <button class="icon-btn" id="lyZBackBtn" title="خليه تحت كل حاجة" style="flex:1;border:1px solid var(--border);">⏬</button>
           </div>
           <div id="lyPropsMapFrame" style="display:none;">
+            <button class="btn-create" id="lyLiveAdjustBtn" style="width:100%;margin-bottom:6px;background:#2563eb;">🔍 اضبط الزوم من هنا (من غير ما تسيب اللوحة)</button>
             <button class="btn-create" id="lyCaptureBtn" style="width:100%;margin-bottom:6px;">📸 التقط لقطة من موضع الخريطة الحالي</button>
-            <div style="font-size:10px;color:var(--text-muted);">زوّم/حرّك الخريطة العادية (بعد الرجوع لها أو من غير ما تسيب شاشة اللوحة) لحد ما توصل للمنظر اللي عايزه، وبعدين دوس الزرار</div>
+            <div style="font-size:10px;color:var(--text-muted);">أو ارجع لشاشة الخريطة العادية، زوّم/حرّك لحد ما توصل للمنظر اللي عايزه، وبعدين ادخل هنا تاني ودوس الزرار</div>
             <div id="lyMapFrameScaleReadout" style="font-size:11px;color:var(--teal);margin-top:6px;"></div>
           </div>
           <div id="lyPropsTitleBlock" style="display:none;">
@@ -3771,6 +3803,7 @@
       scaleBox.style.width = Math.round(fixedWpx*fitScale)+'px';
       scaleBox.style.height = Math.round(fixedHpx*fitScale)+'px';
     }
+    void wrap.offsetHeight; // نجبر إعادة رسم فورية — بعض متصفحات الموبايل بتتأخر في رسم عنصر بعد ما نغيّر transform عليه
 
     const allEls = getOrderedLayoutElements(page);
     allEls.forEach(el=>{
@@ -4081,6 +4114,10 @@
   }
 
   function closeLayoutView(){
+    if(mfLiveAdjustPrevStyle !== null) closeMapFrameLiveAdjust();
+    // نرجّع عرض الشاشة (viewport) لوضعه الطبيعي بتاع الموبايل، حتى لو وضع "تنسيق اللاب" كان
+    // مفعّل — عشان الوضع ده يفضل خاص بشاشة اللوحة بس ومايأثرش على باقي التطبيق بعد ما نقفلها
+    if(typeof viewportMetaEl !== 'undefined' && viewportMetaEl) viewportMetaEl.setAttribute('content', ORIG_VIEWPORT_CONTENT);
     document.getElementById('layoutView').style.display = 'none';
     document.getElementById('lyAddElMenu').style.display = 'none';
     currentLayoutEditPageId = null;
@@ -4117,8 +4154,33 @@
     if(sc) sc.style.display = 'none';
     const attr = document.querySelector('.leaflet-control-attribution');
     if(attr) attr.style.display = 'none';
+    applyLyDesktopMode(lyDesktopModeOn);
     selectLayoutElement(null, page);
-    renderLayoutCanvas(page);
+    // بنستنى "نفَس" كامل (frame) قبل ما نقيس المساحة المتاحة ونرسم اللوحة — على الموبايل
+    // المتصفح ممكن ياخد لحظة زيادة يخلّص فيها حساب التخطيط الجديد بعد ما فتحنا الشاشة دي،
+    // ولو قسنا بدري (زي الكمبيوتر) ممكن نلاقي المساحة صفر فتفضل اللوحة فاضية تمامًا
+    requestAnimationFrame(()=> requestAnimationFrame(()=> renderLayoutCanvas(page)));
+    // شبكة أمان إضافية: بعض متصفحات الموبايل (خصوصًا داخل شاشات المعاينة المدمجة) بتاخد
+    // وقت أطول من مجرد frame أو اتنين لحد ما تخلّص حساب حجم شاشة اللوحة، فلو الرسمة الأولى
+    // فضلت فاضية أو بحجم غير منطقي، بنعيد رسمها تلقائيًا كذا مرة على فترات قصيرة
+    [120, 350, 700].forEach(delay=>{
+      setTimeout(()=>{
+        if(currentLayoutEditPageId !== page.id) return; // المستخدم يمكن يكون قفل اللوحة قبل كده
+        renderLayoutCanvas(page);
+      }, delay);
+    });
+  }
+
+  // مراقب دائم لحجم مساحة عرض اللوحة — لو حجمها اتغيّر لأي سبب (فتح الشاشة أول مرة، تدوير
+  // الجهاز، ظهور/اختفاء الكيبورد...) بنعيد رسم اللوحة تلقائيًا عشان متفضلش فاضية أو بمقاس غلط
+  if(typeof ResizeObserver !== 'undefined'){
+    const lyBodyObserver = new ResizeObserver(()=>{
+      if(!currentLayoutEditPageId) return;
+      const pg = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+      if(pg) renderLayoutCanvas(pg);
+    });
+    const lyBodyElForObserver = document.getElementById('layoutViewBody');
+    if(lyBodyElForObserver) lyBodyObserver.observe(lyBodyElForObserver);
   }
 
   function applyLayoutToolbarToPage(){
@@ -4239,10 +4301,7 @@
     scheduleSave();
   });
 
-  document.getElementById('lyCaptureBtn').addEventListener('click', ()=>{
-    const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
-    const el = page && page.elements.find(e=>e.id===selectedElementId);
-    if(!page || !el || el.type !== 'mapFrame') return;
+  function doCaptureMapFrame(page, el){
     captureCurrentMapView(page, el, (dataURL, scaleInfo)=>{
       state.layoutSnapshots[el.id] = dataURL;
       el.scaleInfo = scaleInfo;
@@ -4251,10 +4310,189 @@
       document.getElementById('stHint').textContent = '✅ اتلقطت لقطة الخريطة';
       scheduleSave();
     }, ()=>{ alert('حصل خطأ أثناء التقاط لقطة الخريطة — جرب تاني.'); });
+  }
+
+  document.getElementById('lyCaptureBtn').addEventListener('click', ()=>{
+    const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+    const el = page && page.elements.find(e=>e.id===selectedElementId);
+    if(!page || !el || el.type !== 'mapFrame') return;
+    doCaptureMapFrame(page, el);
   });
+
+  /* ── ضبط الزوم مباشرة جوه إطار الخريطة على اللوحة (من غير الرجوع لشاشة الخريطة العادية) ──
+     بتاخد عنصر #map الحقيقي (بكل طبقاته وأدواته) وتحطه بصريًا فوق مكان إطار الخريطة بالظبط
+     (position:fixed فوق شاشة اللوحة) عشان تتحرك/تتزوم فيه لايف، وبعدين ترجعه مكانه القديم ─── */
+  let mfLiveAdjustPrevStyle = null;
+  let mfRectZoomActive = false, mfRectStart = null, mfRectBoxEl = null;
+
+  function mfPositionBar(boxRect){
+    const bar = document.getElementById('mfLiveAdjustBar');
+    bar.style.left = Math.max(4, boxRect.left) + 'px';
+    const aboveTop = boxRect.top - 50;
+    bar.style.top = (aboveTop > 4 ? aboveTop : boxRect.top + 6) + 'px';
+  }
+
+  function openMapFrameLiveAdjust(page, el){
+    const boxEl = document.querySelector('#lyCanvasWrap .ly-el[data-id="'+el.id+'"]');
+    if(!boxEl){ alert('حدد إطار الخريطة الأول.'); return; }
+    const r = boxEl.getBoundingClientRect();
+    const mapEl = document.getElementById('map');
+    mfLiveAdjustPrevStyle = mapEl.getAttribute('style') || '';
+    mapEl.style.setProperty('position','fixed','important');
+    mapEl.style.setProperty('left', Math.round(r.left)+'px','important');
+    mapEl.style.setProperty('top', Math.round(r.top)+'px','important');
+    mapEl.style.setProperty('width', Math.round(r.width)+'px','important');
+    mapEl.style.setProperty('height', Math.round(r.height)+'px','important');
+    mapEl.style.setProperty('z-index','900','important');
+    mapEl.style.setProperty('box-shadow','0 0 0 3px '+getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),'important');
+    map.invalidateSize({pan:false});
+    mfPositionBar(r);
+    document.getElementById('mfLabelsBtn').classList.toggle('active', labelsVisible);
+    document.getElementById('mfLiveAdjustBar').style.display = 'flex';
+    // أي قائمة أو نافذة صغيرة بتظهر عند اختيار عنصر على الخريطة (زي قائمة تعديل المضلع)
+    // مكانها الطبيعي وراء شاشة اللوحة — بنرفعها فوق مؤقتًا طول ما إحنا في وضع الضبط ده
+    document.body.classList.add('mf-live-adjust-active');
+    document.getElementById('stHint').textContent = '🔍 حرّك وزوّم الخريطة لحد المنظر اللي عايزه، وبعدين دوس "تم"';
+  }
+
+  // بتخفي الشريط العائم وتلغي وضع مستطيل الزوم بس من غير ما ترجع الخريطة مكانها —
+  // مستخدمة قبل الالتقاط مباشرة عشان الالتقاط ياخد بالظبط نفس المنظر اللي واقف عليه المستخدم
+  function mfHideBar(){
+    mfDisableRectZoom();
+    document.getElementById('mfLiveAdjustBar').style.display = 'none';
+  }
+
+  // بترجع عنصر #map الحقيقي لمكانه القديم (مخفي وراء لوحة الإخراج) — تتنفذ بعد الالتقاط
+  // خالص (أو عند الإلغاء) عشان مترجعوش قبل ما ناخد اللقطة فيغيّر المنظر اللي ظبطه المستخدم
+  function mfRestoreMapStyle(){
+    const mapEl = document.getElementById('map');
+    mapEl.setAttribute('style', mfLiveAdjustPrevStyle || '');
+    mfLiveAdjustPrevStyle = null;
+    map.invalidateSize({pan:false});
+    document.body.classList.remove('mf-live-adjust-active');
+  }
+
+  function closeMapFrameLiveAdjust(){
+    mfHideBar();
+    mfRestoreMapStyle();
+  }
+
+  // أداة "مستطيل الزوم" — تتصرف تمام أداة Zoom Rectangle: تسحب مستطيل بإصبعك أو الماوس على
+  // الخريطة، وبمجرد ما تسيب، الخريطة تزوم/تحصر نفسها على حدود المستطيل ده بالظبط
+  function mfRectPointerDown(e){
+    if(e.target.closest('.leaflet-control')) return;
+    mfRectStart = {x:e.clientX, y:e.clientY};
+    mfRectBoxEl = document.createElement('div');
+    mfRectBoxEl.style.cssText = 'position:fixed;border:2px dashed #2563eb;background:rgba(37,99,235,.18);z-index:960;pointer-events:none;';
+    document.body.appendChild(mfRectBoxEl);
+    document.addEventListener('pointermove', mfRectPointerMove);
+    document.addEventListener('pointerup', mfRectPointerUp);
+    e.preventDefault();
+  }
+  function mfRectPointerMove(e){
+    if(!mfRectStart) return;
+    const x1 = Math.min(mfRectStart.x, e.clientX), y1 = Math.min(mfRectStart.y, e.clientY);
+    const x2 = Math.max(mfRectStart.x, e.clientX), y2 = Math.max(mfRectStart.y, e.clientY);
+    mfRectBoxEl.style.left = x1+'px'; mfRectBoxEl.style.top = y1+'px';
+    mfRectBoxEl.style.width = (x2-x1)+'px'; mfRectBoxEl.style.height = (y2-y1)+'px';
+  }
+  function mfRectPointerUp(e){
+    document.removeEventListener('pointermove', mfRectPointerMove);
+    document.removeEventListener('pointerup', mfRectPointerUp);
+    const rect = mfRectBoxEl ? mfRectBoxEl.getBoundingClientRect() : null;
+    if(mfRectBoxEl){ mfRectBoxEl.remove(); mfRectBoxEl = null; }
+    if(rect && rect.width > 10 && rect.height > 10){
+      const mapRect = map.getContainer().getBoundingClientRect();
+      const p1 = L.point(rect.left - mapRect.left, rect.top - mapRect.top);
+      const p2 = L.point(rect.right - mapRect.left, rect.bottom - mapRect.top);
+      const bounds = L.latLngBounds(map.containerPointToLatLng(p1), map.containerPointToLatLng(p2));
+      map.fitBounds(bounds, {animate:true});
+    }
+    mfRectStart = null;
+    mfDisableRectZoom();
+  }
+  function mfEnableRectZoom(){
+    mfRectZoomActive = true;
+    const c = map.getContainer();
+    c.style.cursor = 'crosshair';
+    map.dragging.disable(); map.doubleClickZoom.disable();
+    c.addEventListener('pointerdown', mfRectPointerDown);
+    document.getElementById('mfRectZoomBtn').classList.add('active');
+  }
+  function mfDisableRectZoom(){
+    mfRectZoomActive = false;
+    const c = map.getContainer();
+    c.style.cursor = '';
+    map.dragging.enable(); map.doubleClickZoom.enable();
+    c.removeEventListener('pointerdown', mfRectPointerDown);
+    document.getElementById('mfRectZoomBtn').classList.remove('active');
+  }
+
+  document.getElementById('lyLiveAdjustBtn').addEventListener('click', ()=>{
+    const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+    const el = page && page.elements.find(e=>e.id===selectedElementId);
+    if(!page || !el || el.type !== 'mapFrame') return;
+    openMapFrameLiveAdjust(page, el);
+  });
+  document.getElementById('mfRectZoomBtn').addEventListener('click', ()=>{
+    if(mfRectZoomActive) mfDisableRectZoom(); else mfEnableRectZoom();
+  });
+  document.getElementById('mfLabelsBtn').addEventListener('click', ()=>{
+    labelsVisible = !labelsVisible;
+    document.getElementById('labelsBtn').classList.toggle('active', labelsVisible);
+    document.getElementById('mfLabelsBtn').classList.toggle('active', labelsVisible);
+    renderLabels();
+  });
+  document.getElementById('mfDoneBtn').addEventListener('click', ()=>{
+    const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+    const el = page && page.elements.find(e=>e.id===selectedElementId);
+    mfHideBar();
+    if(!page || !el || el.type !== 'mapFrame'){ mfRestoreMapStyle(); return; }
+    // بنسيب #map زي ما هو (لسه واقف بالظبط على المنظر اللي ظبطه المستخدم) ونلقط اللقطة منه
+    // مباشرة، وبعد كده بس نرجّعه مكانه القديم — عشان الالتقاط ياخد نفس المنظر بالظبط
+    captureCurrentMapView(page, el, (dataURL, scaleInfo)=>{
+      state.layoutSnapshots[el.id] = dataURL;
+      el.scaleInfo = scaleInfo;
+      mfRestoreMapStyle();
+      renderLayoutCanvas(page);
+      selectLayoutElement(el.id, page);
+      document.getElementById('stHint').textContent = '✅ اتلقطت لقطة الخريطة';
+      scheduleSave();
+    }, ()=>{
+      mfRestoreMapStyle();
+      alert('حصل خطأ أثناء التقاط لقطة الخريطة — جرب تاني.');
+    });
+  });
+  document.getElementById('mfCancelBtn').addEventListener('click', closeMapFrameLiveAdjust);
 
   document.getElementById('lyExportJpgBtn').addEventListener('click', ()=>{ if(currentLayoutEditPageId) exportPageAsFile(currentLayoutEditPageId, 'jpg'); });
   document.getElementById('lyExportPdfBtn').addEventListener('click', ()=>{ if(currentLayoutEditPageId) exportPageAsFile(currentLayoutEditPageId, 'pdf'); });
+
+  // زرار "تنسيق اللاب" — بيشتغل بالظبط زي وضع "عرض كمبيوتر" في متصفح كروم: بيغيّر عرض
+  // الشاشة الافتراضي (viewport) لعرض كبير زي شاشة اللاب، فكل حاجة في شاشة اللوحة (اللاي أوت)
+  // بترجع بمقاسها وترتيبها الطبيعي، وتقدر تتعامل معاها باللمس زي ما كنت هتتعامل بالماوس
+  // (تكبير/تصغير بإصبعين، وتحريك بالسحب)، بدل التنسيق المصغّر بتاع الموبايل. الأثر ده بيتفعّل
+  // بس لما تكون شاشة اللوحة مفتوحة، وبيرجع تلقائيًا لوضع الموبايل العادي بمجرد ما تقفلها،
+  // عشان مايأثرش على باقي التطبيق خالص
+  const lyDesktopModeBtn = document.getElementById('lyDesktopModeBtn');
+  const viewportMetaEl = document.querySelector('meta[name="viewport"]');
+  const ORIG_VIEWPORT_CONTENT = viewportMetaEl ? viewportMetaEl.getAttribute('content') : '';
+  const DESKTOP_VIEWPORT_CONTENT = 'width=1366';
+  function applyLyDesktopMode(on){
+    if(viewportMetaEl) viewportMetaEl.setAttribute('content', on ? DESKTOP_VIEWPORT_CONTENT : ORIG_VIEWPORT_CONTENT);
+    document.getElementById('layoutView').classList.toggle('force-desktop', on);
+    lyDesktopModeBtn.classList.toggle('active', on);
+    lyDesktopModeBtn.textContent = on ? '📱 تنسيق الموبايل' : '💻 تنسيق اللاب';
+    const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+    if(page) renderLayoutCanvas(page); // المساحة المتاحة اتغيّرت، فلازم نعيد حساب حجم اللوحة
+  }
+  let lyDesktopModeOn = false;
+  try{ lyDesktopModeOn = localStorage.getItem('lyForceDesktopMode') === '1'; }catch(e){}
+  lyDesktopModeBtn.addEventListener('click', ()=>{
+    lyDesktopModeOn = !lyDesktopModeOn;
+    try{ localStorage.setItem('lyForceDesktopMode', lyDesktopModeOn ? '1' : '0'); }catch(e){}
+    applyLyDesktopMode(lyDesktopModeOn);
+  });
 
   /* ---------- عنصر النص المشترك ---------- */
   function applyTextElementFields(){
@@ -4510,6 +4748,10 @@
         const boxAspect = boxWMM / boxHMM; // عرض/ارتفاع
 
         document.body.classList.add('notebook-print-mode');
+        // بنحفظ حدود المنظر اللي واقف عليه المستخدم دلوقتي بالظبط (قبل أي تغيير في حجم
+        // الخريطة) عشان نرجعها بعد التكبير للالتقاط — من غير كده تغيير حجم الحاوية بيغيّر
+        // "مساحة الأرض" الظاهرة حتى لو المركز والزوم فضلوا زي ما هم
+        const preResizeBounds = map.getBounds();
         // بنحدد حجم بكسل حقيقي للخريطة أثناء اللقطة بنفس نسبة أبعاد الصندوق بالظبط (مش أبعاد شاشة
         // الجهاز)، عشان اللي بيتلقط يطابق شكل المكان اللي هيتحط فيه تمامًا من غير أي تمدد
         const baseW = 1600;
@@ -4518,6 +4760,9 @@
         mapEl.style.setProperty('width', capW+'px', 'important');
         mapEl.style.setProperty('height', capH+'px', 'important');
         map.invalidateSize({pan:false});
+        // نرجّع المنظر لنفس الحدود بالظبط اللي كان عليها المستخدم قبل التكبير — عشان اللقطة
+        // النهائية تطابق اللي شافه واختاره فعلاً، مش منظر أوسع أو أضيق بسبب تغيير حجم الحاوية
+        map.fitBounds(preResizeBounds, {animate:false, duration:0});
         const linkedFeature = getFeatureByRef(page.featureRef);
         labelsLayer = buildPlanLabelsLayer(page, linkedFeature);
         labelsLayer.addTo(map);
