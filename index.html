@@ -212,6 +212,9 @@
      أي قائمة أو نافذة صغيرة بتظهر عند اختيار عنصر عليها (زي قائمة تعديل المضلع) لازم تظهر
      فوقها هي كمان، وإلا هتفضل مستخبية وراء خلفية شاشة اللوحة زي ما كان بيحصل قبل كده */
   body.mf-live-adjust-active .rect-hud{z-index:930 !important;}
+  /* لوحة تعديل الشكل (نقل/تدوير/إضافة نقاط) بتظهر تلقائيًا لأي عنصر متحدد على الموبايل —
+     مش مطلوبة وانت بتظبط إطار خريطة جوه اللاي أوت، فبنخفيها في الوضع ده بس */
+  body.mf-live-adjust-active .mobile-edit-pad{display:none !important;}
 
   .go-to-hud { width: 280px; border-color: var(--teal); }
   .dms-row{display:flex;gap:3px;align-items:center;margin-bottom:4px;}
@@ -557,7 +560,7 @@
   .ly-el-table{ background:#fff; border:1px solid #333 !important; font-size:9px; }
   .ly-el-table .ly-table-head{ background:#FCF3D9; color:#111; padding:2px 6px; font-weight:700; border-bottom:1px solid #333; }
   .ly-el-table .ly-table-body{ padding:3px 5px; overflow:auto; }
-  .nb-table td,.nb-table th{border:1px solid #DDD2BA;padding:2px 5px;text-align:center;white-space:nowrap;}
+  .nb-table td,.nb-table th{border:1px solid #DDD2BA;padding:var(--tbl-pad-y,2px) var(--tbl-pad-x,5px);text-align:center;white-space:nowrap;}
   .nb-table th{background:#eef3f8;font-weight:700;}
   #attrTableGrid th,#attrTableGrid td{border:1px solid #444;padding:0;white-space:nowrap;}
   #attrTableGrid th{background:#2d3748;color:#fff;padding:6px 10px;position:sticky;top:0;z-index:2;font-size:11px;}
@@ -609,7 +612,7 @@
 
   /* ---- Print: map only ---- */
   @media print{
-    .toolbar,.sidebar,.statusbar,.basemap-toggle,.drive-control,
+    .toolbar,.sidebar,.statusbar,.basemap-toggle,.drive-control,#globalDesktopModeBtn,
     .rect-hud,.mobile-sidebar-toggle,.mobile-finish-btn,.mobile-edit-pad,
     .leaflet-control,.leaflet-top,.leaflet-bottom{display:none!important;}
     .app,.main,.canvas-wrap{height:100vh!important;display:block!important;}
@@ -621,6 +624,7 @@
   body.notebook-print-mode .statusbar,
   body.notebook-print-mode .basemap-toggle,
   body.notebook-print-mode .drive-control,
+  body.notebook-print-mode #globalDesktopModeBtn,
   body.notebook-print-mode .rect-hud,
   body.notebook-print-mode .mobile-sidebar-toggle,
   body.notebook-print-mode .mobile-finish-btn,
@@ -1183,6 +1187,7 @@
         <button id="btnStreets">خريطة عادية</button>
         <button id="btnBlank">خلفية بيضاء</button>
       </div>
+      <button id="globalDesktopModeBtn" title="بدّل بين تنسيق الموبايل وتنسيق شاشة اللاب/تابلت للبرنامج كله" style="position:absolute;top:10px;right:10px;z-index:960;background:rgba(255,255,255,.95);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:10px;padding:6px 11px;box-shadow:0 4px 18px rgba(0,120,140,.18);font-size:11px;font-family:var(--sans);color:var(--text-muted);cursor:pointer;">💻 تنسيق اللاب</button>
       <div id="driveMenuPopup" style="display:none;position:fixed;top:56px;left:50%;transform:translateX(-50%);z-index:970;">
         <div class="drive-control disconnected" id="driveControl">
           <svg viewBox="0 0 24 24"><path d="M7 15l-4-7 4-7h10l4 7-4 7z"/><path d="M3 8h18M9 15l3 5 3-5"/></svg>
@@ -1386,6 +1391,30 @@
               <option value="EPSG:22992">مصر 1907 / الحزام الأحمر</option>
               <option value="EPSG:22993">مصر 1907 / الحزام الأرجواني</option>
             </select>
+          </div>
+          <div id="lyPropsTable" style="display:none;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <label style="flex:1;font-size:11px;">حجم خط الجدول (px)</label>
+              <input type="number" id="lyTableFontSize" placeholder="تلقائي" min="5" max="40" style="width:64px;text-align:center;">
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+              <label style="flex:1;font-size:11px;">عرض الخلية (px)</label>
+              <input type="number" id="lyTableCellPadX" min="0" max="40" style="width:64px;text-align:center;">
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+              <label style="flex:1;font-size:11px;">ارتفاع الخلية (px)</label>
+              <input type="number" id="lyTableCellPadY" min="0" max="40" style="width:64px;text-align:center;">
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">
+              <label style="flex:1;font-size:11px;">عرض الجدول (مم)</label>
+              <input type="number" id="lyTableWidthMM" min="5" style="width:64px;text-align:center;">
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+              <label style="flex:1;font-size:11px;">ارتفاع الجدول (مم)</label>
+              <input type="number" id="lyTableHeightMM" min="5" style="width:64px;text-align:center;">
+            </div>
+            <button class="btn-cancel" id="lyTableResetStyleBtn" style="width:100%;margin-top:8px;font-size:10.5px;padding:5px;">↺ رجّع حجم الخط والخلية للوضع التلقائي</button>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:6px;">عرض وارتفاع الجدول ممكن كمان تتحكم فيهم بالسحب من زاوية الجدول نفسه جوه اللوحة.</div>
           </div>
           <div id="lyPropsText" style="display:none;">
             <textarea id="lyTextContent" placeholder="اكتب النص هنا" rows="3"></textarea>
@@ -2231,7 +2260,7 @@
   if(window.proj4){
     proj4.defs('EPSG:32635','+proj=utm +zone=35 +datum=WGS84 +units=m +no_defs');
     proj4.defs('EPSG:32636','+proj=utm +zone=36 +datum=WGS84 +units=m +no_defs');
-    proj4.defs('EPSG:22992','+proj=tmerc +lat_0=30 +lon_0=31 +k=1 +x_0=615000 +y_0=810000 +ellps=helmert +towgs84=-127.535,113.495,-12.7,1.603747,-0.153612,-5.364408,5.33745 +units=m +no_defs +type=crs');
+    proj4.defs('EPSG:22992','+proj=tmerc +lat_0=30 +lon_0=31 +k=1 +x_0=615000 +y_0=810000 +ellps=helmert +towgs84=-130,110,-13,0,0,0,0 +units=m +no_defs +type=crs');
     proj4.defs('EPSG:22993','+proj=tmerc +lat_0=30 +lon_0=27 +k=1 +x_0=700000 +y_0=200000 +ellps=helmert +towgs84=-130,110,-13,0,0,0,0 +units=m +no_defs +type=crs');
   }
   function projectedToLatLng(x, y, epsgCode){
@@ -3708,7 +3737,9 @@
       const verticesCrsLabel = crsLabels[el.displayCrs] || '(DD)';
       const titles = {area:'📐 المساحة', lengths:'📏 أطوال الأضلاع', vertices:'📍 إحداثيات القطاعات '+verticesCrsLabel, attrs:'🗂️ بيانات المضلعات الداخلية', surveySheets:'🗺️ لوحات هيئة المساحة (تقريبي)'};
       box.classList.add('ly-el-table');
-      box.style.fontSize = Math.max(7, pxW*0.012) + 'px';
+      box.style.fontSize = (el.tableFontSize ? el.tableFontSize : Math.max(7, pxW*0.012)) + 'px';
+      box.style.setProperty('--tbl-pad-x', (el.cellPadX != null ? el.cellPadX : 5) + 'px');
+      box.style.setProperty('--tbl-pad-y', (el.cellPadY != null ? el.cellPadY : 2) + 'px');
       if(el.tableKey === 'surveySheets'){
         box.innerHTML = `<div class="ly-table-head">${titles.surveySheets}</div><div class="ly-table-body"><span style="color:#888;font-size:9px;">⏳ جارٍ تحميل فهرس الخرائط...</span></div>`;
         buildSurveySheetsTableHTML(f).then(html=>{
@@ -3866,11 +3897,22 @@
     document.getElementById('lyPropsShapeArrow').style.display = el.type==='shapeArrow' ? 'block' : 'none';
     const isVerticesTable = el.type==='table' && el.tableKey==='vertices';
     document.getElementById('lyPropsVerticesTable').style.display = isVerticesTable ? 'block' : 'none';
-    document.getElementById('lyPropsGeneric').style.display = (el.type!=='mapFrame' && el.type!=='titleBlock' && el.type!=='text' && el.type!=='image' && el.type!=='shapeRect' && el.type!=='shapeArrow' && !isVerticesTable) ? 'block' : 'none';
+    document.getElementById('lyPropsTable').style.display = el.type==='table' ? 'block' : 'none';
+    document.getElementById('lyPropsGeneric').style.display = (el.type!=='mapFrame' && el.type!=='titleBlock' && el.type!=='text' && el.type!=='image' && el.type!=='shapeRect' && el.type!=='shapeArrow' && el.type!=='table') ? 'block' : 'none';
     const titles = {mapFrame:'🗺️ إطار خريطة', titleBlock:'🏷️ الكرتوش', table:'📊 جدول بيانات', northArrow:'🧭 اتجاه الشمال', scaleBar:'📏 مقياس الرسم', polygonTitle:'🔤 اسم المضلع', text:'📝 نص (مشترك)', image:'🖼️ صورة (مشتركة)', shapeRect:'🔲 شكل مستطيل', shapeArrow:'➡️ سهم'};
     document.getElementById('lyPropsTitle').textContent = titles[el.type] || 'خصائص العنصر';
     if(isVerticesTable){
       document.getElementById('lyVerticesCrsSelect').value = el.displayCrs || 'EPSG:4326';
+    }
+    if(el.type === 'table'){
+      document.getElementById('lyTableFontSize').value = el.tableFontSize || '';
+      document.getElementById('lyTableCellPadX').value = el.cellPadX != null ? el.cellPadX : 5;
+      document.getElementById('lyTableCellPadY').value = el.cellPadY != null ? el.cellPadY : 2;
+      const dims = PAPER_SIZES_MM[page.paper] || PAPER_SIZES_MM.A4;
+      const pageWmm = page.orientation === 'landscape' ? dims[0] : dims[1];
+      const pageHmm = page.orientation === 'landscape' ? dims[1] : dims[0];
+      document.getElementById('lyTableWidthMM').value = Math.round(el.wPct/100*pageWmm);
+      document.getElementById('lyTableHeightMM').value = Math.round(el.hPct/100*pageHmm);
     }
     if(el.type === 'mapFrame'){
       document.getElementById('lyMapFrameScaleReadout').textContent = el.scaleInfo ? ('آخر مقياس ملتقط: 1:'+el.scaleInfo.scaleDenom) : 'لسه ملتقطتش لقطة لإطار الخريطة ده';
@@ -4115,9 +4157,8 @@
 
   function closeLayoutView(){
     if(mfLiveAdjustPrevStyle !== null) closeMapFrameLiveAdjust();
-    // نرجّع عرض الشاشة (viewport) لوضعه الطبيعي بتاع الموبايل، حتى لو وضع "تنسيق اللاب" كان
-    // مفعّل — عشان الوضع ده يفضل خاص بشاشة اللوحة بس ومايأثرش على باقي التطبيق بعد ما نقفلها
-    if(typeof viewportMetaEl !== 'undefined' && viewportMetaEl) viewportMetaEl.setAttribute('content', ORIG_VIEWPORT_CONTENT);
+    // ملحوظة: مبنرجعش وضع "تنسيق اللاب" هنا تلقائيًا — بقى وضع عام على البرنامج كله (مش خاص
+    // بشاشة اللوحة بس)، فبيفضل شغال زي ما هو لحد ما المستخدم نفسه يبدّله
     document.getElementById('layoutView').style.display = 'none';
     document.getElementById('lyAddElMenu').style.display = 'none';
     currentLayoutEditPageId = null;
@@ -4471,10 +4512,11 @@
   // زرار "تنسيق اللاب" — بيشتغل بالظبط زي وضع "عرض كمبيوتر" في متصفح كروم: بيغيّر عرض
   // الشاشة الافتراضي (viewport) لعرض كبير زي شاشة اللاب، فكل حاجة في شاشة اللوحة (اللاي أوت)
   // بترجع بمقاسها وترتيبها الطبيعي، وتقدر تتعامل معاها باللمس زي ما كنت هتتعامل بالماوس
-  // (تكبير/تصغير بإصبعين، وتحريك بالسحب)، بدل التنسيق المصغّر بتاع الموبايل. الأثر ده بيتفعّل
-  // بس لما تكون شاشة اللوحة مفتوحة، وبيرجع تلقائيًا لوضع الموبايل العادي بمجرد ما تقفلها،
-  // عشان مايأثرش على باقي التطبيق خالص
+  // (تكبير/تصغير بإصبعين، وتحريك بالسحب)، بدل التنسيق المصغّر بتاع الموبايل. دلوقتي الوضع ده
+  // بقى عام على البرنامج كله (مش بس جوه لوحة الإخراج) — عشان يفيد في حالة الشغل على تابلت
+  // بشاشة لمس، وبيفتكر آخر اختيار للمرة الجاية بغض النظر فين استخدمته
   const lyDesktopModeBtn = document.getElementById('lyDesktopModeBtn');
+  const globalDesktopModeBtn = document.getElementById('globalDesktopModeBtn');
   const viewportMetaEl = document.querySelector('meta[name="viewport"]');
   const ORIG_VIEWPORT_CONTENT = viewportMetaEl ? viewportMetaEl.getAttribute('content') : '';
   const DESKTOP_VIEWPORT_CONTENT = 'width=1366';
@@ -4483,16 +4525,25 @@
     document.getElementById('layoutView').classList.toggle('force-desktop', on);
     lyDesktopModeBtn.classList.toggle('active', on);
     lyDesktopModeBtn.textContent = on ? '📱 تنسيق الموبايل' : '💻 تنسيق اللاب';
+    if(globalDesktopModeBtn){
+      globalDesktopModeBtn.classList.toggle('active', on);
+      globalDesktopModeBtn.textContent = on ? '📱 تنسيق الموبايل' : '💻 تنسيق اللاب';
+      globalDesktopModeBtn.style.background = on ? 'var(--accent)' : 'rgba(255,255,255,.95)';
+      globalDesktopModeBtn.style.color = on ? '#fff' : 'var(--text-muted)';
+    }
     const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
     if(page) renderLayoutCanvas(page); // المساحة المتاحة اتغيّرت، فلازم نعيد حساب حجم اللوحة
   }
   let lyDesktopModeOn = false;
   try{ lyDesktopModeOn = localStorage.getItem('lyForceDesktopMode') === '1'; }catch(e){}
-  lyDesktopModeBtn.addEventListener('click', ()=>{
+  function toggleLyDesktopMode(){
     lyDesktopModeOn = !lyDesktopModeOn;
     try{ localStorage.setItem('lyForceDesktopMode', lyDesktopModeOn ? '1' : '0'); }catch(e){}
     applyLyDesktopMode(lyDesktopModeOn);
-  });
+  }
+  lyDesktopModeBtn.addEventListener('click', toggleLyDesktopMode);
+  if(globalDesktopModeBtn) globalDesktopModeBtn.addEventListener('click', toggleLyDesktopMode);
+  applyLyDesktopMode(lyDesktopModeOn); // نطبّق آخر اختيار محفوظ فورًا من أول ما البرنامج يفتح
 
   /* ---------- عنصر النص المشترك ---------- */
   function applyTextElementFields(){
@@ -4605,6 +4656,63 @@
     if(!page || !el || el.type !== 'table' || el.tableKey !== 'vertices') return;
     el.displayCrs = document.getElementById('lyVerticesCrsSelect').value;
     renderLayoutCanvas(page);
+    scheduleSave();
+  });
+
+  /* ---------- التحكم في مظهر الجداول: حجم الخط، عرض/ارتفاع الخلية، عرض/ارتفاع الجدول ---------- */
+  function currentTableEl(){
+    const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
+    const el = page && page.elements.find(e=>e.id===selectedElementId);
+    return (page && el && el.type==='table') ? {page, el} : null;
+  }
+  document.getElementById('lyTableFontSize').addEventListener('input', function(){
+    const ctx = currentTableEl(); if(!ctx) return;
+    const v = parseFloat(this.value);
+    ctx.el.tableFontSize = (this.value === '' || isNaN(v)) ? null : Math.max(5, v);
+    renderLayoutCanvas(ctx.page);
+    scheduleSave();
+  });
+  document.getElementById('lyTableCellPadX').addEventListener('input', function(){
+    const ctx = currentTableEl(); if(!ctx) return;
+    const v = parseFloat(this.value);
+    ctx.el.cellPadX = isNaN(v) ? 5 : Math.max(0, v);
+    renderLayoutCanvas(ctx.page);
+    scheduleSave();
+  });
+  document.getElementById('lyTableCellPadY').addEventListener('input', function(){
+    const ctx = currentTableEl(); if(!ctx) return;
+    const v = parseFloat(this.value);
+    ctx.el.cellPadY = isNaN(v) ? 2 : Math.max(0, v);
+    renderLayoutCanvas(ctx.page);
+    scheduleSave();
+  });
+  document.getElementById('lyTableWidthMM').addEventListener('input', function(){
+    const ctx = currentTableEl(); if(!ctx) return;
+    const v = parseFloat(this.value);
+    if(isNaN(v) || v <= 0) return;
+    const dims = PAPER_SIZES_MM[ctx.page.paper] || PAPER_SIZES_MM.A4;
+    const pageWmm = ctx.page.orientation === 'landscape' ? dims[0] : dims[1];
+    ctx.el.wPct = Math.max(4, Math.min(100-ctx.el.xPct, (v/pageWmm)*100));
+    renderLayoutCanvas(ctx.page);
+    scheduleSave();
+  });
+  document.getElementById('lyTableHeightMM').addEventListener('input', function(){
+    const ctx = currentTableEl(); if(!ctx) return;
+    const v = parseFloat(this.value);
+    if(isNaN(v) || v <= 0) return;
+    const dims = PAPER_SIZES_MM[ctx.page.paper] || PAPER_SIZES_MM.A4;
+    const pageHmm = ctx.page.orientation === 'landscape' ? dims[1] : dims[0];
+    ctx.el.hPct = Math.max(4, Math.min(100-ctx.el.yPct, (v/pageHmm)*100));
+    renderLayoutCanvas(ctx.page);
+    scheduleSave();
+  });
+  document.getElementById('lyTableResetStyleBtn').addEventListener('click', ()=>{
+    const ctx = currentTableEl(); if(!ctx) return;
+    ctx.el.tableFontSize = null;
+    ctx.el.cellPadX = null;
+    ctx.el.cellPadY = null;
+    selectLayoutElement(ctx.el.id, ctx.page); // نعيد ملء الخانات بالقيم التلقائية الجديدة
+    renderLayoutCanvas(ctx.page);
     scheduleSave();
   });
 
@@ -10331,9 +10439,30 @@
         if(ent.type==='LINE' && ent.vertices && ent.vertices.length>=2){
           features.push({type:'Feature', properties:{layer:layerName, type:'line'}, geometry:{type:'LineString', coordinates: ent.vertices.map(v=>toWgs(v.x,v.y))}});
         } else if((ent.type==='LWPOLYLINE'||ent.type==='POLYLINE') && ent.vertices && ent.vertices.length>=2){
-          const coords = ent.vertices.map(v=>toWgs(v.x,v.y));
-          if(ent.shape){ // مضلع مقفول
-            features.push({type:'Feature', properties:{layer:layerName, type:'polygon'}, geometry:{type:'Polygon', coordinates:[[...coords, coords[0]]]}});
+          // كل رأس (vertex) في الـ DXF ممكن يكون معاه قيمة "bulge" بتعني إن الضلع اللي بعده
+          // مش خط مستقيم لكنه قوس منحني — لو تجاهلناها كان بيترسم خط مستقيم بدل القوس فتبقى
+          // أضلاع القطعة المنحنية غلط. بنحول قيمة الـ bulge لسهم انحناء (sagitta) ونستخدم نفس
+          // دالة رسم القوس المستخدمة في أداة الرسم اليدوي بالبرنامج
+          const closed = !!ent.shape;
+          const llVerts = ent.vertices.map(v=>{ const r=projectedToLatLng(v.x,v.y,epsgCode); return {lat:r.lat, lng:r.lng, x:v.x, y:v.y, bulge:v.bulge||0}; });
+          const seq = closed ? [...llVerts, llVerts[0]] : llVerts;
+          const coords = [[seq[0].lng, seq[0].lat]];
+          for(let i=0;i<seq.length-1;i++){
+            const a = seq[i], b = seq[i+1];
+            let handled = false;
+            if(a.bulge){
+              const chordLen = Math.hypot(b.x-a.x, b.y-a.y);
+              const sagitta = a.bulge * chordLen / 2;
+              const arc = arcPointsFromSagitta({lat:a.lat,lng:a.lng}, {lat:b.lat,lng:b.lng}, sagitta);
+              if(arc && arc.pts && arc.pts.length>2){
+                arc.pts.slice(1).forEach(([lat,lng])=> coords.push([lng,lat]));
+                handled = true;
+              }
+            }
+            if(!handled) coords.push([b.lng, b.lat]);
+          }
+          if(closed){
+            features.push({type:'Feature', properties:{layer:layerName, type:'polygon'}, geometry:{type:'Polygon', coordinates:[coords]}});
           } else {
             features.push({type:'Feature', properties:{layer:layerName, type:'line'}, geometry:{type:'LineString', coordinates: coords}});
           }
@@ -10347,7 +10476,14 @@
         } else if(ent.type==='ARC' && ent.center && ent.radius!=null){
           const cx=ent.center.x, cy=ent.center.y, r=ent.radius;
           const coords=[];
-          const steps=32; const start=ent.startAngle||0; const len=ent.angleLength||(2*Math.PI);
+          const steps=32; const start=ent.startAngle||0;
+          // ملف الـ DXF بيدّي startAngle و endAngle (بالراديان)، مش طول القوس مباشرة —
+          // والقوس دايمًا عكس عقارب الساعة (CCW) من البداية للنهاية حسب معيار DXF. لو
+          // endAngle طلعت أصغر من startAngle، معناها القوس عدّى من نقطة الصفر (٣٦٠°)،
+          // فبنضيف دورة كاملة عشان نحسب طول القوس الصح بدل ما نرسم دايرة كاملة غلط
+          const end = ent.endAngle!=null ? ent.endAngle : (start + 2*Math.PI);
+          let len = end - start;
+          if(len <= 0) len += 2*Math.PI;
           for(let i=0;i<=steps;i++){ const a=start+(len*i/steps); coords.push(toWgs(cx+r*Math.cos(a), cy+r*Math.sin(a))); }
           features.push({type:'Feature', properties:{layer:layerName, type:'line'}, geometry:{type:'LineString', coordinates: coords}});
         } else {
