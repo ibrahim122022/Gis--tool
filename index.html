@@ -5202,15 +5202,6 @@
     updateHistoryButtons();
   }
   
-  // مساحة عنصر مضلع مع مراعاة أي فتحات/ثقوب بداخله (holes) — بتطرح مساحة الفتحات من مساحة المحيط الخارجي
-  function featureAreaMeters(f){
-    if(!f) return 0;
-    let a = polygonAreaMeters(f.coords);
-    if(f.holes && f.holes.length){
-      f.holes.forEach(h=>{ a -= polygonAreaMeters(h); });
-    }
-    return Math.max(0, a);
-  }
   function polygonAreaMeters(coords){
     // حساب المساحة بإسقاط UTM (نفس الزون لكل نقط المضلع، بيتحدد تلقائي حسب موقعه)
     // ده بيطابق اللي بيطلع في ArcGIS Pro لما يكون الشغل بنظام UTM (بدل الحساب الكروي القديم عبر Turf.js)
@@ -6358,10 +6349,7 @@
           const borderWidth = isSel ? Math.max(3, (f.borderWidth||2)) : (f.borderWidth!=null ? f.borderWidth : 2);
           const fillOpacity = f.noFill ? 0 : (isSel?0.3:0.18);
           // fill بيفضل true حتى لو بدون تعبئة، عشان تقدري تدوسي جوّه المضلع فتحددّيه حتى لو شفاف
-          // لو المضلع فيه فتحة/فتحات (holes) — زي ناتج أداة الطرح لما المضلع المطروح يكون بالكامل جوّه الأساسي —
-          // بنبعت الحلقات كلها لـ Leaflet (الحلقة الخارجية + الفتحات) عشان يترسم "دونات" صح بصريًا
-          const polyRings = (f.holes && f.holes.length) ? [f.coords, ...f.holes] : f.coords;
-          shape = L.polygon(polyRings, {color: borderColor, weight: borderWidth, fillColor:color, fillOpacity, fill:true});
+          shape = L.polygon(f.coords, {color: borderColor, weight: borderWidth, fillColor:color, fillOpacity, fill:true});
         }
         
         shape.on('click', (e) => {
@@ -6443,36 +6431,11 @@
               document.getElementById('stHint').textContent = '➖ اضغط على المضلع اللي هيتطرح';
               return;
             }
-            // بدل الاعتماد على الشكل اللي استقبل الكليك فعليًا (وده دايمًا هيكون العلوي بصريًا)،
-            // بنجيب كل المضلعات اللي فعلاً تحت نقطة الكليك — عشان لو المضلع المطلوب طرحه واقع بالكامل
-            // جوّه المضلع الأساسي وبالتالي مغطى بيه بصريًا، تقدري توصلي له برضه
-            const diffAllHere = featuresAtPoint(e.latlng).filter(c=>{
-              const cf = getFeature(c.layerId, c.featureId);
-              return cf && (cf.type==='polygon' || cf.type==='rectangle');
-            });
-            const diffSubCandidates = diffAllHere.filter(c=>!(c.layerId===diffBaseLayerId && c.featureId===diffBaseFeatureId));
-            if(!diffSubCandidates.length){
+            if(layer.id===diffBaseLayerId && f.id===diffBaseFeatureId){
               document.getElementById('stHint').textContent = '⚠️ اختر مضلع مختلف عن المضلع الأساسي';
               return;
             }
-            // لو فيه أكتر من مضلع متداخل في نفس النقطة، الأرجح إن المقصود هو الأصغر مساحة (الأكثر تداخلًا/الداخلي)
-            let diffSubPick = diffSubCandidates[0];
-            if(diffSubCandidates.length > 1){
-              let bestArea = Infinity;
-              diffSubCandidates.forEach(c=>{
-                const cf = getFeature(c.layerId, c.featureId);
-                try{
-                  const ring = cf.coords.map(pt=>[pt[1],pt[0]]);
-                  if(ring[0][0]!==ring[ring.length-1][0] || ring[0][1]!==ring[ring.length-1][1]) ring.push(ring[0]);
-                  const a = turf.area(turf.polygon([ring]));
-                  if(a < bestArea){ bestArea = a; diffSubPick = c; }
-                }catch(e){}
-              });
-              const pf = getFeature(diffSubPick.layerId, diffSubPick.featureId);
-              const pname = pf?.props?.name || '';
-              document.getElementById('stHint').textContent = `ℹ️ في أكتر من مضلع متداخل هنا — تم اختيار الأصغر مساحة${pname?' ('+pname+')':''} كمضلع الطرح`;
-            }
-            performBooleanDifference(diffBaseLayerId, diffBaseFeatureId, diffSubPick.layerId, diffSubPick.featureId);
+            performBooleanDifference(diffBaseLayerId, diffBaseFeatureId, layer.id, f.id);
             return;
           }
           if(tool==='buffer'){
@@ -8311,11 +8274,11 @@
       html += `<div class="stat-row">عدد النقاط: <b>${f.coords.length}</b></div>`;
     } 
     else {
-      html += `<div class="ftype">مضلع حر${f.holes&&f.holes.length?' (فيه فتحة/فتحات)':''}</div>`;
+      html += `<div class="ftype">مضلع حر</div>`;
       html += `<div class="stat-row">المحيط: <b>${pathPerimeter(f.coords).toFixed(1)} م</b></div>`;
-      html += `<div class="stat-row">المساحة: <b>${featureAreaMeters(f).toFixed(1)} م²</b></div>`;
+      html += `<div class="stat-row">المساحة: <b>${polygonAreaMeters(f.coords).toFixed(1)} م²</b></div>`;
       {
-        const _fq = areaToFeddan(featureAreaMeters(f));
+        const _fq = areaToFeddan(polygonAreaMeters(f.coords));
         html += `<div class="stat-row">المساحة (فدان): <b>${_fq.feddan} ف ${_fq.qirat} ط ${_fq.sahm} س</b></div>`;
       }
       html += `<div class="stat-row">عدد النقاط: <b>${f.coords.length}</b></div>`;
@@ -9411,17 +9374,9 @@
       const geoms = result.geometry.type==='MultiPolygon' ? result.geometry.coordinates : [result.geometry.coordinates];
       const baseName = (baseF.attrs && baseF.attrs.name) ? baseF.attrs.name : null;
       const newFeatures = geoms.map((polyCoords, i)=>{
-        // polyCoords[0] هو المحيط الخارجي، وأي حلقات بعده (polyCoords[1], polyCoords[2]...) هي فتحات/ثقوب —
-        // بتحصل بالظبط لما المضلع المطروح يكون واقع بالكامل جوّه المضلع الأساسي من غير ما يلمس حدوده.
-        // قبل كده كان بيتم تجاهل الحلقات دي تمامًا فيرجع نفس المضلع الأصلي وكأن حاجة مالهاش أي تأثير حصلت
         const outer = polyCoords[0].map(c=>[c[1], c[0]]);
         const coords = outer.slice(0,-1);
-        const holes = polyCoords.slice(1).map(ring=>{
-          const h = ring.map(c=>[c[1], c[0]]);
-          return h.slice(0,-1);
-        }).filter(h=>h.length>=3);
         const nf = {id:uid(), type:'polygon', coords, attrs:Object.assign({}, baseF.attrs||{}), color: baseF.color};
-        if(holes.length) nf.holes = holes;
         if(baseName && geoms.length>1) nf.attrs.name = baseName+' - '+(i+1);
         return nf;
       }).filter(nf=>nf.coords.length>=3);
@@ -9436,10 +9391,7 @@
       else baseLayer.features.push(...newFeatures);
       selection = {layerId: baseLayer.id, featureId: newFeatures[0].id};
       renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
-      const hadHole = newFeatures.some(nf=>nf.holes && nf.holes.length);
-      document.getElementById('stHint').textContent = hadHole
-        ? `✅ تم الطرح — المضلع المطروح كان بالكامل جوّه الأساسي، فاتعمل فتحة (فراغ) بداخله`
-        : `✅ تم الطرح — الناتج ${newFeatures.length} ${newFeatures.length>1?'أجزاء':'مضلع'}`;
+      document.getElementById('stHint').textContent = `✅ تم الطرح — الناتج ${newFeatures.length} ${newFeatures.length>1?'أجزاء':'مضلع'}`;
     }catch(err){
       console.error(err);
       document.getElementById('stHint').textContent = '❌ حصل خطأ أثناء الطرح: '+(err&&err.message?err.message:err)+' — تأكد إن المضلعين متقاطعين فعلاً';
@@ -10500,7 +10452,11 @@
             let handled = false;
             if(a.bulge){
               const chordLen = Math.hypot(b.x-a.x, b.y-a.y);
-              const sagitta = a.bulge * chordLen / 2;
+              // ملحوظة مهمة: قناة الـ bulge في الـ DXF بتوصف اتجاه الانحناء بمعيار "دوران عكس
+              // عقارب الساعة حوالين المركز" — وده عكس معيار "sagitta" اللي بتفهمه دالة رسم
+              // القوس بتاعتنا (اللي بتحسب اتجاه الانتفاخ نسبةً لاتجاه الوتر نفسه). لو مسيبناها
+              // من غير عكس إشارة، القوس بيرتسم مقلوب (Mirror) على الجانب التاني من الوتر
+              const sagitta = -a.bulge * chordLen / 2;
               const arc = arcPointsFromSagitta({lat:a.lat,lng:a.lng}, {lat:b.lat,lng:b.lng}, sagitta);
               if(arc && arc.pts && arc.pts.length>2){
                 arc.pts.slice(1).forEach(([lat,lng])=> coords.push([lng,lat]));
