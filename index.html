@@ -441,6 +441,15 @@
       width:auto !important; height:34px !important;
       z-index:970; box-shadow:0 2px 10px rgba(0,0,0,.25);
     }
+    /* زرار "تنسيق اللاب/الموبايل" كان بيتصادم مع زرار الوضع الداكن/الفاتح في نفس الركن —
+       بنثبّته تحته مباشرة في الموبايل بدل ما يتراكب عليه */
+    #globalDesktopModeBtn{
+      position:fixed !important;
+      top:calc(env(safe-area-inset-top,0px) + 8px + 34px + 6px) !important;
+      right:10px !important; inset-inline-end:10px !important;
+      left:auto !important; margin:0 !important;
+      z-index:965; box-shadow:0 2px 10px rgba(0,0,0,.25);
+    }
     .ribbon-panels{display:flex;flex-direction:row;border-top:none;background:transparent;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
     .ribbon-panel{display:flex !important;flex-direction:row;padding:0;gap:0;overflow-x:visible;}
     .ribbon-group{flex-direction:row;padding:0 4px;gap:0;align-items:center;}
@@ -569,7 +578,7 @@
   #attrTableGrid input.atg-cell:focus{outline:2px solid var(--teal);background:rgba(107,127,114,.15);}
   #attrTableGrid .atg-rowbtn{padding:5px 8px;cursor:pointer;background:none;border:none;color:var(--text-muted);font-size:13px;}
   #attrTableGrid .atg-rowbtn:hover{color:var(--danger);}
-  #attrTableGrid tr:nth-child(even) td{background:rgba(255,255,255,.04);}
+  #attrTableGrid tr:nth-child(even) td{background:var(--bg-panel-2);}
 
   /* ---- هالة بيضاء شفافة تُستخدم لمقابض سحب أركان الراستر فوق الخريطة ---- */
   .nb-map-label{background:transparent!important;border:none!important;box-shadow:none!important;}
@@ -840,8 +849,8 @@
                 <path d="M16 3.5l4.5 4.5-4.5 4.5" stroke-width="1.6" fill="none" opacity=".85"/>
               </svg><span>سكريبت GDB</span>
             </button>
-            <input type="file" id="importFileInput" accept=".geojson,.json,.kml,.kmz,.dxf,.zip,.gpx,.xml" style="display:none;">
-            <button class="tool-btn" id="importBtn" title="استيراد ملف: GeoJSON / KML / KMZ / DXF (أوتوكاد) / Shapefile (.zip)">
+            <input type="file" id="importFileInput" accept=".geojson,.json,.kml,.kmz,.dxf,.zip,.gpx,.xml,.csv" style="display:none;">
+            <button class="tool-btn" id="importBtn" title="استيراد ملف: GeoJSON / KML / KMZ / DXF (أوتوكاد) / Shapefile (.zip) / CSV نقاط">
               <svg viewBox="0 0 24 24">
                 <path d="M12 15.5V2.5" stroke-width="2.3"/>
                 <path d="M7 7l5-5 5 5" stroke-width="2.3"/>
@@ -1626,6 +1635,94 @@
           <div class="row-btns" style="margin-top:6px;">
             <button class="btn-cancel" id="xmlCrsCancelBtn" style="flex:1;">إلغاء</button>
             <button class="btn-create" id="xmlCrsConfirmBtn" style="flex:1;">✅ استيراد</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── تصدير نقاط طبقة إلى ملف CSV بصيغة جهاز التوتال ستيشن ── -->
+      <div id="csvExportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:950;align-items:center;justify-content:center;">
+        <div style="background:var(--bg-panel);border:1.5px solid #D4A020;border-radius:10px;padding:16px;max-width:92vw;width:360px;max-height:90vh;overflow-y:auto;">
+          <h4 style="color:#D4A020;margin-top:0;">📤 تصدير نقاط الطبقة (Total Station)</h4>
+          <label>ترتيب الأعمدة في الملف الناتج</label>
+          <input type="text" id="csvExportColOrder" value="PENZD" style="width:100%;text-transform:uppercase;letter-spacing:2px;text-align:center;font-weight:700;">
+          <div style="font-size:10px;color:var(--text-muted);margin:4px 0 10px;">P = رقم النقطة &nbsp; E = شرقي &nbsp; N = شمالي &nbsp; Z = المنسوب &nbsp; D = الوصف — رتّبهم زي ما جهاز التوتال ستيشن بتاعك محتاجهم.</div>
+          <label>نظام الإحداثيات</label>
+          <select id="csvExportCrsTypeSelect">
+            <option value="UTM">🗺️ UTM</option>
+            <option value="EGY">🇪🇬 مصري (الحزام الأحمر/الأرجواني)</option>
+          </select>
+          <div id="csvExportUtmWrap" style="margin-top:8px;">
+            <div style="display:flex;gap:8px;">
+              <div style="flex:1;">
+                <label>رقم الزون (Zone)</label>
+                <input type="number" id="csvExportUtmZone" value="36" min="1" max="60" style="width:100%;">
+              </div>
+              <div style="flex:1;">
+                <label>نصف الكرة</label>
+                <select id="csvExportUtmHemisphere">
+                  <option value="N">شمالي (N)</option>
+                  <option value="S">جنوبي (S)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div id="csvExportEgyWrap" style="display:none;margin-top:8px;">
+            <label>الحزام</label>
+            <select id="csvExportEgyBelt">
+              <option value="EPSG:22992">الحزام الأحمر (Red Belt)</option>
+              <option value="EPSG:22993">الحزام الأرجواني (Purple Belt)</option>
+            </select>
+          </div>
+          <div style="font-size:10.5px;color:var(--text-muted);margin:10px 0;">هيتم تصدير النقاط الموجودة في الطبقة بس (أي عنصر تاني زي مضلعات أو خطوط هيتجاهل).</div>
+          <div class="row-btns" style="margin-top:6px;">
+            <button class="btn-cancel" id="csvExportCancelBtn" style="flex:1;">إلغاء</button>
+            <button class="btn-create" id="csvExportConfirmBtn" style="flex:1;">✅ تصدير</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── استيراد ملف نقاط CSV (بترتيب أعمدة زي ملفات نقاط الأوتوكاد/سيفيل ثري دي) ── -->
+      <div id="csvImportModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:950;align-items:center;justify-content:center;">
+        <div style="background:var(--bg-panel);border:1.5px solid #D4A020;border-radius:10px;padding:16px;max-width:92vw;width:360px;max-height:90vh;overflow-y:auto;">
+          <h4 style="color:#D4A020;margin-top:0;">📄 استيراد ملف نقاط CSV</h4>
+          <label>ترتيب أعمدة الملف</label>
+          <input type="text" id="csvColOrder" value="PENZD" style="width:100%;text-transform:uppercase;letter-spacing:2px;text-align:center;font-weight:700;">
+          <div style="font-size:10px;color:var(--text-muted);margin:4px 0 10px;">
+            P = رقم/اسم النقطة &nbsp; E = إحداثي شرقي (أو خط الطول) &nbsp; N = إحداثي شمالي (أو خط العرض) &nbsp; Z = المنسوب &nbsp; D = الوصف<br>
+            اكتب الترتيب بنفس تسلسله في الملف (زي ملفات نقاط الأوتوكاد) — مثلًا PENZD أو PNEZD. لو عمود مش موجود في ملفك، امسحه من الترتيب.
+          </div>
+          <label>نظام الإحداثيات</label>
+          <select id="csvCrsTypeSelect">
+            <option value="DD">🌍 جغرافي (خط عرض/طول عشري — DD)</option>
+            <option value="UTM">🗺️ UTM</option>
+            <option value="EGY">🇪🇬 مصري (الحزام الأحمر/الأرجواني)</option>
+          </select>
+          <div id="csvUtmWrap" style="display:none;margin-top:8px;">
+            <div style="display:flex;gap:8px;">
+              <div style="flex:1;">
+                <label>رقم الزون (Zone)</label>
+                <input type="number" id="csvUtmZone" value="36" min="1" max="60" style="width:100%;">
+              </div>
+              <div style="flex:1;">
+                <label>نصف الكرة</label>
+                <select id="csvUtmHemisphere">
+                  <option value="N">شمالي (N)</option>
+                  <option value="S">جنوبي (S)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div id="csvEgyWrap" style="display:none;margin-top:8px;">
+            <label>الحزام</label>
+            <select id="csvEgyBelt">
+              <option value="EPSG:22992">الحزام الأحمر (Red Belt)</option>
+              <option value="EPSG:22993">الحزام الأرجواني (Purple Belt)</option>
+            </select>
+          </div>
+          <div style="font-size:10.5px;color:var(--text-muted);margin:10px 0;">لو اخترت "جغرافي"، عمود E هيتقرأ كخط طول وعمود N كخط عرض مباشرة.</div>
+          <div class="row-btns" style="margin-top:6px;">
+            <button class="btn-cancel" id="csvImportCancelBtn" style="flex:1;">إلغاء</button>
+            <button class="btn-create" id="csvImportConfirmBtn" style="flex:1;">✅ استيراد</button>
           </div>
         </div>
       </div>
@@ -6348,8 +6445,12 @@
           const borderColor = isSel ? '#1d4ed8' : (f.borderColor || color);
           const borderWidth = isSel ? Math.max(3, (f.borderWidth||2)) : (f.borderWidth!=null ? f.borderWidth : 2);
           const fillOpacity = f.noFill ? 0 : (isSel?0.3:0.18);
+          // لو المضلع ده هو المضلع الأساسي المختار فعلاً في أداة الطرح، بنخليه "شفاف عن اللمس"
+          // مؤقتًا (interactive:false) — عشان لو فيه مضلع تاني جواه بالكامل (زي حفرة داخلية)
+          // يبقى ممكن توصله بالنقر من غير ما مضلعه الأساسي (اللي فوقيه) يخطف كل الدوسات
+          const isDiffBaseAlreadyChosen = tool==='difference' && diffBaseFeatureId!=null && layer.id===diffBaseLayerId && f.id===diffBaseFeatureId;
           // fill بيفضل true حتى لو بدون تعبئة، عشان تقدري تدوسي جوّه المضلع فتحددّيه حتى لو شفاف
-          shape = L.polygon(f.coords, {color: borderColor, weight: borderWidth, fillColor:color, fillOpacity, fill:true});
+          shape = L.polygon(f.coords, {color: borderColor, weight: borderWidth, fillColor:color, fillOpacity, fill:true, interactive: !isDiffBaseAlreadyChosen});
         }
         
         shape.on('click', (e) => {
@@ -7582,7 +7683,15 @@
         openSchemaModal(layer.id);
       });
 
-      row.appendChild(expandBtn); row.appendChild(swatch); row.appendChild(nameSpan); row.appendChild(countSpan); row.appendChild(visBtn); row.appendChild(schemaBtn);
+      const csvExportBtn = document.createElement('button');
+      csvExportBtn.className = 'icon-btn'; csvExportBtn.title = 'تصدير نقاط الطبقة كملف CSV (لجهاز التوتال ستيشن)';
+      csvExportBtn.innerHTML = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>`;
+      csvExportBtn.addEventListener('click', e=>{
+        L.DomEvent.stopPropagation(e);
+        openCsvExportModal(layer.id);
+      });
+
+      row.appendChild(expandBtn); row.appendChild(swatch); row.appendChild(nameSpan); row.appendChild(countSpan); row.appendChild(visBtn); row.appendChild(schemaBtn); row.appendChild(csvExportBtn);
       if(state.layers.length > 1){
         const delBtn = document.createElement('button');
         delBtn.className = 'icon-btn'; delBtn.innerHTML = trashIcon();
@@ -10425,6 +10534,149 @@
     }catch(err){ alert('فشل تحويل ملف LandXML:\n'+err.message); }
   });
 
+  /* ========== استيراد ملف نقاط CSV بترتيب أعمدة قابل للتخصيص (زي ملفات نقاط الأوتوكاد/سيفيل) ========== */
+  let pendingCsvText = null;
+  const csvCrsTypeSelect = document.getElementById('csvCrsTypeSelect');
+  csvCrsTypeSelect.addEventListener('change', ()=>{
+    document.getElementById('csvUtmWrap').style.display = csvCrsTypeSelect.value==='UTM' ? 'block' : 'none';
+    document.getElementById('csvEgyWrap').style.display = csvCrsTypeSelect.value==='EGY' ? 'block' : 'none';
+  });
+  function openCsvImportModal(text){
+    pendingCsvText = text;
+    document.getElementById('csvColOrder').value = 'PENZD';
+    csvCrsTypeSelect.value = 'DD';
+    document.getElementById('csvUtmWrap').style.display = 'none';
+    document.getElementById('csvEgyWrap').style.display = 'none';
+    document.getElementById('csvImportModal').style.display = 'flex';
+  }
+  document.getElementById('csvImportCancelBtn').addEventListener('click', ()=>{
+    pendingCsvText = null;
+    document.getElementById('csvImportModal').style.display = 'none';
+  });
+
+  // بيحاول يكتشف الفاصل المستخدم في الملف (فاصلة، فاصلة منقوطة، أو تاب) من أول سطر فيه بيانات فعلية
+  function detectCsvDelimiter(firstLine){
+    const candidates = [',', ';', '\t'];
+    let best = ',', bestCount = -1;
+    candidates.forEach(d=>{
+      const count = firstLine.split(d).length;
+      if(count > bestCount){ bestCount = count; best = d; }
+    });
+    return best;
+  }
+
+  function csvTextToGeoJSON(text, colOrderStr, crsCode){
+    const order = colOrderStr.trim().toUpperCase().split('').filter(ch=>'PENZD'.includes(ch));
+    if(!order.includes('E') || !order.includes('N')) throw new Error('لازم يبقى فيه عمود E وعمود N على الأقل في الترتيب');
+    const rawLines = text.split(/\r\n|\r|\n/).map(l=>l.trim()).filter(l=>l.length>0);
+    if(!rawLines.length) throw new Error('الملف فاضي');
+    const delim = detectCsvDelimiter(rawLines[0]);
+    const features = [];
+    let skipped = 0;
+    rawLines.forEach(line=>{
+      const fields = line.split(delim).map(v=>v.trim().replace(/^"|"$/g,''));
+      const row = {};
+      order.forEach((ch,i)=>{ if(i < fields.length) row[ch] = fields[i]; });
+      const eVal = parseFloat(row.E), nVal = parseFloat(row.N);
+      if(!Number.isFinite(eVal) || !Number.isFinite(nVal)){ skipped++; return; } // على الأغلب سطر عنوان (Header)
+      let lat, lng;
+      if(!crsCode){ lng = eVal; lat = nVal; } // جغرافي مباشر
+      else { const r = projectedToLatLng(eVal, nVal, crsCode); lat = r.lat; lng = r.lng; }
+      const props = {layer:'نقاط CSV', type:'point'};
+      if(row.P) props.name = row.P;
+      if(row.Z != null && row.Z !== '' && Number.isFinite(parseFloat(row.Z))) props.elevation = parseFloat(row.Z);
+      if(row.D) props.description = row.D;
+      features.push({type:'Feature', properties:props, geometry:{type:'Point', coordinates:[lng, lat]}});
+    });
+    if(!features.length) throw new Error('محدش لقيت أي صف بيانات صالح — تأكد من ترتيب الأعمدة');
+    if(skipped) console.warn('تم تجاهل '+skipped+' سطر (على الأغلب صف عناوين أو بيانات ناقصة)');
+    return {type:'FeatureCollection', features};
+  }
+
+  document.getElementById('csvImportConfirmBtn').addEventListener('click', ()=>{
+    if(!pendingCsvText) return;
+    const colOrder = document.getElementById('csvColOrder').value;
+    const crsType = csvCrsTypeSelect.value;
+    let crsCode = null; // null = جغرافي مباشر (بدون تحويل إسقاط)
+    try{
+      if(crsType==='UTM'){
+        const zone = parseInt(document.getElementById('csvUtmZone').value, 10);
+        const hemi = document.getElementById('csvUtmHemisphere').value;
+        if(!zone || zone<1 || zone>60){ alert('رقم الزون لازم يكون بين 1 و 60'); return; }
+        crsCode = 'EPSG:CSVUTM'+zone+hemi;
+        if(!proj4.defs(crsCode)){
+          proj4.defs(crsCode, '+proj=utm +zone='+zone+(hemi==='S'?' +south':'')+' +datum=WGS84 +units=m +no_defs');
+        }
+      } else if(crsType==='EGY'){
+        crsCode = document.getElementById('csvEgyBelt').value;
+      }
+      const geojson = csvTextToGeoJSON(pendingCsvText, colOrder, crsCode);
+      document.getElementById('csvImportModal').style.display = 'none';
+      pendingCsvText = null;
+      importGeoJSON(geojson);
+    }catch(err){ alert('فشل استيراد ملف CSV:\n'+err.message); }
+  });
+
+  /* ========== تصدير نقاط طبقة إلى ملف CSV بصيغة جهاز التوتال ستيشن ========== */
+  let pendingCsvExportLayerId = null;
+  const csvExportCrsTypeSelect = document.getElementById('csvExportCrsTypeSelect');
+  csvExportCrsTypeSelect.addEventListener('change', ()=>{
+    document.getElementById('csvExportUtmWrap').style.display = csvExportCrsTypeSelect.value==='UTM' ? 'block' : 'none';
+    document.getElementById('csvExportEgyWrap').style.display = csvExportCrsTypeSelect.value==='EGY' ? 'block' : 'none';
+  });
+  function openCsvExportModal(layerId){
+    const layer = getLayer(layerId);
+    if(!layer) return;
+    if(!layer.features.some(f=>f.type==='point')){
+      alert('الطبقة دي مفيهاش أي نقاط للتصدير.');
+      return;
+    }
+    pendingCsvExportLayerId = layerId;
+    document.getElementById('csvExportColOrder').value = 'PENZD';
+    csvExportCrsTypeSelect.value = 'UTM';
+    document.getElementById('csvExportUtmWrap').style.display = 'block';
+    document.getElementById('csvExportEgyWrap').style.display = 'none';
+    document.getElementById('csvExportModal').style.display = 'flex';
+  }
+  document.getElementById('csvExportCancelBtn').addEventListener('click', ()=>{
+    pendingCsvExportLayerId = null;
+    document.getElementById('csvExportModal').style.display = 'none';
+  });
+  document.getElementById('csvExportConfirmBtn').addEventListener('click', ()=>{
+    const layer = getLayer(pendingCsvExportLayerId);
+    if(!layer) return;
+    const order = document.getElementById('csvExportColOrder').value.trim().toUpperCase().split('').filter(ch=>'PENZD'.includes(ch));
+    if(!order.includes('E') || !order.includes('N')){ alert('لازم يبقى فيه عمود E وعمود N على الأقل في الترتيب'); return; }
+    let crsCode;
+    if(csvExportCrsTypeSelect.value==='UTM'){
+      const zone = parseInt(document.getElementById('csvExportUtmZone').value, 10);
+      const hemi = document.getElementById('csvExportUtmHemisphere').value;
+      if(!zone || zone<1 || zone>60){ alert('رقم الزون لازم يكون بين 1 و 60'); return; }
+      crsCode = 'EPSG:CSVUTM'+zone+hemi;
+      if(!proj4.defs(crsCode)){
+        proj4.defs(crsCode, '+proj=utm +zone='+zone+(hemi==='S'?' +south':'')+' +datum=WGS84 +units=m +no_defs');
+      }
+    } else {
+      crsCode = document.getElementById('csvExportEgyBelt').value;
+    }
+    const points = layer.features.filter(f=>f.type==='point');
+    const lines = points.map((f,i)=>{
+      const [lat,lng] = f.coords[0];
+      const {x,y} = latLngToProjected(lat, lng, crsCode);
+      const row = {
+        P: (f.attrs && f.attrs.name) ? f.attrs.name : String(i+1),
+        E: x.toFixed(3),
+        N: y.toFixed(3),
+        Z: (f.attrs && f.attrs.elevation != null) ? f.attrs.elevation : '0',
+        D: (f.attrs && f.attrs.description) ? f.attrs.description : ((f.attrs && f.attrs.name) || '')
+      };
+      return order.map(ch=>row[ch]).join(',');
+    });
+    downloadTextFile(lines.join('\n'), (layer.name||'نقاط') + '.csv', 'text/csv');
+    document.getElementById('csvExportModal').style.display = 'none';
+    pendingCsvExportLayerId = null;
+  });
+
   function dxfToGeoJSON(dxfText, epsgCode){
     if(typeof DxfParser === 'undefined') throw new Error('مكتبة قراءة DXF لسه بتحمّل، جرب تاني بعد شوية');
     const parser = new DxfParser();
@@ -10525,8 +10777,11 @@
       } else if(ext==='xml'){
         const text = await file.text();
         openXmlCrsModal(parseLandXmlRaw(text));
+      } else if(ext==='csv'){
+        const text = await file.text();
+        openCsvImportModal(text);
       } else {
-        alert('صيغة الملف غير مدعومة. المدعوم: GeoJSON, KML, KMZ, DXF, Shapefile (.zip), GPX, LandXML');
+        alert('صيغة الملف غير مدعومة. المدعوم: GeoJSON, KML, KMZ, DXF, Shapefile (.zip), GPX, LandXML, CSV');
       }
     }catch(err){
       alert('خطأ في استيراد الملف:\n'+err.message);
