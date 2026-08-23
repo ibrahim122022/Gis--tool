@@ -495,20 +495,88 @@
     .rect-hud{left:50% !important;top:50% !important;transform:translate(-50%,-50%);width:82vw;max-width:260px;max-height:calc(100vh - 190px) !important;overflow-y:auto !important;}
     .statusbar{font-size:10px;gap:10px;padding:0 8px;flex-wrap:wrap;height:auto;min-height:28px;}
 
-    /* ── شاشة لوحة الإخراج (Layout) في وضع الموبايل — شريط مضغوط، ولوحة خصائص العنصر تبقى Bottom Sheet ── */
-    #layoutViewToolbar{padding:6px 8px !important;gap:5px !important;}
-    #layoutViewToolbar button{font-size:10.5px !important;padding:6px 8px !important;}
+    /* ══════════════════════════════════════════════════════════════════════
+       شاشة لوحة الإخراج (Layout) في وضع الموبايل — تنسيق عصري وحديث (ألوان
+       وأشكال بس، من غير أي تعديل في شغل أي زرار أو أداة) — تصميم "زجاجي" داكن
+       أنيق يشبه واجهات التصميم الحديثة، مع إبقاء كل الـ id/class والوظائف زي
+       ما هي تمامًا
+       ══════════════════════════════════════════════════════════════════════ */
+    #layoutView{background:linear-gradient(160deg,#111827,#1e293b) !important;}
+    #layoutViewToolbar{
+      padding:10px 12px !important;gap:8px !important;
+      background:linear-gradient(135deg,#0f172a,#1e2a3f) !important;
+      border-bottom:none !important;
+      box-shadow:0 3px 14px rgba(0,0,0,.45), inset 0 -1px 0 rgba(255,255,255,.05) !important;
+    }
+    #layoutViewToolbar button{
+      font-size:11px !important;padding:9px 13px !important;
+      border-radius:10px !important;font-weight:600 !important;
+      transition:transform .12s ease, filter .12s ease !important;
+    }
+    #layoutViewToolbar button:active{transform:scale(.95) !important;}
+    #layoutViewToolbar .btn-cancel{
+      background:rgba(255,255,255,.07) !important;color:#e2e8f0 !important;
+      border:1px solid rgba(255,255,255,.14) !important;
+    }
+    #layoutViewToolbar .btn-cancel:hover{background:rgba(255,255,255,.13) !important;}
+    #layoutViewToolbar .btn-create{
+      background:linear-gradient(135deg,#6366f1,#8b5cf6) !important;color:#fff !important;
+      border:none !important;box-shadow:0 4px 14px rgba(99,102,241,.45) !important;
+    }
+    #layoutViewToolbar .btn-create:hover{filter:brightness(1.08) !important;}
+    #lyName, #lyPaper, #lyOrientation{
+      background:rgba(255,255,255,.07) !important;color:#e2e8f0 !important;
+      border:1px solid rgba(255,255,255,.16) !important;border-radius:9px !important;
+    }
     #lyName{width:96px !important;font-size:11px !important;}
+    #lyName::placeholder{color:rgba(226,232,240,.5) !important;}
     #lyPaper{width:48px !important;font-size:11px !important;}
     #lyOrientation{width:70px !important;font-size:11px !important;}
-    #lyLinkedFeatureName{max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    #lyLinkedFeatureName{max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#34d399 !important;font-weight:600 !important;}
     #layoutViewBody{padding:10px !important;}
+    #lyAddElMenu{
+      background:linear-gradient(160deg,#1a2436,#111827) !important;
+      border:1px solid rgba(255,255,255,.1) !important;
+      box-shadow:0 14px 34px rgba(0,0,0,.55) !important;border-radius:12px !important;
+    }
+    #lyAddElMenu .ly-add-item{color:#e2e8f0 !important;border-radius:8px !important;}
+    #lyAddElMenu .ly-add-item:hover{background:rgba(255,255,255,.09) !important;}
     #lyElementProps{
       left:0 !important; right:0 !important; top:auto !important; bottom:0 !important;
-      width:100% !important; border-radius:14px 14px 0 0 !important;
+      width:100% !important; border-radius:16px 16px 0 0 !important;
       max-height:55vh !important; z-index:960 !important;
-      box-shadow:0 -8px 24px rgba(0,0,0,.45) !important;
+      background:linear-gradient(180deg,#1a2436,#0f172a) !important;
+      border:1px solid rgba(255,255,255,.1) !important; border-bottom:none !important;
+      box-shadow:0 -10px 30px rgba(0,0,0,.55) !important;
+      color:#e2e8f0 !important;
     }
+    #lyElementProps::before{
+      content:''; display:block; width:42px; height:4px; border-radius:3px;
+      background:rgba(255,255,255,.25); margin:0 auto 10px;
+    }
+    #lyElementProps b, #lyElementProps label{color:#e2e8f0 !important;}
+    #lyElementProps input, #lyElementProps select{
+      background:rgba(255,255,255,.07) !important;color:#e2e8f0 !important;
+      border:1px solid rgba(255,255,255,.16) !important;
+    }
+    #lyElementProps .icon-btn{
+      background:rgba(255,255,255,.07) !important;border-color:rgba(255,255,255,.16) !important;
+    }
+    /* الشريط العائم لضبط الزوم داخل إطار الخريطة على اللوحة — نفس الروح الزجاجية الداكنة */
+    #mfLiveAdjustBar{
+      background:linear-gradient(135deg,#0f172a,#1e2a3f) !important;
+      border:1px solid rgba(255,255,255,.14) !important;
+      box-shadow:0 10px 28px rgba(0,0,0,.5) !important;border-radius:12px !important;
+    }
+    #mfLiveAdjustBar button{border-radius:9px !important;font-weight:600 !important;}
+    #mfLiveAdjustBar .btn-cancel{
+      background:rgba(255,255,255,.07) !important;color:#e2e8f0 !important;
+      border:1px solid rgba(255,255,255,.14) !important;
+    }
+    #mfLiveAdjustBar .btn-create{
+      background:linear-gradient(135deg,#22c55e,#16a34a) !important;color:#fff !important;border:none !important;
+    }
+    #mfLabelSizeReadout{color:#e2e8f0 !important;}
   }
 
   /* ═══ زرار "تنسيق اللاب" داخل شاشة لوحة الإخراج فقط — بيلغي كل تنسيقات الموبايل المصغّرة
@@ -527,6 +595,7 @@
     max-height:calc(100vh - 90px) !important; z-index:860 !important;
     box-shadow:0 8px 24px rgba(0,0,0,.4) !important;
   }
+  #layoutView.force-desktop #lyElementProps::before{display:none !important;}
   #lyDesktopModeBtn.active{background:var(--accent) !important;color:#fff !important;}
 
   /* ---- Feature label tooltips ---- */
