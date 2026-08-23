@@ -1961,6 +1961,16 @@
         </div>
       </div>
 
+      <!-- ── قايمة اختيار مضلع لما يكون فيه أكتر من مضلع متداخل في نفس نقطة الدوسة ── -->
+      <div class="rect-hud" id="polyPickMenu" style="width:230px;border-color:#8e44ad;display:none;">
+        <h4 style="color:#8e44ad;">فيه أكتر من مضلع هنا</h4>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">اختار المضلع اللي قصدك:</div>
+        <div id="polyPickList" class="search-results" style="max-height:220px;"></div>
+        <div class="row-btns" style="margin-top:8px;">
+          <button class="btn-cancel" id="polyPickCancelBtn">إلغاء</button>
+        </div>
+      </div>
+
       <!-- ── Buffer (هامش) HUD ── -->
       <div class="rect-hud" id="bufferHud" style="width:250px;border-color:#16a085;display:none;">
         <h4 style="color:#16a085;">◎ هامش / إزاحة</h4>
@@ -2619,6 +2629,8 @@
 
   // ── حالة أداة الطرح (Boolean Difference) ──
   let diffBaseLayerId = null, diffBaseFeatureId = null; // المضلع الأساسي اللي هيفضل بعد الطرح
+  // ── حالة قائمة اختيار المضلعات المتداخلة (لما أكتر من مضلع بيحتوي نفس نقطة الدوسة) ──
+  let polyPickCallback = null;
 
   // ── حالة أداة الهامش / الإزاحة (Buffer/Offset) ──
   let bufferPendingLayerId = null, bufferPendingFeatureId = null;
@@ -3505,6 +3517,85 @@
     if(ring.length < 4) return null;
     try { return turf.polygon([ring]); } catch(e){ return null; }
   }
+
+  /* ── حل مشكلة اختيار مضلع مدفون بالكامل جوّه مضلع تاني ──────────────────
+     بدل ما نعتمد على "مين فوق في الرسم" بس (اللي بيخطف الدوسة دايمًا للمضلع الأكبر
+     المحيط)، بنفحص فعليًا بـ turf كل المضلعات اللي بتحتوي نقطة الدوسة، ونرتبهم
+     من الأصغر مساحة للأكبر. لو طلع أكتر من مضلع في نفس النقطة، بنعرض للمستخدم
+     قايمة صغيرة يختار منها بنفسه بالظبط مين قصده — بدل التخمين. */
+  function getPolygonCandidatesAtLatLng(latlng, fallbackLayer, fallbackFeature){
+    const pt = turf.point([latlng.lng, latlng.lat]);
+    const candidates = [];
+    state.layers.forEach(layer=>{
+      if(!layer.visible) return;
+      layer.features.forEach(f=>{
+        if(f.hidden) return;
+        if(f.type!=='polygon' && f.type!=='rectangle') return;
+        const tp = toTurfPolygon(f.coords);
+        if(!tp) return;
+        let inside = false;
+        try{ inside = turf.booleanPointInPolygon(pt, tp); }catch(e){ inside = false; }
+        if(inside){
+          let area = 0;
+          try{ area = turf.area(tp); }catch(e){}
+          candidates.push({layer, feature:f, area});
+        }
+      });
+    });
+    // لو المضلع اللي فعلاً استقبل حدث الدوسة (fallback) مش موجود في النتيجة لأي سبب
+    // (حالات نادرة زي دقة حسابية عند حافة الضلع)، بنضيفه يدويًا عشان منخسرش الدوسة الأصلية
+    if(fallbackFeature && !candidates.some(c=>c.feature.id===fallbackFeature.id)){
+      let area = 0;
+      try{ area = turf.area(toTurfPolygon(fallbackFeature.coords)); }catch(e){}
+      candidates.push({layer:fallbackLayer, feature:fallbackFeature, area});
+    }
+    candidates.sort((a,b)=> a.area - b.area);
+    return candidates;
+  }
+
+  function formatAreaShort(m2){
+    if(m2 >= 10000) return (m2/10000).toFixed(2) + ' فدان تقريبي (' + Math.round(m2).toLocaleString('ar-EG') + ' م²)';
+    return Math.round(m2).toLocaleString('ar-EG') + ' م²';
+  }
+
+  // بتعرض قايمة اختيار للمستخدم لما يكون في نقطة الدوسة أكتر من مضلع متداخل.
+  // candidates: مصفوفة {layer, feature, area} من getPolygonCandidatesAtLatLng
+  // latlng: نقطة الدوسة (لتحديد مكان ظهور القايمة على الشاشة)
+  // onPick(layer, feature): بيتنفذ لما المستخدم يختار عنصر من القايمة
+  function showPolyPickMenu(candidates, latlng, onPick){
+    const menu = document.getElementById('polyPickMenu');
+    const list = document.getElementById('polyPickList');
+    list.innerHTML = '';
+    candidates.forEach(c=>{
+      const row = document.createElement('div');
+      row.className = 'search-result-item';
+      row.style.display = 'flex'; row.style.alignItems = 'center'; row.style.gap = '8px';
+      const swatch = document.createElement('span');
+      swatch.style.cssText = `width:12px;height:12px;border-radius:3px;flex-shrink:0;background:${c.feature.color||c.layer.color};border:1px solid rgba(0,0,0,.25);`;
+      const textWrap = document.createElement('div');
+      textWrap.style.minWidth = '0';
+      textWrap.innerHTML = `<div class="sr-name">${escapeHtml(featureLabel(c.feature))}</div>`+
+        `<div class="sr-type">${escapeHtml(c.layer.name)} · ${formatAreaShort(c.area)}</div>`;
+      row.appendChild(swatch); row.appendChild(textWrap);
+      row.addEventListener('click', ()=>{
+        menu.style.display = 'none';
+        polyPickCallback = null;
+        onPick(c.layer, c.feature);
+      });
+      list.appendChild(row);
+    });
+    const pt = map.latLngToContainerPoint(latlng);
+    const wr = mapEl.getBoundingClientRect();
+    menu.style.left = Math.min(Math.max(pt.x+18,8), wr.width-240)+'px';
+    menu.style.top  = Math.min(Math.max(pt.y-40,8), wr.height-280)+'px';
+    menu.style.display = 'block';
+    polyPickCallback = onPick;
+  }
+
+  document.getElementById('polyPickCancelBtn').addEventListener('click', ()=>{
+    document.getElementById('polyPickMenu').style.display = 'none';
+    polyPickCallback = null;
+  });
 
   function getPolygonsContainedIn(selectedFeature){
     const selTurf = toTurfPolygon(selectedFeature.coords);
@@ -6520,23 +6611,35 @@
           }
           if(tool==='difference'){
             L.DomEvent.stopPropagation(e);
-            if(f.type!=='polygon' && f.type!=='rectangle'){
-              document.getElementById('stHint').textContent='⚠️ أداة الطرح تعمل على المضلعات فقط';
+            const candidates = getPolygonCandidatesAtLatLng(e.latlng, layer, f);
+            const applyDiffPick = (pLayer, pFeature)=>{
+              if(pFeature.type!=='polygon' && pFeature.type!=='rectangle'){
+                document.getElementById('stHint').textContent='⚠️ أداة الطرح تعمل على المضلعات فقط';
+                return;
+              }
+              if(!diffBaseFeatureId){
+                diffBaseLayerId = pLayer.id; diffBaseFeatureId = pFeature.id;
+                selection = {layerId:pLayer.id, featureId:pFeature.id};
+                renderFeatures();
+                document.getElementById('diffHudMsg').textContent = 'تمام — دلوقتي اضغط على المضلع اللي عايز تطرحه من المضلع الأساسي';
+                document.getElementById('stHint').textContent = '➖ اضغط على المضلع اللي هيتطرح';
+                return;
+              }
+              if(pLayer.id===diffBaseLayerId && pFeature.id===diffBaseFeatureId){
+                document.getElementById('stHint').textContent = '⚠️ اختر مضلع مختلف عن المضلع الأساسي';
+                return;
+              }
+              performBooleanDifference(diffBaseLayerId, diffBaseFeatureId, pLayer.id, pFeature.id);
+            };
+            // لو فيه أكتر من مضلع بيحتوي نفس نقطة الدوسة (زي مضلع مدفون بالكامل جوه مضلع تاني)،
+            // نوريله قايمة صغيرة يختار منها بنفسه بالظبط مين قصده، بدل ما نخمّن
+            if(candidates.length > 1){
+              showPolyPickMenu(candidates, e.latlng, applyDiffPick);
+              document.getElementById('stHint').textContent = '➖ فيه أكتر من مضلع هنا — اختار من القايمة اللي ظهرت';
               return;
             }
-            if(!diffBaseFeatureId){
-              diffBaseLayerId = layer.id; diffBaseFeatureId = f.id;
-              selection = {layerId:layer.id, featureId:f.id};
-              renderFeatures();
-              document.getElementById('diffHudMsg').textContent = 'تمام — دلوقتي اضغط على المضلع اللي عايز تطرحه من المضلع الأساسي';
-              document.getElementById('stHint').textContent = '➖ اضغط على المضلع اللي هيتطرح';
-              return;
-            }
-            if(layer.id===diffBaseLayerId && f.id===diffBaseFeatureId){
-              document.getElementById('stHint').textContent = '⚠️ اختر مضلع مختلف عن المضلع الأساسي';
-              return;
-            }
-            performBooleanDifference(diffBaseLayerId, diffBaseFeatureId, layer.id, f.id);
+            const only = candidates[0] || {layer, feature:f};
+            applyDiffPick(only.layer, only.feature);
             return;
           }
           if(tool==='buffer'){
@@ -7298,6 +7401,7 @@
       document.getElementById('lengthsCloseBtn').style.display = 'none';
       hideInlineValueHud();
       rectHud.style.display='none'; circleHud.style.display='none'; goToCoordsHud.style.display='none'; document.getElementById('pointUtmHud').style.display='none'; document.getElementById('divideHud').style.display='none'; dividePendingLayerId=null; dividePendingFeatureId=null;
+      document.getElementById('polyPickMenu').style.display='none'; polyPickCallback=null;
       resetSplitState();
       document.getElementById('areaCalcHud').style.display='none';
       document.getElementById('snapSettingsHud').style.display='none';
@@ -7510,6 +7614,7 @@
     dividePendingLayerId=null; dividePendingFeatureId=null;
     resetSplitState();
     diffBaseLayerId=null; diffBaseFeatureId=null; document.getElementById('diffHud').style.display='none';
+    document.getElementById('polyPickMenu').style.display='none'; polyPickCallback=null;
     bufferPendingLayerId=null; bufferPendingFeatureId=null; document.getElementById('bufferHud').style.display='none';
     lineOffsetPendingLayerId=null; lineOffsetPendingFeatureId=null; document.getElementById('lineOffsetHud').style.display='none';
     document.getElementById('stTemp').textContent='';
@@ -9461,6 +9566,37 @@
     diffBaseLayerId = null; diffBaseFeatureId = null;
     document.getElementById('diffHud').style.display='none';
   }
+  /* ── تحويل مضلع بيه "حفرة" (نتيجة الطرح لما مضلع يبقى مدفون بالكامل جوه التاني) ─────
+     إلى حلقة واحدة بسيطة قابلة للتخزين في نظام البيانات الحالي (اللي بيدعم حلقة واحدة بس
+     لكل عنصر). الحل: نعمل "شق" رفيع جدًا (خط رفيع بلا مساحة فعلية) بين حدود المضلع
+     الخارجي وحدود الحفرة الداخلية، فيبقى شكل واحد متصل بس بيفضل شكله زي إن فيه حفرة
+     فعلية لما نرسمه. من غير الخطوة دي، الكود القديم كان بياخد الحلقة الخارجية بس
+     ويتجاهل الحفرة تمامًا — يعني الطرح ما كنش بيظهر أي أثر لما المضلع التاني يبقى
+     مدفون بالكامل جوه الأول (وهي بالظبط الحالة اللي إنت بتشتكي منها). */
+  function polygonWithHolesToSlitRing(rings){
+    // rings: [الحلقة الخارجية, حفرة1, حفرة2, ...] كل حلقة [lng,lat] (زي ما بيرجعها turf) ومقفولة
+    let ring = rings[0].slice(0, -1);
+    for(let h=1; h<rings.length; h++){
+      const hole = rings[h].slice(0, -1);
+      if(hole.length < 3) continue;
+      // نلاقي أقرب زوج نقط بين الحلقة الحالية والحفرة عشان نوصل الشق بينهم بأقصر مسافة ممكنة
+      let bestI=0, bestJ=0, bestD=Infinity;
+      for(let i=0;i<ring.length;i++){
+        for(let j=0;j<hole.length;j++){
+          const dx=ring[i][0]-hole[j][0], dy=ring[i][1]-hole[j][1];
+          const d = dx*dx+dy*dy;
+          if(d<bestD){ bestD=d; bestI=i; bestJ=j; }
+        }
+      }
+      const reorderedHole = hole.slice(bestJ).concat(hole.slice(0,bestJ));
+      const before = ring.slice(0, bestI+1);
+      const after = ring.slice(bestI);
+      ring = before.concat(reorderedHole, [reorderedHole[0]], after);
+    }
+    ring.push(ring[0]);
+    return ring;
+  }
+
   function performBooleanDifference(baseLayerId, baseFeatureId, subLayerId, subFeatureId){
     const baseLayer = getLayer(baseLayerId);
     const baseF = getFeature(baseLayerId, baseFeatureId);
@@ -9483,7 +9619,11 @@
       const geoms = result.geometry.type==='MultiPolygon' ? result.geometry.coordinates : [result.geometry.coordinates];
       const baseName = (baseF.attrs && baseF.attrs.name) ? baseF.attrs.name : null;
       const newFeatures = geoms.map((polyCoords, i)=>{
-        const outer = polyCoords[0].map(c=>[c[1], c[0]]);
+        // لو المضلع الناتج بقى فيه "حفرة" (حلقة تانية جوه) — الحالة اللي بتحصل لما المضلع
+        // المطروح يكون مدفون بالكامل جوه المضلع الأساسي — نحولها لحلقة واحدة بشق رفيع
+        // عشان تتخزن وتترسم صح بدل ما تتجاهل الحفرة تمامًا
+        const ring = polyCoords.length > 1 ? polygonWithHolesToSlitRing(polyCoords) : polyCoords[0];
+        const outer = ring.map(c=>[c[1], c[0]]);
         const coords = outer.slice(0,-1);
         const nf = {id:uid(), type:'polygon', coords, attrs:Object.assign({}, baseF.attrs||{}), color: baseF.color};
         if(baseName && geoms.length>1) nf.attrs.name = baseName+' - '+(i+1);
