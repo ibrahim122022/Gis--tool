@@ -139,6 +139,7 @@
   .lo-dir-btn{flex:1;padding:8px 6px;border:1px solid var(--border);background:var(--bg-panel-2);color:var(--text-muted);border-radius:6px;cursor:pointer;font-size:12px;font-family:var(--sans);transition:all .15s;}
   .lo-dir-btn.active{background:#0891b2;border-color:#0891b2;color:#fff;font-weight:700;}
   .tool-btn[data-tool="lineoffset"]{--tc:#0891b2;}
+  .tool-btn[data-tool="roadroute"]{--tc:#b45309;}
 
 
   .tool-btn:hover:not(:disabled){
@@ -450,6 +451,18 @@
       left:auto !important; margin:0 !important;
       z-index:965; box-shadow:0 2px 10px rgba(0,0,0,.25);
     }
+    /* قائمة "إنهاء الرسم" (وزرار "دول آخر ضلعين" المرافق ليها) كانت بتتراكب فوق شريط
+       أنماط الرسم تحت — بنقلهم لتحت زرار "تنسيق اللاب/الموبايل" فوق الشاشة بدل ما يفضلوا
+       تحت في نص أدوات الرسم */
+    .mobile-finish-btn{
+      position:fixed !important;
+      bottom:auto !important;
+      top:calc(env(safe-area-inset-top,0px) + 8px + 34px + 6px + 32px + 6px) !important;
+      right:10px !important; left:auto !important; inset-inline-end:10px !important;
+    }
+    #lengthsCloseBtn{
+      top:calc(env(safe-area-inset-top,0px) + 8px + 34px + 6px + 32px + 6px + 44px + 6px) !important;
+    }
     .ribbon-panels{display:flex;flex-direction:row;border-top:none;background:transparent;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
     .ribbon-panel{display:flex !important;flex-direction:row;padding:0;gap:0;overflow-x:visible;}
     .ribbon-group{flex-direction:row;padding:0 4px;gap:0;align-items:center;}
@@ -519,7 +532,7 @@
   /* ---- Feature label tooltips ---- */
   .feature-label-tip{
     background:rgba(27,57,104,.92);color:#FFFFFF;border:1px solid rgba(0,180,166,.5);
-    border-radius:6px;font-size:10.5px;font-family:var(--mono);padding:2px 9px;
+    border-radius:6px;font-size:calc(10.5px * var(--mf-label-scale, 1));font-family:var(--mono);padding:2px 9px;
     box-shadow:0 2px 10px rgba(27,57,104,.3);white-space:nowrap;pointer-events:none;
   }
   .feature-label-tip.leaflet-tooltip-top::before{display:none;}
@@ -527,7 +540,7 @@
   /* ---- Dimension labels (side lengths) ---- */
   .dim-label-tip{
     background:rgba(0,180,166,.88);color:#fff;border:1px solid rgba(0,180,166,.4);
-    border-radius:5px;font-size:9px;font-family:var(--mono);padding:1px 6px;
+    border-radius:5px;font-size:calc(9px * var(--mf-label-scale, 1));font-family:var(--mono);padding:1px 6px;
     box-shadow:0 1px 6px rgba(0,120,140,.2);white-space:nowrap;pointer-events:none;
   }
   .dim-label-tip.leaflet-tooltip-top::before{display:none;}
@@ -607,7 +620,7 @@
   .tb-footnote{text-align:center;font-size:.72em;color:#555;padding:.4em 0;}
   .plan-label-icon{ background:transparent; border:none; }
   .plan-vertex-label, .plan-edge-label, .plan-building-label{
-    display:inline-block; font-family:var(--sans); font-weight:800; font-size:16px;
+    display:inline-block; font-family:var(--sans); font-weight:800; font-size:calc(16px * var(--mf-label-scale, 1));
     padding:3px 7px; border-radius:5px; white-space:nowrap; box-shadow:0 1px 4px rgba(0,0,0,.55);
   }
   .plan-vertex-label{ background:#fff; color:#1d4ed8; border:2px solid #1d4ed8; }
@@ -1047,6 +1060,15 @@
                 <path d="M3 21c4-8 10-2 18-11" fill="none" stroke-width="1.6" stroke-dasharray="3 2.4" opacity=".7"/>
               </svg><span>نسخ موازي</span>
             </button>
+            <button class="tool-btn" data-tool="roadroute" title="ارسم خط بيتبع الطرق الفعلية بين نقطتين أو أكتر (مسار عبر الطرق) — محتاج اتصال بالإنترنت">
+              <svg viewBox="0 0 24 24">
+                <path d="M4 20c2-6 3-10 3-13a5 5 0 0 1 10 0c0 3 1 7 3 13" fill="none" stroke-width="1.8"/>
+                <path d="M8.5 20h7" stroke-width="1.6"/>
+                <path d="M12 4v13" stroke-width="1.6" stroke-dasharray="2 2"/>
+                <circle cx="7" cy="7" r="1.6" fill="currentColor" stroke="none"/>
+                <circle cx="17" cy="7" r="1.6" fill="currentColor" stroke="none"/>
+              </svg><span>مسار طرق</span>
+            </button>
             <button class="tool-btn" data-tool="measure" title="قياس المسافة بين نقطتين">
               <svg viewBox="0 0 24 24">
                 <line x1="3.5" y1="20.5" x2="20.5" y2="3.5" stroke-width="2.4"/>
@@ -1351,9 +1373,12 @@
           </div>
         </div>
         <!-- شريط عائم بيظهر لما تكون بتظبط الزوم مباشرة جوه إطار الخريطة على اللوحة -->
-        <div id="mfLiveAdjustBar" style="display:none;position:fixed;z-index:950;flex-direction:row;gap:6px;align-items:center;background:var(--bg-panel);border:1px solid var(--accent);border-radius:9px;padding:6px 8px;box-shadow:0 6px 18px rgba(0,0,0,.35);">
+        <div id="mfLiveAdjustBar" style="display:none;position:fixed;z-index:950;flex-direction:row;flex-wrap:wrap;gap:6px;align-items:center;background:var(--bg-panel);border:1px solid var(--accent);border-radius:9px;padding:6px 8px;box-shadow:0 6px 18px rgba(0,0,0,.35);max-width:calc(100vw - 16px);">
           <button id="mfRectZoomBtn" class="btn-cancel mf-toggle-btn" style="font-size:11px;padding:6px 9px;white-space:nowrap;">🔲 مستطيل الزوم</button>
           <button id="mfLabelsBtn" class="btn-cancel mf-toggle-btn" style="font-size:11px;padding:6px 9px;white-space:nowrap;" title="إظهار/إخفاء اسم المضلع والنقطة على الخريطة">🏷️ الأسماء</button>
+          <button id="mfLabelSizeDownBtn" class="btn-cancel" style="font-size:13px;padding:6px 10px;white-space:nowrap;" title="صغّر خط أسماء النقط والأضلاع">🔠−</button>
+          <span id="mfLabelSizeReadout" style="font-size:10.5px;color:var(--text-muted);min-width:32px;text-align:center;">100%</span>
+          <button id="mfLabelSizeUpBtn" class="btn-cancel" style="font-size:13px;padding:6px 10px;white-space:nowrap;" title="كبّر خط أسماء النقط والأضلاع">🔠+</button>
           <button id="mfDoneBtn" class="btn-create" style="font-size:11px;padding:6px 9px;white-space:nowrap;">✅ تم — التقط اللقطة</button>
           <button id="mfCancelBtn" class="btn-cancel" style="font-size:11px;padding:6px 9px;white-space:nowrap;">✖ إلغاء</button>
         </div>
@@ -1975,6 +2000,20 @@
         <div id="polyPickList" class="search-results" style="max-height:220px;"></div>
         <div class="row-btns" style="margin-top:8px;">
           <button class="btn-cancel" id="polyPickCancelBtn">إلغاء</button>
+        </div>
+      </div>
+
+      <!-- ── مسار عبر الطرق الفعلية (OSRM) ── -->
+      <div class="rect-hud" id="roadRouteHud" style="width:260px;border-color:#b45309;display:none;position:fixed;top:56px;left:50%;transform:translateX(-50%);z-index:965;">
+        <h4 style="color:#b45309;">🛣️ مسار عبر الطرق</h4>
+        <div id="roadRouteMsg" style="font-size:11.5px;color:var(--text-muted);line-height:1.6;margin-bottom:8px;">دوس نقطة البداية، وبعدين نقطة النهاية (تقدر تضيف نقط وسيطة بالدوس عليها قبل النهاية). المسار بيتحسب من إنترنت — محتاج اتصال شغال.</div>
+        <div id="roadRouteCount" style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">0 نقطة متحددة</div>
+        <div class="row-btns" style="margin-top:6px;">
+          <button class="btn-cancel" id="roadRouteUndoBtn">↩ امسح آخر نقطة</button>
+        </div>
+        <div class="row-btns" style="margin-top:6px;">
+          <button class="btn-cancel" id="roadRouteCancelBtn">إلغاء</button>
+          <button class="btn-create" id="roadRouteGoBtn" style="background:#b45309;">🛣️ احسب المسار</button>
         </div>
       </div>
 
@@ -2645,6 +2684,12 @@
   // ── حالة أداة نسخ الخط الموازي (Line Offset) ──
   let lineOffsetPendingLayerId = null, lineOffsetPendingFeatureId = null;
   let lineOffsetDirection = 'right'; // 'right' أو 'left'
+
+  // ── حالة أداة "مسار عبر الطرق" (Road Routing عن طريق OSRM) ──
+  let roadRouteWaypoints = []; // [{lat,lng}, ...] النقط اللي دوس عليها المستخدم بالترتيب
+  let roadRouteMarkers = [];   // ماركرات Leaflet بتوضح النقط دي على الخريطة وقت الاختيار
+  let roadRoutePreviewLine = null; // خط معاينة بسيط (خطوط مستقيمة) بين النقط لحد ما يتحسب المسار الفعلي
+  let roadRouteLoading = false;
 
   const mapEl = document.getElementById('map');
   const rectHud = document.getElementById('rectHud');
@@ -4576,6 +4621,7 @@
      (position:fixed فوق شاشة اللوحة) عشان تتحرك/تتزوم فيه لايف، وبعدين ترجعه مكانه القديم ─── */
   let mfLiveAdjustPrevStyle = null;
   let mfRectZoomActive = false, mfRectStart = null, mfRectBoxEl = null;
+  let mfLabelFontScale = 1; // نسبة تكبير خط أسماء النقط والأضلاع أثناء ضبط إطار الخريطة في اللوحة
 
   function mfPositionBar(boxRect){
     const bar = document.getElementById('mfLiveAdjustBar');
@@ -4600,6 +4646,9 @@
     map.invalidateSize({pan:false});
     mfPositionBar(r);
     document.getElementById('mfLabelsBtn').classList.toggle('active', labelsVisible);
+    mfLabelFontScale = 1;
+    document.documentElement.style.setProperty('--mf-label-scale', mfLabelFontScale);
+    document.getElementById('mfLabelSizeReadout').textContent = '100%';
     document.getElementById('mfLiveAdjustBar').style.display = 'flex';
     // أي قائمة أو نافذة صغيرة بتظهر عند اختيار عنصر على الخريطة (زي قائمة تعديل المضلع)
     // مكانها الطبيعي وراء شاشة اللوحة — بنرفعها فوق مؤقتًا طول ما إحنا في وضع الضبط ده
@@ -4622,6 +4671,9 @@
     mfLiveAdjustPrevStyle = null;
     map.invalidateSize({pan:false});
     document.body.classList.remove('mf-live-adjust-active');
+    // نرجّع حجم خط الأسماء لوضعه الطبيعي في الخريطة العادية بعد ما نقفل شاشة الضبط
+    mfLabelFontScale = 1;
+    document.documentElement.style.setProperty('--mf-label-scale', 1);
   }
 
   function closeMapFrameLiveAdjust(){
@@ -4694,6 +4746,17 @@
     document.getElementById('labelsBtn').classList.toggle('active', labelsVisible);
     document.getElementById('mfLabelsBtn').classList.toggle('active', labelsVisible);
     renderLabels();
+  });
+  function setMfLabelFontScale(scale){
+    mfLabelFontScale = Math.min(3, Math.max(0.6, scale));
+    document.documentElement.style.setProperty('--mf-label-scale', mfLabelFontScale);
+    document.getElementById('mfLabelSizeReadout').textContent = Math.round(mfLabelFontScale*100) + '%';
+  }
+  document.getElementById('mfLabelSizeUpBtn').addEventListener('click', ()=>{
+    setMfLabelFontScale(mfLabelFontScale + 0.15);
+  });
+  document.getElementById('mfLabelSizeDownBtn').addEventListener('click', ()=>{
+    setMfLabelFontScale(mfLabelFontScale - 0.15);
   });
   document.getElementById('mfDoneBtn').addEventListener('click', ()=>{
     const page = state.layoutPages.find(p=>p.id===currentLayoutEditPageId);
@@ -5019,7 +5082,7 @@
     });
     if(neighborPoints.length){
       const sampleTextEl = state.sharedLayoutElements.find(e=>e.type==='text');
-      const nFontSize = Math.max(sampleTextEl ? (sampleTextEl.fontSize||16) : 16, 22);
+      const nFontSize = Math.max(sampleTextEl ? (sampleTextEl.fontSize||16) : 16, 22) * mfLabelFontScale;
       const nColor = sampleTextEl ? (sampleTextEl.color||'#2d3748') : '#2d3748';
       neighborPoints.forEach(pf=>{
         const plat = pf.coords[0][0], plng = pf.coords[0][1];
@@ -7162,6 +7225,12 @@
       updateSplitPreview();
       return;
     }
+    if(tool==='roadroute'){
+      if(roadRouteLoading) return; // مستنيين رد السيرفر على الطلب السابق
+      const snappedPt = effectiveLatLng(e);
+      addRoadRouteWaypoint({lat:snappedPt.lat, lng:snappedPt.lng});
+      return;
+    }
     if(tool==='select'){
       if(window.innerWidth > 760) { selection=null; renderAttrPanel(); renderFeatures(); }
       return;
@@ -7640,6 +7709,7 @@
     document.getElementById('polyPickMenu').style.display='none'; polyPickCallback=null;
     bufferPendingLayerId=null; bufferPendingFeatureId=null; document.getElementById('bufferHud').style.display='none';
     lineOffsetPendingLayerId=null; lineOffsetPendingFeatureId=null; document.getElementById('lineOffsetHud').style.display='none';
+    clearRoadRouteState();
     document.getElementById('stTemp').textContent='';
     document.getElementById('penHud').style.display = (tool==='pen') ? 'block' : 'none';
     penDrawing = null;
@@ -7661,6 +7731,11 @@
       document.getElementById('stHint').textContent = '◎ اضغط على العنصر (مضلع أو خط) اللي عايز تعمله هامش/إزاحة';
     } else if (tool === 'lineoffset') {
       document.getElementById('stHint').textContent = '↔ اضغط على الخط اللي عايز تنسخ نسخة موازية منه';
+    } else if (tool === 'roadroute') {
+      document.getElementById('roadRouteHud').style.display='block';
+      updateRoadRouteHudText();
+      document.getElementById('roadRouteGoBtn').textContent = '🛣️ احسب المسار';
+      document.getElementById('stHint').textContent = '🛣️ دوس نقطة البداية على الخريطة';
     } else if (tool === 'pen') {
       document.getElementById('stHint').textContent = '✏️ ارسم حر بالماوس أو بصباعك — اختار نوع الفرشة واللون والنعومة من اللوحة';
     } else {
@@ -7695,12 +7770,32 @@
     const gdb = document.getElementById('globalDesktopModeBtn');
     if(gdb) gdb.style.display = hidden ? 'none' : '';
   }
+  // قائمة تعديل النقط العائمة (تدوير/إضافة نقطة/حذف نقطة/نقل الكل...) بتفضل ظاهرة فوق
+  // قائمة الخصائص لما تتفتح بملء الشاشة على الموبايل — بنقفلها مؤقتًا طول ما القائمة
+  // مفتوحة، وبنرجّعها لو كان لسه فيه عنصر متحدد لما نقفل القائمة
+  let mobileEditPadHiddenForSidebar = false;
+  function hideMobileEditPadForSidebar(){
+    if(mobileEditPad.style.display === 'flex'){
+      mobileEditPadHiddenForSidebar = true;
+      closeMobileEditPad();
+    }
+  }
+  function restoreMobileEditPadAfterSidebar(){
+    if(mobileEditPadHiddenForSidebar){
+      mobileEditPadHiddenForSidebar = false;
+      if(selection){
+        const f = getFeature(selection.layerId, selection.featureId);
+        if(f && f.type !== 'point') openMobileEditPad(f);
+      }
+    }
+  }
   document.getElementById('mobileSidebarToggle').addEventListener('click', (e)=>{
     e.stopPropagation();
     if(sidebarEl.classList.contains('open')){
       sidebarEl.classList.remove('open');
       mobileQuickMenu.classList.remove('open');
       setGlobalDesktopBtnHiddenForSidebar(false);
+      restoreMobileEditPadAfterSidebar();
     } else {
       mobileQuickMenu.classList.toggle('open');
     }
@@ -7708,12 +7803,14 @@
   document.getElementById('sidebarMobileClose').addEventListener('click', ()=>{
     sidebarEl.classList.remove('open');
     setGlobalDesktopBtnHiddenForSidebar(false);
+    restoreMobileEditPadAfterSidebar();
   });
   function openMobilePanel(panelId){
     activateTab(panelId);
     sidebarEl.classList.add('open');
     mobileQuickMenu.classList.remove('open');
     setGlobalDesktopBtnHiddenForSidebar(true);
+    hideMobileEditPadForSidebar();
   }
   document.getElementById('mqbLayers').addEventListener('click', ()=> openMobilePanel('layersPanel'));
   document.getElementById('mqbAttrs').addEventListener('click', ()=> openMobilePanel('attrPanel'));
@@ -9686,6 +9783,114 @@
     document.getElementById('stHint').textContent='تم إلغاء الطرح';
     document.querySelector('.tool-btn[data-tool="select"]').click();
   });
+
+  /* ========== أداة "مسار عبر الطرق" — بتستخدم سيرفر OSRM التجريبي المجاني عشان تجيب
+     مسار حقيقي ماشي على شبكة الطرق الفعلية بين النقط اللي المستخدم بيدوس عليها، بدل
+     خط مستقيم عادي. محتاج اتصال بالإنترنت وقت الاستخدام (مش بيشتغل أوفلاين). ========== */
+  const OSRM_BASE_URL = 'https://router.project-osrm.org/route/v1/driving/';
+
+  function renderRoadRouteMarkers(){
+    roadRouteMarkers.forEach(m=> map.removeLayer(m));
+    roadRouteMarkers = roadRouteWaypoints.map((wp, i)=>{
+      const isEnds = (i===0 || i===roadRouteWaypoints.length-1);
+      return L.circleMarker([wp.lat, wp.lng], {
+        radius: isEnds ? 7 : 5,
+        color:'#b45309', weight:2,
+        fillColor: i===0 ? '#16a085' : (i===roadRouteWaypoints.length-1 ? '#e8457a' : '#fff'),
+        fillOpacity:1
+      }).addTo(map);
+    });
+    if(roadRoutePreviewLine){ map.removeLayer(roadRoutePreviewLine); roadRoutePreviewLine=null; }
+    if(roadRouteWaypoints.length >= 2){
+      roadRoutePreviewLine = L.polyline(roadRouteWaypoints.map(wp=>[wp.lat, wp.lng]), {
+        color:'#b45309', weight:2, dashArray:'6 5', opacity:.75
+      }).addTo(map);
+    }
+  }
+
+  function updateRoadRouteHudText(){
+    const n = roadRouteWaypoints.length;
+    document.getElementById('roadRouteCount').textContent = n + ' نقطة متحددة';
+    const msgEl = document.getElementById('roadRouteMsg');
+    if(n === 0){
+      msgEl.textContent = 'دوس نقطة البداية على الخريطة';
+    } else if(n === 1){
+      msgEl.textContent = 'دوس نقطة النهاية (أو نقط وسيطة قبلها لو المسار عايز يمر بأماكن معينة)';
+    } else {
+      msgEl.textContent = 'تقدر تضيف نقط وسيطة كمان، أو دوس "احسب المسار" لما تخلص';
+    }
+    document.getElementById('roadRouteGoBtn').disabled = n < 2;
+    document.getElementById('roadRouteGoBtn').style.opacity = n < 2 ? '.5' : '1';
+  }
+
+  function addRoadRouteWaypoint(latlng){
+    roadRouteWaypoints.push(latlng);
+    renderRoadRouteMarkers();
+    updateRoadRouteHudText();
+  }
+
+  function undoRoadRouteWaypoint(){
+    roadRouteWaypoints.pop();
+    renderRoadRouteMarkers();
+    updateRoadRouteHudText();
+  }
+
+  function clearRoadRouteState(){
+    roadRouteMarkers.forEach(m=> map.removeLayer(m));
+    roadRouteMarkers = [];
+    if(roadRoutePreviewLine){ map.removeLayer(roadRoutePreviewLine); roadRoutePreviewLine=null; }
+    roadRouteWaypoints = [];
+    roadRouteLoading = false;
+    document.getElementById('roadRouteHud').style.display = 'none';
+  }
+
+  async function computeRoadRoute(){
+    if(roadRouteWaypoints.length < 2) return;
+    roadRouteLoading = true;
+    document.getElementById('roadRouteGoBtn').textContent = '⏳ بيحسب المسار...';
+    document.getElementById('roadRouteGoBtn').disabled = true;
+    document.getElementById('stHint').textContent = '🛣️ بيتواصل مع سيرفر الطرق... (محتاج إنترنت)';
+    try{
+      const coordsStr = roadRouteWaypoints.map(wp=> wp.lng.toFixed(6)+','+wp.lat.toFixed(6)).join(';');
+      const url = OSRM_BASE_URL + coordsStr + '?overview=full&geometries=geojson';
+      const res = await fetch(url);
+      if(!res.ok) throw new Error('السيرفر رد بخطأ ('+res.status+')');
+      const data = await res.json();
+      if(data.code !== 'Ok' || !data.routes || !data.routes.length){
+        throw new Error('مفيش طريق موصّل بين النقط دي (ممكن تكون بعيدة عن شبكة الطرق أو في جزيرة منفصلة)');
+      }
+      const route = data.routes[0];
+      const coords = route.geometry.coordinates.map(c=>[c[1], c[0]]); // من [lng,lat] لـ [lat,lng]
+      pushStateToUndo();
+      const f = addFeature('line', coords);
+      const distKm = (route.distance/1000).toFixed(2);
+      const durMin = Math.round(route.duration/60);
+      f.attrs = f.attrs || {};
+      f.attrs.name = 'مسار طرق (' + distKm + ' كم، ~' + durMin + ' د)';
+      selection = {layerId: activeLayer().id, featureId: f.id};
+      renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
+      document.getElementById('stHint').textContent = '✅ اتحسب المسار — الطول ' + distKm + ' كم، المدة التقريبية ~' + durMin + ' دقيقة';
+      clearRoadRouteState();
+      document.querySelector('.tool-btn[data-tool="select"]').click();
+    }catch(err){
+      console.error(err);
+      roadRouteLoading = false;
+      document.getElementById('roadRouteGoBtn').textContent = '🛣️ احسب المسار';
+      document.getElementById('roadRouteGoBtn').disabled = false;
+      document.getElementById('stHint').textContent = '❌ تعذر حساب المسار: ' + (err && err.message ? err.message : err);
+    }
+  }
+
+  document.getElementById('roadRouteUndoBtn').addEventListener('click', ()=>{
+    if(roadRouteLoading) return;
+    undoRoadRouteWaypoint();
+  });
+  document.getElementById('roadRouteCancelBtn').addEventListener('click', ()=>{
+    clearRoadRouteState();
+    document.getElementById('stHint').textContent = 'تم إلغاء رسم مسار الطرق';
+    document.querySelector('.tool-btn[data-tool="select"]').click();
+  });
+  document.getElementById('roadRouteGoBtn').addEventListener('click', computeRoadRoute);
 
   /* ========== أداة الهامش / الإزاحة (Buffer/Offset) — باستخدام turf.buffer ========== */
   function performBufferOffset(layerId, featureId, distMeters){
