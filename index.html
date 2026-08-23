@@ -645,6 +645,13 @@
   body.notebook-print-mode .app,
   body.notebook-print-mode .main,
   body.notebook-print-mode .canvas-wrap{height:100vh!important;display:block!important;}
+  /* أثناء شاشة لوحة الإخراج (اللاي أوت) — زرار "تنسيق اللاب" العام وزرار الاتصال بـ Drive
+     العائم (وشاشة منيوه) بتوع الشاشة الرئيسية ثابتين بترتيب طبقات (z-index) أعلى من شاشة
+     اللوحة نفسها، فكانوا بيفضلوا طافيين فوقها. استخدام class على الـ body بدل الاعتماد على
+     تغيير display بالجافاسكربت بس، عشان نضمن الإخفاء يحصل مهما كان مصدر فتح الشاشة */
+  body.layout-view-active #globalDesktopModeBtn,
+  body.layout-view-active #driveMenuPopup,
+  body.layout-view-active #mobileDriveToggle{display:none!important;}
   /* الأبعاد الفعلية بتتحدد في JS وقت اللقطة (captureCurrentMapView) عشان تطابق نسبة إطار
      الخريطة في اللوحة بالظبط — مفيش مقاس ثابت هنا عشان منحطش نسبة أبعاد غلط بتتمدد بعدين */
   body.notebook-print-mode #map{position:fixed!important; top:0!important; left:0!important; z-index:1!important;}
@@ -4348,6 +4355,7 @@
     // ملحوظة: مبنرجعش وضع "تنسيق اللاب" هنا تلقائيًا — بقى وضع عام على البرنامج كله (مش خاص
     // بشاشة اللوحة بس)، فبيفضل شغال زي ما هو لحد ما المستخدم نفسه يبدّله
     document.getElementById('layoutView').style.display = 'none';
+    document.body.classList.remove('layout-view-active');
     document.getElementById('lyAddElMenu').style.display = 'none';
     currentLayoutEditPageId = null;
     selectedElementId = null;
@@ -4360,6 +4368,13 @@
     document.querySelectorAll('.mobile-sidebar-toggle').forEach(el=> el.style.display = '');
     const attr = document.querySelector('.leaflet-control-attribution');
     if(attr) attr.style.display = '';
+    // نرجّع زرار "تنسيق اللاب" العام يظهر تاني (كان متخفي طول ما إحنا في شاشة لوحة الإخراج)
+    const gdb = document.getElementById('globalDesktopModeBtn');
+    if(gdb) gdb.style.display = '';
+    // منيو الاتصال بـ Drive أصلها مخفية افتراضيًا (بتظهر بس لما المستخدم يضغط زرارها بنفسه)،
+    // فبنسيبها مخفية هنا بدل ما نمسح الـ style تمامًا (اللي كان هيخليها تظهر تلقائي غلط)
+    const dmp = document.getElementById('driveMenuPopup');
+    if(dmp) dmp.style.display = 'none';
   }
 
   function openLayoutPageEditor(pageId){
@@ -4374,6 +4389,7 @@
     const f = getFeatureByRef(page.featureRef);
     document.getElementById('lyLinkedFeatureName').textContent = f ? ('✓ ' + featureLabel(f)) : '';
     document.getElementById('layoutView').style.display = 'flex';
+    document.body.classList.add('layout-view-active');
     // منيو الخلفية ومقياس الرسم بتوع الخريطة الحية، وكمان نسبة Leaflet، ترتيبهم فوق شاشة لوحة الإخراج (z-index)
     // فبيظهروا طافيين فوقها غلط — بنخفيهم صراحة طول ما إحنا في شاشة اللوحة دي
     // (زرار الطبقات المستدير بالثلاث خطوط فضّلناه ظاهر — المستخدم عايزه يفضل شغال جوه شاشة اللوحة كمان)
@@ -4383,6 +4399,13 @@
     if(sc) sc.style.display = 'none';
     const attr = document.querySelector('.leaflet-control-attribution');
     if(attr) attr.style.display = 'none';
+    // زرار "تنسيق اللاب" وزرار الاتصال بـ Google Drive بتوع الشاشة الرئيسية، ترتيبهم فوق شاشة
+    // لوحة الإخراج (z-index) فبيظهروا طافيين فوقها غلط — بنخفيهم صراحة طول ما إحنا هنا،
+    // خصوصًا إن شاشة اللوحة نفسها فيها زرار "تنسيق اللاب" خاص بيها (lyDesktopModeBtn)
+    const gdb = document.getElementById('globalDesktopModeBtn');
+    if(gdb) gdb.style.display = 'none';
+    const dmp = document.getElementById('driveMenuPopup');
+    if(dmp) dmp.style.display = 'none';
     applyLyDesktopMode(lyDesktopModeOn);
     selectLayoutElement(null, page);
     // بنستنى "نفَس" كامل (frame) قبل ما نقيس المساحة المتاحة ونرسم اللوحة — على الموبايل
@@ -7665,22 +7688,32 @@
   
   const sidebarEl = document.querySelector('.sidebar');
   const mobileQuickMenu = document.getElementById('mobileQuickMenu');
+  // زرار "تنسيق اللاب" العام ثابت فوق الشاشة كلها بـ z-index عالي، وده بيخليه يتراكب فوق
+  // شريط تابات اللوحة الجانبية (الطبقات/الخصائص/إخراج اللوحات/Bookmarks) لما تتفتح بملء
+  // الشاشة في وضع الموبايل — فبنخفيه طول ما اللوحة الجانبية مفتوحة على الموبايل
+  function setGlobalDesktopBtnHiddenForSidebar(hidden){
+    const gdb = document.getElementById('globalDesktopModeBtn');
+    if(gdb) gdb.style.display = hidden ? 'none' : '';
+  }
   document.getElementById('mobileSidebarToggle').addEventListener('click', (e)=>{
     e.stopPropagation();
     if(sidebarEl.classList.contains('open')){
       sidebarEl.classList.remove('open');
       mobileQuickMenu.classList.remove('open');
+      setGlobalDesktopBtnHiddenForSidebar(false);
     } else {
       mobileQuickMenu.classList.toggle('open');
     }
   });
   document.getElementById('sidebarMobileClose').addEventListener('click', ()=>{
     sidebarEl.classList.remove('open');
+    setGlobalDesktopBtnHiddenForSidebar(false);
   });
   function openMobilePanel(panelId){
     activateTab(panelId);
     sidebarEl.classList.add('open');
     mobileQuickMenu.classList.remove('open');
+    setGlobalDesktopBtnHiddenForSidebar(true);
   }
   document.getElementById('mqbLayers').addEventListener('click', ()=> openMobilePanel('layersPanel'));
   document.getElementById('mqbAttrs').addEventListener('click', ()=> openMobilePanel('attrPanel'));
