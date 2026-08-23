@@ -1485,8 +1485,8 @@
               <input type="text" id="nbTbSahm" placeholder="سهم" style="text-align:center;">
             </div>
             <div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding:5px;background:rgba(0,0,0,.15);border-radius:6px;">📐 بتتحسب أوتوماتيك (تفدين) من مساحة المضلع المرتبط نفسه — مفيش داعي تكتبها يدوي.</div>
-            <div style="font-size:10px;color:var(--text-muted);margin-top:6px;padding:6px;background:rgba(0,0,0,.15);border-radius:6px;">🏗️ جدول المبانى بيتحسب أوتوماتيك من المضلعات اللي جوه المضلع المرتبط بالصفحة دي (نفس بيانات "المضلعات الداخلية") — وصف المبنى = قيمة حقل "الاستخدام"، والمساحة بالمتر المربع محسوبة من شكل المضلع نفسه.</div>
-            <textarea id="nbTbCultivations" placeholder="الزراعات — سطر لكل نوع: الوصف, فدان, قيراط, سهم" rows="3" style="margin-top:6px;"></textarea>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:6px;padding:6px;background:rgba(0,0,0,.15);border-radius:6px;">🏗️ جدول المبانى بيتحسب أوتوماتيك بس من المضلعات اللي جوه المضلع المرتبط بالصفحة دي واللي حقل "النوع" بتاعها = "مبانى" (من قايمة معلومات المضلع) — وصف المبنى = قيمة حقل "الاستخدام"، والمساحة بالمتر المربع محسوبة من شكل المضلع نفسه.</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:6px;padding:6px;background:rgba(0,0,0,.15);border-radius:6px;">🌾 جدول الزراعات كمان بيتحسب أوتوماتيك من المضلعات اللي جوه المضلع المرتبط واللي حقل "النوع" بتاعها = "زراعات" — وصف الزراعة = قيمة حقل "الاستخدام"، والمساحة (فدان/قيراط/سهم) محسوبة من شكل المضلع نفسه. لازم المضلع يكون داخل تمامًا حدود المضلع المرتبط بالصفحة عشان يظهر.</div>
             <input type="text" id="nbTbNotes" placeholder="ملاحظات" style="margin-top:6px;">
             <input type="text" id="nbTbSurveyor" placeholder="القائم بأعمال المساحة" style="margin-top:6px;">
             <input type="text" id="nbTbDate" placeholder="التاريخ" style="margin-top:6px;">
@@ -1593,23 +1593,19 @@
         <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:6px;">هتتعمل صفحة مستقلة لكل مضلع في الطبقة دي، بمقياس ومركز يتظبطوا تلقائيًا على كل مضلع، وتترص كلها في ملف PDF واحد.</div>
         <label>الطبقة</label>
         <select id="msLayer"></select>
-        <label>مقاس الورقة</label>
-        <select id="msPaper">
-          <option value="A4">A4</option>
-          <option value="A3">A3</option>
-          <option value="A2">A2</option>
-          <option value="A1">A1</option>
-          <option value="A0">A0</option>
-        </select>
-        <label>اتجاه الورقة</label>
-        <select id="msOrientation">
-          <option value="landscape">أفقي (Landscape)</option>
-          <option value="portrait">رأسي (Portrait)</option>
+        <label>اللاي-آوت (التصميم) اللي هيتطبق على كل صفحة</label>
+        <select id="msLayoutTemplate"></select>
+        <div style="font-size:10px;color:var(--text-muted);margin:-3px 0 6px;">مقاس الورقة واتجاهها هياخدوا نفس اللاي-آوت المختار تلقائيًا، وكل عناصر اللاي-آوت (كرتوش/جداول/نصوص) هتتكرر زي ما هي على كل صفحة.</div>
+        <label>خلفية الخريطة</label>
+        <select id="msBasemap">
+          <option value="sat">قمر صناعي</option>
+          <option value="streets">خريطة عادية</option>
+          <option value="blank">خلفية بيضاء</option>
         </select>
         <label>هامش حوالين كل مضلع</label>
         <input type="range" id="msMargin" min="5" max="60" step="5" value="20">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:6px;"><input type="checkbox" id="msShowTitleBlock" style="width:auto;"> إظهار الكرتوش في كل صفحة (هياخد بيانات المضلع لو موجودة)</label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-top:4px;"><input type="checkbox" id="msShowTables" checked style="width:auto;"> إظهار جداول المساحة/الأطوال/الإحداثيات</label>
+        <label>نسبة خط أسماء الفيرتكس/الجيران/الأضلاع <span id="msLabelScaleReadout" style="color:var(--teal);">100%</span></label>
+        <input type="range" id="msLabelScale" min="50" max="300" step="10" value="100">
         <div id="msProgress" style="font-size:11px;color:var(--teal);margin:8px 0;display:none;"></div>
         <div class="row-btns" style="margin-top:8px;">
           <button class="btn-cancel" id="msCancelBtn" style="flex:1;">إلغاء</button>
@@ -3485,7 +3481,7 @@
       show:false,
       decisionText:'', ownerName:'', district:'', governorate:'',
       landUseType:'', areaFeddan:'', areaQirat:'', areaSahm:'',
-      cultivations:'', notes:'', surveyorName:'',
+      notes:'', surveyorName:'',
       date: new Date().toLocaleDateString('ar-EG')
     };
   }
@@ -3533,20 +3529,24 @@
       areaFeddan = String(fq.feddan); areaQirat = String(fq.qirat); areaSahm = String(fq.sahm);
     }
 
-    // جدول المبانى: نفس آلية "جدول المضلعات الداخلية" — مضلعات جوه المضلع المرتبط بالصفحة
+    // جدول المبانى وجدول الزراعات: نفس آلية "جدول المضلعات الداخلية" — مضلعات جوه المضلع المرتبط بالصفحة تمامًا،
+    // وبيتفلتروا حسب حقل "النوع" بتاعهم (من قايمة معلومات المضلع): "مبانى" لجدول المبانى، و"زراعات" لجدول الزراعات
     const containedPolys = linkedFeature ? getPolygonsContainedIn(linkedFeature) : [];
-    const buildingsRows = containedPolys.map((cf, idx)=>{
+    const buildingPolys = containedPolys.filter(cf => cf.attrs && cf.attrs['النوع'] === 'مبانى');
+    const buildingsRows = buildingPolys.map((cf, idx)=>{
       const usage = (cf.attrs && cf.attrs['الاستخدام']) || '';
       const areaM2 = polygonAreaMeters(cf.coords);
       return `<tr><td>${idx+1}</td><td style="text-align:right;">${esc(usage)}</td><td>${areaM2.toFixed(2)}</td></tr>`;
     }).join('');
-    const buildingsTotal = containedPolys.reduce((sum, cf)=> sum + polygonAreaMeters(cf.coords), 0);
+    const buildingsTotal = buildingPolys.reduce((sum, cf)=> sum + polygonAreaMeters(cf.coords), 0);
 
-    // جدول الزراعات: مدخل يدوي (كل سطر = نوع زراعة)
-    const cult = parseCultivationsText(tb.cultivations);
-    const cultRows = cult.rows.map(r=>
-      `<tr><td>${r.num}</td><td style="text-align:right;">${esc(r.desc)}</td><td>${esc(r.sahm)}</td><td>${esc(r.qirat)}</td><td>${esc(r.feddan)}</td></tr>`
-    ).join('');
+    // جدول الزراعات: أوتوماتيك بالكامل من المضلعات الداخلية اللي حقل "النوع" بتاعها = "زراعات"
+    const cultivationPolys = containedPolys.filter(cf => cf.attrs && cf.attrs['النوع'] === 'زراعات');
+    const cultRows = cultivationPolys.map((cf, idx)=>{
+      const usage = (cf.attrs && cf.attrs['الاستخدام']) || '';
+      const fq = areaToFeddan(polygonAreaMeters(cf.coords));
+      return `<tr><td>${idx+1}</td><td style="text-align:right;">${esc(usage)}</td><td>${fq.sahm}</td><td>${fq.qirat}</td><td>${fq.feddan}</td></tr>`;
+    }).join('');
 
     return `
       <table class="tb-grid">
@@ -3560,16 +3560,16 @@
         <tr><td class="tb-area-h">فدان</td><td class="tb-area-h">قيراط</td><td class="tb-area-h">سهم</td></tr>
         <tr><td></td><td class="tb-area-v">${esc(areaFeddan)||'0'}</td><td class="tb-area-v">${esc(areaQirat)||'0'}</td><td class="tb-area-v">${esc(areaSahm)||'0'}</td></tr>
       </table>
-      ${containedPolys.length ? `
+      ${buildingPolys.length ? `
       <table class="tb-grid">
-        <tr><td class="tb-label" rowspan="${containedPolys.length+2}">المبانى</td>
+        <tr><td class="tb-label" rowspan="${buildingPolys.length+2}">المبانى</td>
             <td class="tb-bh">م</td><td class="tb-bh">وصف المبنى</td><td class="tb-bh">متر٢</td></tr>
         ${buildingsRows}
         <tr><td colspan="2" class="tb-value"><b>إجمالى المبانى (م²)</b></td><td class="tb-value"><b>${buildingsTotal.toFixed(2)}</b></td></tr>
       </table>` : ''}
-      ${cult.rows.length ? `
+      ${cultivationPolys.length ? `
       <table class="tb-grid">
-        <tr><td class="tb-label" rowspan="${cult.rows.length+1}">الزراعات</td>
+        <tr><td class="tb-label" rowspan="${cultivationPolys.length+1}">الزراعات</td>
             <td class="tb-bh">م</td><td class="tb-bh">وصف</td><td class="tb-bh">س</td><td class="tb-bh">ط</td><td class="tb-bh">ف</td></tr>
         ${cultRows}
       </table>` : `
@@ -3718,6 +3718,10 @@
     polyPickCallback = null;
   });
 
+  // بيرجع كل المضلعات اللي جوه مضلع معين (تمامًا أو حتى لو بتشارك جزء من حدودها بالظبط مع حدود المضلع نفسه)
+  // بنفحص كل نقطة في المرشح وناخد بالنا إن النقط اللي على حدود المضلع الحاوي (مش بس جوه تمامًا) تتحسب "جوه" برضه —
+  // ده مهم جدًا لحالة شائعة: مضلع (أو أكتر) بيمثل زراعة كاملة، وحدوده بتتطابق حرفيًا مع حدود القطعة المرتبطة نفسها.
+  // (turf.booleanContains بيفشل في الحالة دي أحيانًا لأنه بيتعامل مع تطابق الحدود كحالة حدّية)
   function getPolygonsContainedIn(selectedFeature){
     const selTurf = toTurfPolygon(selectedFeature.coords);
     if(!selTurf) return [];
@@ -3726,9 +3730,15 @@
       layer.features.forEach(f=>{
         if(f.id === selectedFeature.id) return;
         if(f.type !== 'polygon' && f.type !== 'rectangle') return;
-        const cand = toTurfPolygon(f.coords);
-        if(!cand) return;
-        try{ if(turf.booleanContains(selTurf, cand)) results.push(f); } catch(e){}
+        if(!Array.isArray(f.coords) || f.coords.length < 3) return;
+        let allInside = true;
+        for(const c of f.coords){
+          const pt = turf.point([c[1], c[0]]);
+          let inside = false;
+          try{ inside = turf.booleanPointInPolygon(pt, selTurf, {ignoreBoundary:false}); }catch(e){ inside = false; }
+          if(!inside){ allInside = false; break; }
+        }
+        if(allInside) results.push(f);
       });
     });
     return results;
@@ -4259,7 +4269,6 @@
       document.getElementById('nbTbFeddan').value = page.titleBlock.areaFeddan || '';
       document.getElementById('nbTbQirat').value = page.titleBlock.areaQirat || '';
       document.getElementById('nbTbSahm').value = page.titleBlock.areaSahm || '';
-      document.getElementById('nbTbCultivations').value = page.titleBlock.cultivations || '';
       document.getElementById('nbTbNotes').value = page.titleBlock.notes || '';
       document.getElementById('nbTbSurveyor').value = page.titleBlock.surveyorName || '';
       document.getElementById('nbTbDate').value = page.titleBlock.date || '';
@@ -4576,14 +4585,13 @@
     page.titleBlock.areaFeddan = document.getElementById('nbTbFeddan').value;
     page.titleBlock.areaQirat = document.getElementById('nbTbQirat').value;
     page.titleBlock.areaSahm = document.getElementById('nbTbSahm').value;
-    page.titleBlock.cultivations = document.getElementById('nbTbCultivations').value;
     page.titleBlock.notes = document.getElementById('nbTbNotes').value;
     page.titleBlock.surveyorName = document.getElementById('nbTbSurveyor').value;
     page.titleBlock.date = document.getElementById('nbTbDate').value;
     renderLayoutCanvas(page);
     scheduleSave();
   }
-  ['nbTbDecision','nbTbOwner','nbTbDistrict','nbTbGovernorate','nbTbLandUse','nbTbFeddan','nbTbQirat','nbTbSahm','nbTbCultivations','nbTbNotes','nbTbSurveyor','nbTbDate'].forEach(id=>{
+  ['nbTbDecision','nbTbOwner','nbTbDistrict','nbTbGovernorate','nbTbLandUse','nbTbFeddan','nbTbQirat','nbTbSahm','nbTbNotes','nbTbSurveyor','nbTbDate'].forEach(id=>{
     document.getElementById(id).addEventListener('input', applyTitleBlockFieldsToPage);
   });
 
@@ -5131,10 +5139,10 @@
         L.marker([midLat, midLng], {icon, interactive:false, keyboard:false}).addTo(group);
       }
     }
-    // ترقيم المبانى (م) — نفس ترقيم جدول المبانى جوه الكرتوش، بيتحط في منتصف كل مبنى داخلي
+    // ترقيم المبانى (م) — نفس ترقيم جدول المبانى جوه الكرتوش بالظبط (بس المضلعات اللي نوعها "مبانى")، بيتحط في منتصف كل مبنى داخلي
     const hasTitleBlock = page.elements.some(el=>el.type==='titleBlock');
     if(hasTitleBlock){
-      const containedPolys = getPolygonsContainedIn(f);
+      const containedPolys = getPolygonsContainedIn(f).filter(cf => cf.attrs && cf.attrs['النوع'] === 'مبانى');
       containedPolys.forEach((cf, idx)=>{
         const latSum = cf.coords.reduce((s,c)=>s+c[0],0), lngSum = cf.coords.reduce((s,c)=>s+c[1],0);
         const cLat = latSum/cf.coords.length, cLng = lngSum/cf.coords.length;
@@ -5290,16 +5298,29 @@
 
   /* ===== سلسلة صفحات تلقائية (Map Series) — صفحة مستقلة لكل مضلع في طبقة مختارة، مرصوصة في ملف PDF واحد ===== */
   document.getElementById('openMapSeriesBtn').addEventListener('click', ()=>{
+    if(!state.layoutPages.length){
+      alert('لازم تصمم لاي-آوت واحد على الأقل الأول من تبويب "🖼️ إخراج اللوحات" (وتحطله كرتوش/جداول/عناصر زي ما عايز) — عشان سلسلة الصفحات التلقائية تستخدمه كنسخة على كل صفحة.');
+      return;
+    }
     const sel = document.getElementById('msLayer');
     sel.innerHTML = '';
     state.layers.forEach(l=>{
       const opt = document.createElement('option'); opt.value = l.id; opt.textContent = l.name + ' (' + l.features.filter(f=>f.type==='polygon').length + ' مضلع)';
       sel.appendChild(opt);
     });
+    const tplSel = document.getElementById('msLayoutTemplate');
+    tplSel.innerHTML = '';
+    state.layoutPages.forEach(p=>{
+      const opt = document.createElement('option'); opt.value = p.id; opt.textContent = p.name + ' — ' + p.paper + ' ' + (p.orientation==='landscape'?'أفقي':'رأسي');
+      tplSel.appendChild(opt);
+    });
     document.getElementById('mapSeriesHud').style.display = 'block';
   });
   document.getElementById('msCancelBtn').addEventListener('click', ()=>{
     document.getElementById('mapSeriesHud').style.display = 'none';
+  });
+  document.getElementById('msLabelScale').addEventListener('input', (e)=>{
+    document.getElementById('msLabelScaleReadout').textContent = e.target.value + '%';
   });
   document.getElementById('msStartBtn').addEventListener('click', ()=> startMapSeries());
 
@@ -5308,13 +5329,17 @@
     if(!layer){ alert('اختار طبقة.'); return; }
     const polygons = layer.features.filter(f=>f.type==='polygon');
     if(!polygons.length){ alert('الطبقة دي مفيهاش مضلعات.'); return; }
+    const templatePage = state.layoutPages.find(p=>p.id===document.getElementById('msLayoutTemplate').value);
+    if(!templatePage){ alert('اختار اللاي-آوت اللي هيتطبق على كل صفحة.'); return; }
+    if(!templatePage.elements.some(el=>el.type==='mapFrame')){ alert('اللاي-آوت المختار مفيهوش إطار خريطة (Map Frame) — ضيفله واحد من تبويب إخراج اللوحات الأول.'); return; }
     if(typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined'){ alert('مكتبات التصدير لسه بتتحمل — استنى شوية وحاول تاني.'); return; }
 
-    const paper = document.getElementById('msPaper').value;
-    const orientation = document.getElementById('msOrientation').value;
+    // مقاس الورقة واتجاهها بياخدوا نفس اللاي-آوت المختار تلقائيًا
+    const paper = templatePage.paper;
+    const orientation = templatePage.orientation;
     const marginPct = (parseFloat(document.getElementById('msMargin').value) || 20) / 100;
-    const showTB = document.getElementById('msShowTitleBlock').checked;
-    const showTables = document.getElementById('msShowTables').checked;
+    const basemapMode = document.getElementById('msBasemap').value;
+    const labelScale = (parseFloat(document.getElementById('msLabelScale').value) || 100) / 100;
 
     const progressEl = document.getElementById('msProgress');
     progressEl.style.display = 'block';
@@ -5323,6 +5348,9 @@
     const { jsPDF } = window.jspdf;
     let pdf = null;
     const savedCenter = map.getCenter(), savedZoom = map.getZoom();
+    const savedBasemap = currentBasemapMode;
+    const savedLabelScale = mfLabelFontScale;
+    setBasemap(basemapMode);
     const dims = PAPER_SIZES_MM[paper] || PAPER_SIZES_MM.A4;
     const [longMM, shortMM] = dims;
     const wMM = orientation === 'landscape' ? longMM : shortMM;
@@ -5331,22 +5359,18 @@
     for(let i=0;i<polygons.length;i++){
       const f = polygons[i];
       progressEl.textContent = `⏳ بيجهز صفحة ${i+1} من ${polygons.length} — ${featureLabel(f)}...`;
-      const page = newLayoutPageDefaults();
+
+      // نسخة كاملة من اللاي-آوت المختار (بكل عناصره: كرتوش/جداول/نصوص/أشكال) بـ IDs جديدة لكل عنصر
+      // عشان ميتصادمش مع الأصلي أو مع باقي صفحات السلسلة
+      const page = JSON.parse(JSON.stringify(templatePage));
+      page.id = uid();
       page.name = featureLabel(f) || ('مضلع ' + (i+1));
-      page.paper = paper; page.orientation = orientation;
       page.featureRef = {layerId: layer.id, featureId: f.id};
+      page.elements = (page.elements||[]).map(el=>{ el.id = uid(); return el; });
+      const mapFrame = page.elements.find(el=>el.type==='mapFrame');
 
-      const mapFrame = addLayoutElement(page, 'mapFrame', {xPct:3, yPct:3, wPct: showTB?65:94, hPct:94});
-      if(showTB) addLayoutElement(page, 'titleBlock', {xPct:70, yPct:3, wPct:27, hPct:94});
-      if(showTables){
-        addLayoutElement(page, 'table', {tableKey:'area', xPct:5, yPct:5, wPct:25, hPct:12});
-        addLayoutElement(page, 'table', {tableKey:'lengths', xPct:5, yPct:20, wPct:25, hPct:16});
-        addLayoutElement(page, 'table', {tableKey:'vertices', xPct:5, yPct:39, wPct:28, hPct:16});
-      }
-      addLayoutElement(page, 'northArrow', {xPct:3, yPct:3, wPct:6, hPct:8});
-      addLayoutElement(page, 'polygonTitle', {xPct:35, yPct:2, wPct:30, hPct:5});
-
-      if(showTB){
+      // لو اللاي-آوت فيه كرتوش، بيتملى تلقائي ببيانات المضلع الحالي (الاسم والمساحة)
+      if(page.elements.some(el=>el.type==='titleBlock')){
         const a = f.attrs || {};
         page.titleBlock.ownerName = a['صاحب الشأن'] || a['الاسم'] || a['اسم'] || '';
         const sqm = polygonAreaMeters(f.coords);
@@ -5360,6 +5384,10 @@
       const sz = map.getSize();
       map.fitBounds(b, {paddingTopLeft:[sz.x*marginPct, sz.y*marginPct], paddingBottomRight:[sz.x*marginPct, sz.y*marginPct]});
       await new Promise(r=>setTimeout(r, 200));
+
+      mfLabelFontScale = labelScale;
+      document.documentElement.style.setProperty('--mf-label-scale', mfLabelFontScale);
+
       let dataURL, scaleInfo;
       try{
         const res = await new Promise((resolve,reject)=>{
@@ -5390,6 +5418,9 @@
     }
 
     map.setView(savedCenter, savedZoom, {animate:false});
+    setBasemap(savedBasemap);
+    mfLabelFontScale = savedLabelScale;
+    document.documentElement.style.setProperty('--mf-label-scale', mfLabelFontScale);
     document.getElementById('msStartBtn').disabled = false;
     renderLayoutPageList();
     scheduleSave();
