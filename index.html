@@ -3725,6 +3725,12 @@
   function getPolygonsContainedIn(selectedFeature){
     const selTurf = toTurfPolygon(selectedFeature.coords);
     if(!selTurf) return [];
+    // بنعمل نسخة "منفوخة" بهامش دقة بسيط جدًا (نص متر) من حدود القطعة المرتبطة، عشان نمتص أي فروق
+    // عشرية دقيقة جدًا ممكن تنتج لو المضلعات دي طلعت من تقسيم/قطع القطعة الأصلية لأكتر من مضلع
+    // (زي زراعات مقسّمة) — فبيبقى فيه احتمال إن نقطة كانت المفروض بالظبط على حد القطعة تبقى
+    // بره بمقدار ميكروسكوبي (أجزاء من السنتيمتر) بسبب دقة عمليات القطع الهندسية
+    let tolTurf = selTurf;
+    try{ tolTurf = turf.buffer(selTurf, 0.0005, {units:'kilometers'}) || selTurf; }catch(e){}
     const results = [];
     state.layers.forEach(layer=>{
       layer.features.forEach(f=>{
@@ -3735,7 +3741,7 @@
         for(const c of f.coords){
           const pt = turf.point([c[1], c[0]]);
           let inside = false;
-          try{ inside = turf.booleanPointInPolygon(pt, selTurf, {ignoreBoundary:false}); }catch(e){ inside = false; }
+          try{ inside = turf.booleanPointInPolygon(pt, tolTurf, {ignoreBoundary:false}); }catch(e){ inside = false; }
           if(!inside){ allInside = false; break; }
         }
         if(allInside) results.push(f);
