@@ -9638,12 +9638,14 @@
 
   function angleFromPoints(p1, p2){
     // زاوية اتجاه القطع (بنفس اصطلاح angleDeg المستخدم في turf.transformRotate)
-    // بتتحسب من الاتجاه الحقيقي على الأرض بالأمتار، مش من فروق درجات lat/lng مباشرة،
-    // لأن درجة خط الطول الواحدة بتمثّل مسافة أقصر كل ما ابتعدنا عن خط الاستواء (بمقدار cos(خط العرض))
-    const refLat = (p1.lat + p2.lat) / 2;
-    const a = metricXY(refLat, p1.lat, p1.lng);
-    const b = metricXY(refLat, p2.lat, p2.lng);
-    const theta = toDeg(Math.atan2(b.y - a.y, b.x - a.x)); // زاوية رياضية قياسية من الشرق (عكس عقارب الساعة)
+    // بتتحسب بإسقاط UTM بالظبط — نفس الإسقاط اللي بيتم فيه القطع الفعلي (ringToUTM/rotateXY) —
+    // مش من إسقاط تقريبي منفصل (كان بيدي زاوية مختلفة شوية عن زاوية الضلع الحقيقية في مساحة UTM،
+    // فكانت خطوط القطع بتطلع مش موازية/عمودية للضلع بالظبط بعد التقسيم)
+    const refLng = (p1.lng + p2.lng) / 2;
+    const zone = utmZoneForLng(refLng);
+    const a = latLngToUTM(p1.lat, p1.lng, zone);
+    const b = latLngToUTM(p2.lat, p2.lng, zone);
+    const theta = toDeg(Math.atan2(b.northing - a.northing, b.easting - a.easting)); // زاوية رياضية قياسية من الشرق (عكس عقارب الساعة)
     // ملحوظة: لازم نستخدم theta زي ما هي (من غير عكس إشارة) عشان تتوافق مع نفس الاصطلاح
     // اللي بتستخدمه rotateXY في دوال التقسيم (CCW من الشرق) — عكس الإشارة هنا كان بيدّي
     // زاوية القطع معكوسة (منعكسة حوالين محور شرق-غرب) في كل الحالات ما عدا 0° و90° بالظبط
@@ -9652,15 +9654,18 @@
   }
 
   function nearestEdgeAngle(coords, latlng){
-    // يبحث عن أقرب ضلع من ضلوع المضلع إلى النقطة (بالمسافة الحقيقية بالأمتار)، ويرجّع زاويته
+    // يبحث عن أقرب ضلع من ضلوع المضلع إلى النقطة، ويرجّع زاويته — كل الحسابات في نفس إسقاط UTM
+    // المستخدم فعليًا في القطع، عشان "أقرب ضلع" والزاوية الراجعة يكونوا متسقين تمامًا مع نتيجة التقسيم
     let bestDist = Infinity, bestAngle = 0;
-    const refLat = latlng.lat;
-    const p = metricXY(refLat, latlng.lat, latlng.lng);
+    const zone = utmZoneForLng(latlng.lng);
+    const pu = latLngToUTM(latlng.lat, latlng.lng, zone);
+    const p = { x: pu.easting, y: pu.northing };
     for(let i = 0; i < coords.length; i++){
       const aLL = { lat: coords[i][0], lng: coords[i][1] };
       const bLL = { lat: coords[(i+1) % coords.length][0], lng: coords[(i+1) % coords.length][1] };
-      const a = metricXY(refLat, aLL.lat, aLL.lng);
-      const b = metricXY(refLat, bLL.lat, bLL.lng);
+      const au = latLngToUTM(aLL.lat, aLL.lng, zone);
+      const bu = latLngToUTM(bLL.lat, bLL.lng, zone);
+      const a = { x: au.easting, y: au.northing }, b = { x: bu.easting, y: bu.northing };
       const dx = b.x - a.x, dy = b.y - a.y;
       const lenSq = dx*dx + dy*dy;
       let t = lenSq === 0 ? 0 : ((p.x - a.x)*dx + (p.y - a.y)*dy) / lenSq;
