@@ -1917,6 +1917,7 @@
         <select id="divMode">
           <option value="count">عدد الأجزاء</option>
           <option value="area">مساحة محددة لكل قطعة</option>
+          <option value="length">طول ثابت لكل قطعة (بدون مساحة)</option>
           <option value="frontage">واجهة ومساحة محددة</option>
         </select>
         <div id="divCountRow">
@@ -1952,6 +1953,15 @@
           </div>
           <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;font-weight:400;">
             <input type="checkbox" id="divAreaReverse" style="width:14px;height:14px;accent-color:#2a9d5c;cursor:pointer;">
+            <span>ابدأ من الجهة المقابلة (تجعل القطعة المتبقية في البداية بدل النهاية)</span>
+          </label>
+        </div>
+        <div id="divLengthRow" style="display:none;">
+          <label>طول كل قطعة (م)</label>
+          <input type="number" id="divLengthValue" value="10" min="0.01" step="0.01">
+          <div style="font-size:10px;color:var(--text-muted);margin:2px 0 8px;">هيتم القطع بالطول ده بالظبط في اتجاه التقسيم المختار تحت، من غير أي قيد على المساحة — القطعة الأخيرة بتاخد الباقي زي ما هو.</div>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:4px;cursor:pointer;font-weight:400;">
+            <input type="checkbox" id="divLengthReverse" style="width:14px;height:14px;accent-color:#2a9d5c;cursor:pointer;">
             <span>ابدأ من الجهة المقابلة (تجعل القطعة المتبقية في البداية بدل النهاية)</span>
           </label>
         </div>
@@ -9244,12 +9254,14 @@
   });
   document.getElementById('divMode').addEventListener('change', function(){
     const isArea = this.value==='area';
+    const isLength = this.value==='length';
     const isFrontage = this.value==='frontage';
-    document.getElementById('divCountRow').style.display = (!isArea && !isFrontage) ? 'block' : 'none';
+    document.getElementById('divCountRow').style.display = (!isArea && !isLength && !isFrontage) ? 'block' : 'none';
     document.getElementById('divAreaRow').style.display = isArea ? 'block' : 'none';
+    document.getElementById('divLengthRow').style.display = isLength ? 'block' : 'none';
     document.getElementById('divFrontageRow').style.display = isFrontage ? 'block' : 'none';
-    document.getElementById('divMaxPiecesRow').style.display = (isArea || isFrontage) ? 'block' : 'none';
-    document.getElementById('divEqualAreaRow').style.display = (!isArea && !isFrontage) ? 'flex' : 'none';
+    document.getElementById('divMaxPiecesRow').style.display = (isArea || isLength || isFrontage) ? 'block' : 'none';
+    document.getElementById('divEqualAreaRow').style.display = (!isArea && !isLength && !isFrontage) ? 'flex' : 'none';
     // في وضع الواجهة، اتجاه التقسيم بيتحدد أوتوماتيك من الضلع المختار — مش محتاجين قايمة "اتجاه التقسيم" العادية
     const dirLabel = Array.from(document.querySelectorAll('#divideHud > label')).find(l=>l.textContent.trim()==='اتجاه التقسيم');
     if(dirLabel){ dirLabel.style.display = isFrontage ? 'none' : 'block'; }
@@ -9537,6 +9549,18 @@
       // نستخدم setTimeout لإتاحة الفرصة للـ UI أن يُحدَّث
       setTimeout(async ()=>{
         await dividePolygonFeatureByArea(dividePendingLayerId, dividePendingFeatureId, areaPerPart, angleDeg, reverseStart, maxPieces);
+        dividePendingLayerId=null; dividePendingFeatureId=null;
+      }, 30);
+      return;
+    }
+    if(divMode==='length'){
+      const lengthPerPart = parseFloat(document.getElementById('divLengthValue').value)||0;
+      if(lengthPerPart <= 0){ alert('اكتب طول قطعة صحيح أكبر من صفر'); document.getElementById('divideHud').style.display='block'; return; }
+      const reverseStart = document.getElementById('divLengthReverse').checked;
+      const maxPiecesRaw = parseInt(document.getElementById('divMaxPieces').value);
+      const maxPieces = (maxPiecesRaw && maxPiecesRaw > 0) ? maxPiecesRaw : null;
+      setTimeout(async ()=>{
+        await dividePolygonFeatureByLength(dividePendingLayerId, dividePendingFeatureId, lengthPerPart, angleDeg, reverseStart, maxPieces);
         dividePendingLayerId=null; dividePendingFeatureId=null;
       }, 30);
       return;
@@ -10717,6 +10741,67 @@
     selection = null;
     renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
     document.getElementById('stHint').textContent = `✓ تم تقسيم المضلع إلى ${newFeatures.length} جزء بمساحة ${areaPerPart} م² لكل قطعة (والقطعة الأخيرة قد تحمل الباقي)`;
+  }
+
+  /* ---------- تقسيم بطول ثابت لكل قطعة من غير أي قيد على المساحة (القطعة بتاخد العمق الكامل للمضلع) ---------- */
+  async function dividePolygonFeatureByLength(layerId, featureId, lengthPerPart, angleDeg, reverseStart, maxPieces){
+    const layer = getLayer(layerId);
+    if(!layer) return;
+    const f = getFeature(layerId, featureId);
+    if(!f) return;
+    if(!lengthPerPart || lengthPerPart <= 0){ alert('يجب إدخال طول صحيح أكبر من صفر'); return; }
+
+    const { ring, toLL } = ringToUTM(f.coords);
+    const totalArea = ringAreaXY(ring);
+    if(totalArea <= 0){ alert('المضلع غير صالح للتقسيم'); return; }
+
+    const centroid = [ring.reduce((s,p)=>s+p[0],0)/ring.length, ring.reduce((s,p)=>s+p[1],0)/ring.length];
+    let rotatedRing = ring.map(p=>rotateXY(p, centroid, -angleDeg));
+    // "ابدأ من الجهة المقابلة" — بنعكس الشكل نفسه (y -> -y) بدل ما نحسب من الأسفل ونعكس المواضع لاحقًا،
+    // فنحصل على نفس القطع الدقيقة بس من الاتجاه التاني، وبعدين نرجعها زي ما كانت
+    if(reverseStart) rotatedRing = rotatedRing.map(p=>[p[0], -p[1]]);
+    const ys = rotatedRing.map(p=>p[1]);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const totalH = maxY - minY;
+    if(lengthPerPart >= totalH){
+      alert('الطول المحدد أكبر من (أو يساوي) امتداد المضلع في اتجاه التقسيم المختار — لا يمكن التقسيم بهذه القيمة');
+      return;
+    }
+
+    // عدد القطع الطبيعي: كل قطعة (عدا الأخيرة) طولها بالظبط القيمة المطلوبة، والباقي (لو فيه) بيبقى قطعة أخيرة مستقلة
+    let nParts = Math.ceil((totalH / lengthPerPart) - 1e-9);
+    if(nParts < 1) nParts = 1;
+    // لو المستخدم حدد حد أقصى لعدد القطع، بنقطع بالظبط العدد ده بالطول المطلوب، والباقي يتحول لقطعة أخيرة واحدة
+    if(maxPieces && maxPieces > 0 && maxPieces < nParts) nParts = maxPieces + 1;
+
+    let cutYs = [minY];
+    for(let i = 1; i < nParts; i++) cutYs.push(minY + i*lengthPerPart);
+    cutYs.push(maxY);
+
+    const newFeatures = [];
+    for(let i = 0; i < nParts; i++){
+      let piece = clipBelowY(rotatedRing, cutYs[i+1]);
+      piece = clipAboveY(piece, cutYs[i]);
+      if(piece.length < 3) continue;
+      if(reverseStart) piece = piece.map(p=>[p[0], -p[1]]);
+      const pieceReal = piece.map(p=>rotateXY(p, centroid, angleDeg));
+      const nf = ringToLatLngFeature(pieceReal, toLL, f);
+      if(nf) newFeatures.push(nf);
+    }
+
+    if(newFeatures.length === 0){
+      alert('لم ينجح التقسيم — جرب طول مختلف أو اتجاه مختلف');
+      return;
+    }
+
+    pushStateToUndo();
+    const fIdx = layer.features.findIndex(x => x.id === featureId);
+    if(fIdx >= 0) layer.features.splice(fIdx, 1, ...newFeatures);
+    else layer.features.push(...newFeatures);
+
+    selection = null;
+    renderLayerList(); renderFeatures(); renderAttrPanel(); scheduleSave();
+    document.getElementById('stHint').textContent = `✓ تم تقسيم المضلع إلى ${newFeatures.length} جزء بطول ${lengthPerPart} م لكل قطعة (والقطعة الأخيرة قد تحمل الباقي)`;
   }
 
   /* ---------- تقسيم بواجهة ثابتة + مساحة محددة لكل قطعة (كل قطعة = عرض واجهة معيّن × عمق يحقق المساحة المطلوبة) ---------- */
