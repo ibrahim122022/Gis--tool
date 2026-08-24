@@ -1526,6 +1526,22 @@
             <button class="btn-cancel" id="lyTableResetStyleBtn" style="width:100%;margin-top:8px;font-size:10.5px;padding:5px;">↺ رجّع حجم الخط والخلية للوضع التلقائي</button>
             <div style="font-size:10px;color:var(--text-muted);margin-top:6px;">عرض وارتفاع الجدول ممكن كمان تتحكم فيهم بالسحب من زاوية الجدول نفسه جوه اللوحة.</div>
           </div>
+          <div id="lyPropsAttrsTable" style="display:none;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">
+            <label style="font-size:11px;display:block;margin-bottom:4px;">المضلعات اللي هتظهر في الجدول</label>
+            <select id="lyAttrsModeSelect" style="width:100%;margin-bottom:10px;">
+              <option value="contained">داخل المضلع المرتبط بالكامل فقط</option>
+              <option value="intersect">داخل أو متداخل (متقاطع) مع المضلع المرتبط</option>
+            </select>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+              <label style="font-size:11px;">الحقول اللي هتظهر</label>
+              <div style="display:flex;gap:4px;">
+                <button class="icon-btn" id="lyAttrsFieldsAllBtn" style="font-size:9.5px;padding:2px 6px;border:1px solid var(--border);">الكل</button>
+                <button class="icon-btn" id="lyAttrsFieldsNoneBtn" style="font-size:9.5px;padding:2px 6px;border:1px solid var(--border);">مفيش</button>
+              </div>
+            </div>
+            <div id="lyAttrsFieldsList" style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:6px;font-size:11px;"></div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">سيبها كلها متحددة عشان كل الحقول المتاحة تظهر زي الوضع الافتراضي.</div>
+          </div>
           <div id="lyPropsText" style="display:none;">
             <textarea id="lyTextContent" placeholder="اكتب النص هنا" rows="3"></textarea>
             <div style="display:flex;gap:4px;margin-top:6px;">
@@ -3080,9 +3096,14 @@
   }
   
   function destPoint(lat,lng,dEast,dNorth){
-    const dLat = dNorth/111320;
-    const dLng = dEast/(111320*Math.cos(toRad(lat)));
-    return [lat+dLat, lng+dLng];
+    // بنستخدم نفس إسقاط UTM المستخدم في حساب الأطوال (haversine) بالظبط، بدل التقريب المسطّح القديم
+    // (اللي كان بيفترض إن كل درجة = 111320 متر بالظبط) — التقريب القديم كان بيدي فرق حوالي 0.4-0.5%
+    // حسب خط العرض، يعني على ضلع 20 متر كان بيطلع ناقص حوالي 8-10 سم عن الطول المطلوب فعليًا
+    const zone = utmZoneForLng(lng);
+    const hemisphere = lat >= 0 ? 'N' : 'S';
+    const p = latLngToUTM(lat, lng, zone);
+    const res = utmToLatLng(zone, hemisphere, p.easting + dEast, p.northing + dNorth);
+    return [res.lat, res.lng];
   }
 
   // تحويل إحداثي عشري (Decimal Degrees) إلى نص درجات/دقائق/ثواني (DMS)
@@ -3750,6 +3771,32 @@
     return results;
   }
 
+  // بيرجع المضلعات المرتبطة بمضلع معين حسب الوضع المطلوب:
+  // 'contained' = زي getPolygonsContainedIn بالظبط (داخل بالكامل فقط) — ده الوضع الافتراضي (القديم) عشان أي جدول
+  // متحفوظ من قبل يفضل شغال زي ما هو من غير أي تغيير.
+  // 'intersect' = أي مضلع بيتقاطع أو بيتلامس مع المضلع المرتبط (سواء داخل بالكامل أو متداخل جزئيًا معاه) — وضع جديد اختياري.
+  function getPolygonsRelatedTo(selectedFeature, mode){
+    if(mode !== 'intersect') return getPolygonsContainedIn(selectedFeature);
+    const selTurf = toTurfPolygon(selectedFeature.coords);
+    if(!selTurf) return [];
+    let tolTurf = selTurf;
+    try{ tolTurf = turf.buffer(selTurf, 0.0005, {units:'kilometers'}) || selTurf; }catch(e){}
+    const results = [];
+    state.layers.forEach(layer=>{
+      layer.features.forEach(f=>{
+        if(f.id === selectedFeature.id) return;
+        if(f.type !== 'polygon' && f.type !== 'rectangle') return;
+        if(!Array.isArray(f.coords) || f.coords.length < 3) return;
+        const fTurf = toTurfPolygon(f.coords);
+        if(!fTurf) return;
+        let related = false;
+        try{ related = turf.booleanIntersects(fTurf, tolTurf); }catch(e){ related = false; }
+        if(related) results.push(f);
+      });
+    });
+    return results;
+  }
+
   // ===== حساب لوحات هيئة المساحة المصرية (تكشيف الخرائط) =====
   // النظام مبني على تكشيف الخريطة الدولية (IMW) المستخدم فعليًا في تسمية لوحات مصر 1:1,000,000 و1:250,000
   // (تم التحقق من الصيغة بأمثلة فعلية: NH35-1 إلخ). أما 1:100,000/50,000/25,000 فتسمياتها الرسمية عند
@@ -3914,14 +3961,20 @@
         (تقريبي) = تقسيم هندسي تقريبي فقط لتحديد الموقع النسبي — لسه محتاجين فهرس 25/50 ألف رسمي للدقة الكاملة.</div>`;
   }
 
-  function buildAttrsTableHTML(f){
-    const contained = getPolygonsContainedIn(f);
+  function buildAttrsTableHTML(f, el){
+    // الوضع والحقول المختارة اختياريان تمامًا — لو مش متحددين (جدول قديم متحفوظ من قبل) بيشتغل بالظبط زي ما كان
+    const mode = (el && el.attrsMode) || 'contained';
+    const fieldsFilter = (el && Array.isArray(el.attrsFields) && el.attrsFields.length) ? el.attrsFields : null;
+    const contained = getPolygonsRelatedTo(f, mode);
     if(!contained.length){
-      return '<div style="padding:5px;color:#888;font-size:10px;">لا يوجد مضلعات تقع بالكامل داخل المضلع المحدد</div>';
+      return mode === 'intersect'
+        ? '<div style="padding:5px;color:#888;font-size:10px;">لا يوجد مضلعات داخل أو متداخلة مع المضلع المحدد</div>'
+        : '<div style="padding:5px;color:#888;font-size:10px;">لا يوجد مضلعات تقع بالكامل داخل المضلع المحدد</div>';
     }
     let html = '';
     contained.forEach((cf, idx) => {
-      const keys = Object.keys(cf.attrs || {}).filter(k => cf.attrs[k] !== '' && cf.attrs[k] != null);
+      let keys = Object.keys(cf.attrs || {}).filter(k => cf.attrs[k] !== '' && cf.attrs[k] != null);
+      if(fieldsFilter) keys = keys.filter(k => fieldsFilter.includes(k));
       const label = (cf.attrs && (cf.attrs['الاسم'] || cf.attrs['اسم'] || cf.attrs['رقم القطعة'])) || ('مضلع ' + (idx+1));
       const areaM2 = polygonAreaMeters(cf.coords);
       html += `<div style="font-weight:700;margin-top:${idx>0?'7px':'0'};font-size:10px;color:#6B7F72;border-top:${idx>0?'1px solid #ddd':'none'};padding-top:${idx>0?'4px':'0'};">${escapeHtml(String(label))}</div>`;
@@ -3934,6 +3987,35 @@
       }
     });
     return html;
+  }
+
+  // بيملأ قايمة الحقول القابلة للتحديد في خصائص "جدول المضلعات الداخلية/المتداخلة" —
+  // بتتجمع من كل الحقول الموجودة فعليًا في المضلعات المرشحة حسب الوضع (داخل فقط / داخل أو متداخل) المختار حاليًا
+  function populateAttrsFieldsList(page, el){
+    const container = document.getElementById('lyAttrsFieldsList');
+    if(!container) return;
+    const f = getFeatureByRef(page.featureRef);
+    const mode = el.attrsMode || 'contained';
+    const polys = f ? getPolygonsRelatedTo(f, mode) : [];
+    const fieldSet = [];
+    polys.forEach(cf=>{
+      Object.keys(cf.attrs || {}).forEach(k=>{
+        if(cf.attrs[k] !== '' && cf.attrs[k] != null && !fieldSet.includes(k)) fieldSet.push(k);
+      });
+    });
+    if(!fieldSet.length){
+      container.innerHTML = '<div style="color:var(--text-muted);">لا يوجد حقول متاحة حاليًا</div>';
+      return;
+    }
+    // null/غير محدد = كل الحقول (الوضع الافتراضي القديم) — أي حقل متسجل في attrsFields فقط هو اللي بيتحدد
+    const selected = Array.isArray(el.attrsFields) ? el.attrsFields : null;
+    container.innerHTML = fieldSet.map(k=>{
+      const checked = selected ? selected.includes(k) : true;
+      return `<label style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer;">
+        <input type="checkbox" class="ly-attrs-field-cb" value="${escapeHtml(k)}" ${checked?'checked':''}>
+        <span>${escapeHtml(k)}</span>
+      </label>`;
+    }).join('');
   }
 
   /* ===== معمارية الإخراج: لقطة من منظور الخريطة الحالي + "مسرح" ثابت المقاس بالمليمتر (زي Map Frame في ArcGIS Pro) — يُستخدم للمعاينة الحية وللتصدير النهائي بنفس الكود ===== */
@@ -4071,7 +4153,7 @@
           box.innerHTML = `<div class="ly-table-head">${titles.surveySheets}</div><div class="ly-table-body">${html}</div>`;
         });
       } else {
-        const html = f ? (el.tableKey==='area'?buildAreaTableHTML(f):el.tableKey==='lengths'?buildLengthsTableHTML(f):el.tableKey==='vertices'?buildVerticesTableHTML(f, el.displayCrs):buildAttrsTableHTML(f)) : '<div style="padding:4px;color:#999;">مفيش مضلع مرتبط بيها</div>';
+        const html = f ? (el.tableKey==='area'?buildAreaTableHTML(f):el.tableKey==='lengths'?buildLengthsTableHTML(f):el.tableKey==='vertices'?buildVerticesTableHTML(f, el.displayCrs):buildAttrsTableHTML(f, el)) : '<div style="padding:4px;color:#999;">مفيش مضلع مرتبط بيها</div>';
         box.innerHTML = `<div class="ly-table-head">${titles[el.tableKey]||''}</div><div class="ly-table-body">${html}</div>`;
       }
     } else if(el.type === 'northArrow'){
@@ -4223,6 +4305,8 @@
     const isVerticesTable = el.type==='table' && el.tableKey==='vertices';
     document.getElementById('lyPropsVerticesTable').style.display = isVerticesTable ? 'block' : 'none';
     document.getElementById('lyPropsTable').style.display = el.type==='table' ? 'block' : 'none';
+    const isAttrsTable = el.type==='table' && el.tableKey==='attrs';
+    document.getElementById('lyPropsAttrsTable').style.display = isAttrsTable ? 'block' : 'none';
     document.getElementById('lyPropsGeneric').style.display = (el.type!=='mapFrame' && el.type!=='titleBlock' && el.type!=='text' && el.type!=='image' && el.type!=='shapeRect' && el.type!=='shapeArrow' && el.type!=='table') ? 'block' : 'none';
     const titles = {mapFrame:'🗺️ إطار خريطة', titleBlock:'🏷️ الكرتوش', table:'📊 جدول بيانات', northArrow:'🧭 اتجاه الشمال', scaleBar:'📏 مقياس الرسم', polygonTitle:'🔤 اسم المضلع', text:'📝 نص (مشترك)', image:'🖼️ صورة (مشتركة)', shapeRect:'🔲 شكل مستطيل', shapeArrow:'➡️ سهم'};
     document.getElementById('lyPropsTitle').textContent = titles[el.type] || 'خصائص العنصر';
@@ -4238,6 +4322,10 @@
       const pageHmm = page.orientation === 'landscape' ? dims[1] : dims[0];
       document.getElementById('lyTableWidthMM').value = Math.round(el.wPct/100*pageWmm);
       document.getElementById('lyTableHeightMM').value = Math.round(el.hPct/100*pageHmm);
+    }
+    if(isAttrsTable){
+      document.getElementById('lyAttrsModeSelect').value = el.attrsMode || 'contained';
+      populateAttrsFieldsList(page, el);
     }
     if(el.type === 'mapFrame'){
       document.getElementById('lyMapFrameScaleReadout').textContent = el.scaleInfo ? ('آخر مقياس ملتقط: 1:'+el.scaleInfo.scaleDenom) : 'لسه ملتقطتش لقطة لإطار الخريطة ده';
@@ -5069,6 +5157,43 @@
     ctx.el.cellPadX = null;
     ctx.el.cellPadY = null;
     selectLayoutElement(ctx.el.id, ctx.page); // نعيد ملء الخانات بالقيم التلقائية الجديدة
+    renderLayoutCanvas(ctx.page);
+    scheduleSave();
+  });
+
+  /* ---------- التحكم في "جدول المضلعات الداخلية/المتداخلة": وضع الاختيار المكاني + الحقول الظاهرة ---------- */
+  function currentAttrsTableEl(){
+    const ctx = currentTableEl();
+    return (ctx && ctx.el.tableKey === 'attrs') ? ctx : null;
+  }
+  document.getElementById('lyAttrsModeSelect').addEventListener('change', function(){
+    const ctx = currentAttrsTableEl(); if(!ctx) return;
+    ctx.el.attrsMode = this.value;
+    populateAttrsFieldsList(ctx.page, ctx.el); // الحقول المتاحة ممكن تختلف حسب المضلعات اللي هتترشح في الوضع الجديد
+    renderLayoutCanvas(ctx.page);
+    scheduleSave();
+  });
+  document.getElementById('lyAttrsFieldsList').addEventListener('change', function(e){
+    if(!e.target.classList.contains('ly-attrs-field-cb')) return;
+    const ctx = currentAttrsTableEl(); if(!ctx) return;
+    const boxes = Array.from(this.querySelectorAll('.ly-attrs-field-cb'));
+    const allChecked = boxes.every(cb=>cb.checked);
+    // لو كل الحقول متحددة، بنسيب attrsFields فاضية (null) عشان يفضل الوضع الافتراضي (كل الحقول، حتى لو اتضافت حقول جديدة بعدين)
+    ctx.el.attrsFields = allChecked ? null : boxes.filter(cb=>cb.checked).map(cb=>cb.value);
+    renderLayoutCanvas(ctx.page);
+    scheduleSave();
+  });
+  document.getElementById('lyAttrsFieldsAllBtn').addEventListener('click', ()=>{
+    const ctx = currentAttrsTableEl(); if(!ctx) return;
+    ctx.el.attrsFields = null;
+    populateAttrsFieldsList(ctx.page, ctx.el);
+    renderLayoutCanvas(ctx.page);
+    scheduleSave();
+  });
+  document.getElementById('lyAttrsFieldsNoneBtn').addEventListener('click', ()=>{
+    const ctx = currentAttrsTableEl(); if(!ctx) return;
+    ctx.el.attrsFields = ['__none__']; // قايمة فيها قيمة وهمية عشان أي حقل حقيقي متطابقهاش، فمفيش حقول تظهر
+    populateAttrsFieldsList(ctx.page, ctx.el);
     renderLayoutCanvas(ctx.page);
     scheduleSave();
   });
