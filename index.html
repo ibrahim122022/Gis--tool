@@ -154,6 +154,9 @@
   .tool-btn[data-tool="lineoffset"]{--tc:#0891b2;}
   .tool-btn[data-tool="roadroute"]{--tc:#b45309;}
   .tool-btn[data-tool="autonumber"]{--tc:#e11d48;}
+  #areaCalcBtn{--tc:#0ea5e9;}
+  #coordConvBtn{--tc:#4f46e5;}
+  #attrTableBtn{--tc:#0369a1;}
 
 
   .tool-btn:hover:not(:disabled){
@@ -170,6 +173,26 @@
                0 2px 8px rgba(0,0,0,.1);
   }
   .tool-btn:disabled{opacity:0.28;cursor:not-allowed;}
+
+  /* ── زرار السناب بقى شكله "مفتاح تبديل" مضغوط بدل ما ياخد كارت أداة كامل ── */
+  .tool-switch{
+    flex-direction:row !important; width:auto !important; height:38px !important;
+    padding:0 10px !important; border-radius:19px; gap:7px !important;
+    background:color-mix(in srgb, var(--text-muted) 8%, transparent) !important;
+  }
+  .tool-switch .switch-label{font-size:10.5px;font-family:var(--sans);font-weight:600;color:var(--text-muted);}
+  .tool-switch .switch-track{
+    width:30px;height:17px;border-radius:10px;background:var(--border);position:relative;flex-shrink:0;
+    transition:background .2s;
+  }
+  .tool-switch .switch-knob{
+    position:absolute;top:2px;right:2px;width:13px;height:13px;border-radius:50%;background:#fff;
+    transition:transform .2s cubic-bezier(.25,.8,.25,1); box-shadow:0 1px 3px rgba(0,0,0,.35);
+  }
+  .tool-switch.active{background:color-mix(in srgb, var(--tc,var(--accent)) 12%, transparent) !important;}
+  .tool-switch.active .switch-label{color:var(--text);}
+  .tool-switch.active .switch-track{background:var(--tc,var(--accent));}
+  .tool-switch.active .switch-knob{transform:translateX(-13px);}
   .toolbar-sep{width:38px;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:2px 0;flex-shrink:0;}
 
   .main{flex:1;position:relative;display:flex;flex-direction:column;min-width:0;}
@@ -518,6 +541,21 @@
     .ribbon-group-row .tool-btn svg{width:21px;height:21px;}
     .ribbon-group-row .tool-btn span{font-size:7.9px;}
     .ribbon-group-caption{display:none;}
+
+    /* ── تبويب "رسم وتحديد": صفين منفصلين بدل عمودين جنب بعض —
+       فوق: إجراءات سريعة مضغوطة (تحديد/تراجع/إعادة/سناب)، تحت: كروت كبيرة لأدوات الرسم ── */
+    .ribbon-panel[data-ribbon-panel="map"]{flex-direction:column;align-items:stretch;gap:8px;}
+    .ribbon-panel[data-ribbon-panel="map"] .ribbon-group{flex-direction:row;flex-wrap:wrap;justify-content:center;width:100%;}
+    .ribbon-panel[data-ribbon-panel="map"] .ribbon-group + .ribbon-group{
+      border-right:none;margin-right:0;padding-right:0;
+      border-top:1px solid var(--glass-border);padding-top:8px;margin-top:0;
+    }
+    .ribbon-panel[data-ribbon-panel="map"] .ribbon-group:first-child .tool-btn:not(.tool-switch){width:38px;height:38px;}
+    .ribbon-panel[data-ribbon-panel="map"] .ribbon-group:first-child .tool-btn:not(.tool-switch) svg{width:17px;height:17px;}
+    .ribbon-panel[data-ribbon-panel="map"] .ribbon-group:first-child .tool-btn:not(.tool-switch) span{display:none;}
+    .ribbon-panel[data-ribbon-panel="map"] .ribbon-group:nth-child(2) .tool-btn{width:66px;height:66px;}
+    .ribbon-panel[data-ribbon-panel="map"] .ribbon-group:nth-child(2) .tool-btn svg{width:27px;height:27px;}
+    .ribbon-panel[data-ribbon-panel="map"] .ribbon-group:nth-child(2) .tool-btn span{font-size:9px;}
     .body-row{order:1;min-height:0;}
     .main{min-height:0;}
     .sidebar{
@@ -964,13 +1002,9 @@
                 <path d="M21 15A9 9 0 1012 3c2.6 0 4.9 1 6.6 2.7L21 8" stroke-width="2"/>
               </svg><span>إعادة</span>
             </button>
-            <button class="tool-btn active" id="snapBtn" title="تفعيل/تعطيل السناب (كل الأنواع دفعة واحدة)">
-              <svg viewBox="0 0 24 24">
-                <path d="M7 4.5v6.5a5 5 0 0010 0V4.5" stroke-width="2.2"/>
-                <path d="M5 4.5h4M15 4.5h4" stroke-width="2.2"/>
-                <line x1="12" y1="17" x2="12" y2="21" stroke-width="2" opacity=".55"/>
-                <path d="M9.5 21h5" stroke-width="2.2"/>
-              </svg><span>سناب</span>
+            <button class="tool-btn tool-switch active" id="snapBtn" title="تفعيل/تعطيل السناب (كل الأنواع دفعة واحدة)">
+              <span class="switch-label">سناب</span>
+              <span class="switch-track"><span class="switch-knob"></span></span>
             </button>
             <button class="tool-btn" id="snapSettingsBtn" title="إعدادات السناب — نقاط الرؤوس / منتصف الضلع / عمودي على ضلع / زوايا قائمة (زي الاوتوكاد)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
@@ -2377,6 +2411,10 @@
         <h4 style="color:#2563eb;">🔲 تحديد متعدد</h4>
         <div id="bulkSelectCount" style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">0 عنصر محدد</div>
         <div id="bulkSelectArea" style="font-size:12px;margin-bottom:10px;"></div>
+        <div class="row-btns" style="margin-top:6px;">
+          <button class="btn-cancel" id="bulkMoveAllBtn">✥ نقل الكل</button>
+          <button class="btn-cancel" id="bulkRotateAllBtn">🔄 تدوير الكل</button>
+        </div>
         <label>لون موحد</label>
         <input type="color" id="bulkColorInput" value="#1d4ed8" style="width:100%;height:32px;border:1px solid var(--border);border-radius:6px;cursor:pointer;margin-bottom:8px;">
         <label>نقل لطبقة</label>
@@ -2960,6 +2998,7 @@
   let mobileRotatePivot = null;       // [lat,lng] مركز التدوير — للمضلعات/الخطوط (المستطيل له منطقه الخاص)
   let mobileRotateStartAngle = 0;
   let mobileRotateOrigCoords = null;  // نسخة من الإحداثيات الأصلية وقت الدخول لوضع التدوير
+  let mobileRotateOrigRect = null;    // نسخة من {lat,lng,rotation,...} الأصلية للمستطيل وقت الدخول لوضع التدوير
   // نقل وتدوير المضلعات في الموبايل — بخطوات بيحددها المستخدم بنفسه (مش تلقائي زي المستطيل/الدائرة):
   // نقل: خطوة 0 = تحديد نقطة مرجعية، خطوة 1 = تحديد الوجهة وتنفيذ النقل
   // تدوير: خطوة 0 = تحديد مركز الدوران، خطوة 1 = تحديد نقطة القبضة، خطوة 2 = تحريك الخريطة وتنفيذ التدوير
@@ -2968,6 +3007,14 @@
   let mobilePolyRotateStep = 0;
   let mobilePolyRotateCenter = null;  // [lat,lng]
   let mobilePolyRotateHandle = null;  // [lat,lng]
+  // نقل وتدوير جماعي للتحديد المتعدد — نفس أسلوب المضلع بالظبط (مرجع/مركز يحددهم المستخدم بنفسه)
+  let mobileBulkTarget = false;       // true = اللوحة شغالة على multiSelect بدل عنصر واحد
+  let bulkMoveStep = 0;
+  let bulkMoveRef = null;             // [lat,lng]
+  let bulkRotateStep = 0;
+  let bulkRotateCenter = null;        // [lat,lng]
+  let bulkRotateHandle = null;        // [lat,lng]
+  let bulkRotateSnapshots = null;     // نسخة من كل عنصر محدد (coords/rect/circle) وقت الدخول لخطوة التدوير
   let isMobileEnv = false;
 
   let undoStack = [];
@@ -6844,6 +6891,7 @@
   function openMobileEditPad(f) {
     isMobileEnv = window.innerWidth <= 760;
     if(!isMobileEnv) return;
+    mobileBulkTarget = false;
 
     mobileCrosshair.style.display = 'block';
     mobileEditPad.style.display = 'flex';
@@ -6857,6 +6905,25 @@
     setMobileEditMode('move');
   }
 
+  // نقل/تدوير جماعي لكل عناصر التحديد المتعدد دفعة واحدة — بنفس لوحة التحكم ونفس أسلوب المضلع بالظبط
+  function openBulkEditPad(mode) {
+    if(!multiSelect.length) return;
+    isMobileEnv = window.innerWidth <= 760;
+    if(!isMobileEnv) return;
+    mobileBulkTarget = true;
+
+    mobileCrosshair.style.display = 'block';
+    mobileEditPad.style.display = 'flex';
+
+    btnPadVertex.style.display = 'none';
+    btnPadDeleteVertex.style.display = 'none';
+    btnPadAddVertex.style.display = 'none';
+    btnPadRotate.style.display = 'block';
+    btnPadScale.style.display = 'none';
+
+    setMobileEditMode(mode);
+  }
+
   function closeMobileEditPad() {
     mobileCrosshair.style.display = 'none';
     mobileEditPad.style.display = 'none';
@@ -6864,19 +6931,39 @@
     if(snapMarker) { map.removeLayer(snapMarker); snapMarker = null; }
     mobilePolyMoveStep = 0; mobilePolyMoveRef = null;
     mobilePolyRotateStep = 0; mobilePolyRotateCenter = null; mobilePolyRotateHandle = null;
+    mobileBulkTarget = false;
+    bulkMoveStep = 0; bulkMoveRef = null;
+    bulkRotateStep = 0; bulkRotateCenter = null; bulkRotateHandle = null; bulkRotateSnapshots = null;
   }
 
   function setMobileEditMode(mode) {
     mobileMode = mode;
     document.querySelectorAll('.mobile-pad-btn[id^="btnPad"]').forEach(b => b.classList.remove('active'));
-    
+
+    if(mobileBulkTarget){
+      if(mode === 'move'){
+        btnPadMove.classList.add('active');
+        mobileVertexRow.style.display = 'none';
+        bulkMoveStep = 0; bulkMoveRef = null;
+        mobilePadTitle.textContent = "🎯 حرك الخريطة لتحديد نقطة مرجعية، وبعدين دوس تحديد";
+        btnPadApply.textContent = "تحديد المرجع";
+      } else if(mode === 'rotate'){
+        btnPadRotate.classList.add('active');
+        mobileVertexRow.style.display = 'none';
+        bulkRotateStep = 0; bulkRotateCenter = null; bulkRotateHandle = null; bulkRotateSnapshots = null;
+        mobilePadTitle.textContent = "🎯 حرك الخريطة لتحديد مركز الدوران، وبعدين دوس تحديد";
+        btnPadApply.textContent = "تحديد المركز";
+      }
+      return;
+    }
+
     const f = getFeature(selection.layerId, selection.featureId);
     if(!f) return;
 
     if(mode === 'move') {
       btnPadMove.classList.add('active');
       mobileVertexRow.style.display = 'none';
-      if(f.type === 'polygon'){
+      if(f.type === 'polygon' || f.type === 'rectangle'){
         mobilePolyMoveStep = 0; mobilePolyMoveRef = null;
         mobilePadTitle.textContent = "🎯 حرك الخريطة لتحديد نقطة مرجعية على الشكل، وبعدين دوس تحديد";
         btnPadApply.textContent = "تحديد المرجع";
@@ -6895,10 +6982,7 @@
     else if(mode === 'rotate') {
       btnPadRotate.classList.add('active');
       mobileVertexRow.style.display = 'none';
-      if(f.type === 'rectangle'){
-        mobilePadTitle.textContent = "🔄 حرك الخريطة لتدوير المستطيل حول مركزه";
-        btnPadApply.textContent = "تطبيق التغيير هنا";
-      } else if(f.type === 'polygon'){
+      if(f.type === 'polygon' || f.type === 'rectangle'){
         mobilePolyRotateStep = 0; mobilePolyRotateCenter = null; mobilePolyRotateHandle = null;
         mobilePadTitle.textContent = "🎯 حرك الخريطة لتحديد مركز الدوران، وبعدين دوس تحديد";
         btnPadApply.textContent = "تحديد المركز";
@@ -6977,16 +7061,105 @@
   });
 
   document.getElementById('btnPadCancel').addEventListener('click', () => {
-    selection = null; closeMobileEditPad(); renderFeatures(); renderAttrPanel();
+    const wasBulk = mobileBulkTarget;
+    closeMobileEditPad();
+    if(!wasBulk){ selection = null; renderAttrPanel(); }
+    renderFeatures();
   });
 
   document.getElementById('btnPadApply').addEventListener('click', () => {
-    const f = getFeature(selection.layerId, selection.featureId);
-    if(!f) return;
     const centerLatLng = map.getCenter();
 
-    // نقل المضلع بخطوتين: تحديد مرجع، ثم تحديد الوجهة — بدل الحساب التلقائي لمركز الشكل
-    if(f.type === 'polygon' && mobileMode === 'move'){
+    // ── نقل/تدوير جماعي لكل عناصر التحديد المتعدد — نفس أسلوب المضلع بالظبط ──
+    if(mobileBulkTarget){
+      if(mobileMode === 'move'){
+        if(bulkMoveStep === 0){
+          bulkMoveRef = [centerLatLng.lat, centerLatLng.lng];
+          bulkMoveStep = 1;
+          mobilePadTitle.textContent = "📍 دلوقتي حرك الخريطة للمكان اللي عايز تنقل له، وبعدين دوس نقل";
+          btnPadApply.textContent = "نقل";
+          return;
+        } else {
+          pushStateToUndo();
+          const dLat = centerLatLng.lat - bulkMoveRef[0];
+          const dLng = centerLatLng.lng - bulkMoveRef[1];
+          multiSelect.forEach(ref => {
+            const mf = getFeature(ref.layerId, ref.featureId);
+            if(!mf) return;
+            if(mf.type === 'rectangle'){
+              mf.rect.lat += dLat; mf.rect.lng += dLng; syncRectCoords(mf);
+            } else if(mf.type === 'circle'){
+              mf.circle.lat += dLat; mf.circle.lng += dLng; syncCircleCoords(mf);
+            } else {
+              mf.coords = mf.coords.map(c => [c[0] + dLat, c[1] + dLng]);
+            }
+          });
+          renderFeatures(); renderAttrPanel(); scheduleSave(); renderBulkSelectPanel();
+          bulkMoveStep = 0; bulkMoveRef = null;
+          mobilePadTitle.textContent = "🎯 حرك الخريطة لتحديد نقطة مرجعية، وبعدين دوس تحديد";
+          btnPadApply.textContent = "تحديد المرجع";
+          return;
+        }
+      }
+      if(mobileMode === 'rotate'){
+        if(bulkRotateStep === 0){
+          bulkRotateCenter = [centerLatLng.lat, centerLatLng.lng];
+          bulkRotateStep = 1;
+          mobilePadTitle.textContent = "🖐️ حرك الخريطة لتحديد النقطة اللي هتمسكها وتلف بيها، وبعدين دوس تحديد";
+          btnPadApply.textContent = "تحديد نقطة القبضة";
+          return;
+        } else if(bulkRotateStep === 1){
+          bulkRotateHandle = [centerLatLng.lat, centerLatLng.lng];
+          mobileRotateStartAngle = metricAngleRad({lat:bulkRotateCenter[0], lng:bulkRotateCenter[1]}, centerLatLng);
+          bulkRotateSnapshots = multiSelect.map(ref => {
+            const mf = getFeature(ref.layerId, ref.featureId);
+            if(!mf) return null;
+            return {
+              coords: JSON.parse(JSON.stringify(mf.coords)),
+              rect: mf.rect ? Object.assign({}, mf.rect) : null,
+              circle: mf.circle ? Object.assign({}, mf.circle) : null
+            };
+          });
+          bulkRotateStep = 2;
+          mobilePadTitle.textContent = "🔄 حرك الخريطة عشان تلف العناصر حوالين النقطة اللي حددتها، وبعدين دوس تدوير";
+          btnPadApply.textContent = "تدوير";
+          return;
+        } else {
+          pushStateToUndo();
+          const newAngle = metricAngleRad({lat:bulkRotateCenter[0], lng:bulkRotateCenter[1]}, centerLatLng);
+          const deltaAngle = newAngle - mobileRotateStartAngle;
+          multiSelect.forEach((ref, i) => {
+            const mf = getFeature(ref.layerId, ref.featureId);
+            const snap = bulkRotateSnapshots && bulkRotateSnapshots[i];
+            if(!mf || !snap) return;
+            if(mf.type === 'rectangle' && snap.rect){
+              const [newLat, newLng] = rotateCoordAroundPivot([snap.rect.lat, snap.rect.lng], bulkRotateCenter, deltaAngle);
+              mf.rect.lat = newLat; mf.rect.lng = newLng;
+              mf.rect.rotation = Math.round((snap.rect.rotation + toDeg(deltaAngle)) % 360);
+              syncRectCoords(mf);
+            } else if(mf.type === 'circle' && snap.circle){
+              const [newLat, newLng] = rotateCoordAroundPivot([snap.circle.lat, snap.circle.lng], bulkRotateCenter, deltaAngle);
+              mf.circle.lat = newLat; mf.circle.lng = newLng;
+              syncCircleCoords(mf);
+            } else {
+              mf.coords = snap.coords.map(c => rotateCoordAroundPivot(c, bulkRotateCenter, deltaAngle));
+            }
+          });
+          renderFeatures(); renderAttrPanel(); scheduleSave(); renderBulkSelectPanel();
+          bulkRotateStep = 0; bulkRotateCenter = null; bulkRotateHandle = null; bulkRotateSnapshots = null;
+          mobilePadTitle.textContent = "🎯 حرك الخريطة لتحديد مركز الدوران، وبعدين دوس تحديد";
+          btnPadApply.textContent = "تحديد المركز";
+          return;
+        }
+      }
+      return;
+    }
+
+    const f = getFeature(selection.layerId, selection.featureId);
+    if(!f) return;
+
+    // نقل المضلع/المستطيل بخطوتين: تحديد مرجع، ثم تحديد الوجهة — بدل الحساب التلقائي لمركز الشكل
+    if((f.type === 'polygon' || f.type === 'rectangle') && mobileMode === 'move'){
       if(mobilePolyMoveStep === 0){
         mobilePolyMoveRef = [centerLatLng.lat, centerLatLng.lng];
         mobilePolyMoveStep = 1;
@@ -6997,7 +7170,11 @@
         pushStateToUndo();
         const dLat = centerLatLng.lat - mobilePolyMoveRef[0];
         const dLng = centerLatLng.lng - mobilePolyMoveRef[1];
-        f.coords = f.coords.map(c => [c[0] + dLat, c[1] + dLng]);
+        if(f.type === 'rectangle'){
+          f.rect.lat += dLat; f.rect.lng += dLng; syncRectCoords(f);
+        } else {
+          f.coords = f.coords.map(c => [c[0] + dLat, c[1] + dLng]);
+        }
         renderFeatures(); renderAttrPanel(); scheduleSave();
         mobilePolyMoveStep = 0; mobilePolyMoveRef = null;
         mobilePadTitle.textContent = "🎯 حرك الخريطة لتحديد نقطة مرجعية على الشكل، وبعدين دوس تحديد";
@@ -7006,8 +7183,8 @@
       }
     }
 
-    // تدوير المضلع بـ3 خطوات: تحديد المركز، تحديد نقطة القبضة، ثم تحريك الخريطة والتطبيق
-    if(f.type === 'polygon' && mobileMode === 'rotate'){
+    // تدوير المضلع/المستطيل بـ3 خطوات: تحديد المركز، تحديد نقطة القبضة، ثم تحريك الخريطة والتطبيق
+    if((f.type === 'polygon' || f.type === 'rectangle') && mobileMode === 'rotate'){
       if(mobilePolyRotateStep === 0){
         mobilePolyRotateCenter = [centerLatLng.lat, centerLatLng.lng];
         mobilePolyRotateStep = 1;
@@ -7018,6 +7195,7 @@
         mobilePolyRotateHandle = [centerLatLng.lat, centerLatLng.lng];
         mobileRotateStartAngle = metricAngleRad({lat:mobilePolyRotateCenter[0], lng:mobilePolyRotateCenter[1]}, centerLatLng);
         mobileRotateOrigCoords = JSON.parse(JSON.stringify(f.coords));
+        if(f.type === 'rectangle') mobileRotateOrigRect = Object.assign({}, f.rect);
         mobilePolyRotateStep = 2;
         mobilePadTitle.textContent = "🔄 حرك الخريطة عشان تلف الشكل حوالين النقطة اللي حددتها، وبعدين دوس تدوير";
         btnPadApply.textContent = "تدوير";
@@ -7026,7 +7204,14 @@
         pushStateToUndo();
         const newAngle = metricAngleRad({lat:mobilePolyRotateCenter[0], lng:mobilePolyRotateCenter[1]}, centerLatLng);
         const deltaAngle = newAngle - mobileRotateStartAngle;
-        f.coords = mobileRotateOrigCoords.map(c=> rotateCoordAroundPivot(c, mobilePolyRotateCenter, deltaAngle));
+        if(f.type === 'rectangle'){
+          const [newLat, newLng] = rotateCoordAroundPivot([mobileRotateOrigRect.lat, mobileRotateOrigRect.lng], mobilePolyRotateCenter, deltaAngle);
+          f.rect.lat = newLat; f.rect.lng = newLng;
+          f.rect.rotation = Math.round((mobileRotateOrigRect.rotation + toDeg(deltaAngle)) % 360);
+          syncRectCoords(f);
+        } else {
+          f.coords = mobileRotateOrigCoords.map(c=> rotateCoordAroundPivot(c, mobilePolyRotateCenter, deltaAngle));
+        }
         renderFeatures(); renderAttrPanel(); scheduleSave();
         mobilePolyRotateStep = 0; mobilePolyRotateCenter = null; mobilePolyRotateHandle = null;
         mobilePadTitle.textContent = "🎯 حرك الخريطة لتحديد مركز الدوران، وبعدين دوس تحديد";
@@ -7039,8 +7224,8 @@
 
     if(mobileMode === 'move') {
       let oldCenterLat = 0, oldCenterLng = 0;
-      if(f.type === 'rectangle' || f.type === 'circle') {
-        oldCenterLat = f[f.type].lat; oldCenterLng = f[f.type].lng;
+      if(f.type === 'circle') {
+        oldCenterLat = f.circle.lat; oldCenterLng = f.circle.lng;
       } else {
         f.coords.forEach(c => { oldCenterLat += c[0]; oldCenterLng += c[1]; });
         oldCenterLat /= f.coords.length; oldCenterLng /= f.coords.length;
@@ -7048,9 +7233,9 @@
       const dLat = centerLatLng.lat - oldCenterLat;
       const dLng = centerLatLng.lng - oldCenterLng;
 
-      if(f.type === 'rectangle' || f.type === 'circle') {
-        f[f.type].lat = centerLatLng.lat; f[f.type].lng = centerLatLng.lng;
-        f.type === 'rectangle' ? syncRectCoords(f) : syncCircleCoords(f);
+      if(f.type === 'circle') {
+        f.circle.lat = centerLatLng.lat; f.circle.lng = centerLatLng.lng;
+        syncCircleCoords(f);
       } else {
         f.coords = f.coords.map(c => [c[0] + dLat, c[1] + dLng]);
       }
@@ -7059,14 +7244,7 @@
       f.coords[mobileActiveVertexIdx] = [centerLatLng.lat, centerLatLng.lng];
     }
     else if(mobileMode === 'rotate') {
-      if(f.type === 'rectangle'){
-        const corners = f.coords;
-        const cLat = (corners[0][0] + corners[2][0]) / 2;
-        const cLng = (corners[0][1] + corners[2][1]) / 2;
-        const angle = metricAngleRad({lat:cLat,lng:cLng}, centerLatLng);
-        f.rect.rotation = Math.round(toDeg(angle) % 360);
-        syncRectCoords(f);
-      } else if(mobileRotatePivot && mobileRotateOrigCoords){
+      if(mobileRotatePivot && mobileRotateOrigCoords){
         const newAngle = metricAngleRad({lat:mobileRotatePivot[0], lng:mobileRotatePivot[1]}, centerLatLng);
         const deltaAngle = newAngle - mobileRotateStartAngle;
         f.coords = mobileRotateOrigCoords.map(c=> rotateCoordAroundPivot(c, mobileRotatePivot, deltaAngle));
@@ -7528,19 +7706,41 @@
       if(tempLine) { map.removeLayer(tempLine); tempLine = null; }
       
       if(rect3Point.step === 1) {
-        const pts = [[rect3Point.pt1.lat, rect3Point.pt1.lng], [snapped.lat, snapped.lng]];
-        tempLine = L.polyline(pts, {color:'#1d4ed8', weight:2, dashArray:'4 4'}).addTo(map);
-        const width = haversine(rect3Point.pt1.lat, rect3Point.pt1.lng, snapped.lat, snapped.lng);
-        const angle = metricAngleRad(rect3Point.pt1, snapped);
-        let deg = Math.round(toDeg(angle) % 360); if(deg < 0) deg += 360;
-        
-        // ميزة الـ Angle Snapping الذكية للغلق على الاتجاهات الرئيسية
+        const rawWidth = haversine(rect3Point.pt1.lat, rect3Point.pt1.lng, snapped.lat, snapped.lng);
+        const rawAngle = metricAngleRad(rect3Point.pt1, snapped);
+        let deg = Math.round(toDeg(rawAngle) % 360); if(deg < 0) deg += 360;
+
+        // ميزة الـ Angle Snapping الذكية للغلق على الاتجاهات الرئيسية — بس من غير ما تلغي
+        // أي إسناب حقيقي على عنصر تاني (رأس/منتصف ضلع/حرف) لو حصل، عشان تقدري تسندي
+        // النقطة التانية على مضلع أو مستطيل مرسوم قبل كده من غير ما الزاوية الرئيسية تستولي عليها
         const snapThreshold = 2;
-        [0, 90, 180, 270, 360].forEach(targetAngle => {
-          if (Math.abs(deg - targetAngle) <= snapThreshold) {
-            deg = targetAngle === 360 ? 0 : targetAngle;
-          }
-        });
+        let didCardinalSnap = false;
+        if(!lastSnapResult){
+          [0, 90, 180, 270, 360].forEach(targetAngle => {
+            if (Math.abs(deg - targetAngle) <= snapThreshold) {
+              deg = targetAngle === 360 ? 0 : targetAngle;
+              didCardinalSnap = true;
+            }
+          });
+        }
+
+        // مهم: لما يحصل قفل على زاوية رئيسية (من غير إسناب حقيقي)، لازم نصحح إحداثي النقطة
+        // نفسها على نفس الزاوية المقفولة (مش بس الرقم الظاهر في الشاشة)، عشان المستطيل
+        // الفعلي يتبني بالظبط بالزاوية اللي شايفها المستخدم؛ أما لو فيه إسناب حقيقي، بنحافظ
+        // على نفس نقطة الإسناب كما هي من غير أي تعديل
+        let snapLat = snapped.lat, snapLng = snapped.lng;
+        const width = rawWidth;
+        if(didCardinalSnap){
+          const snappedRad = toRad(deg);
+          [snapLat, snapLng] = destPoint(
+            rect3Point.pt1.lat, rect3Point.pt1.lng,
+            rawWidth * Math.cos(snappedRad), rawWidth * Math.sin(snappedRad)
+          );
+        }
+        rect3Point.step1Preview = {lat: snapLat, lng: snapLng};
+
+        const pts = [[rect3Point.pt1.lat, rect3Point.pt1.lng], [snapLat, snapLng]];
+        tempLine = L.polyline(pts, {color:'#1d4ed8', weight:2, dashArray:'4 4'}).addTo(map);
 
         document.getElementById('stTemp').textContent = `العرض: ${width.toFixed(1)} م | الزاوية: ${deg}°`;
       } 
@@ -7820,7 +8020,10 @@
         updateHistoryButtons();
       } 
       else if(rect3Point.step === 1) {
-        rect3Point.pt2 = snapped;
+        // بنستخدم نفس النقطة المصحّحة اللي كانت ظاهرة في المعاينة (لو حصل قفل زاوية)،
+        // بدل النقطة الخام اللي حصل عندها الدوس، عشان الضلع الفعلي يتطابق مع اللي كان ظاهر بالظبط
+        rect3Point.pt2 = rect3Point.step1Preview || snapped;
+        rect3Point.step1Preview = null;
         rect3Point.step = 2;
         document.getElementById('stHint').textContent = 'اسحب لتحديد طول المستطيل النهائي فوق الخريطة ثم انقر...';
         updateHistoryButtons();
@@ -8030,7 +8233,7 @@
   /* ---------- Tools & tabs ---------- */
   document.getElementById('snapBtn').addEventListener('click', ()=>{
     snapEnabled = !snapEnabled;
-    document.getElementById('snapBtn').toggleAttribute('active', snapEnabled);
+    document.getElementById('snapBtn').classList.toggle('active', snapEnabled);
     if(!snapEnabled && snapMarker){ map.removeLayer(snapMarker); snapMarker=null; }
     syncSnapCheckboxes();
   });
@@ -8052,7 +8255,7 @@
   });
   document.getElementById('snapOptVertex').addEventListener('change', e=>{
     snapEnabled = e.target.checked;
-    document.getElementById('snapBtn').toggleAttribute('active', snapEnabled);
+    document.getElementById('snapBtn').classList.toggle('active', snapEnabled);
     if(!snapEnabled && snapMarker){ map.removeLayer(snapMarker); snapMarker=null; }
   });
   document.getElementById('snapOptMidpoint').addEventListener('change', e=>{
@@ -8941,6 +9144,15 @@
   document.getElementById('bulkClearBtn').addEventListener('click', ()=>{
     multiSelect = []; selection = null;
     renderBulkSelectPanel(); renderFeatures();
+  });
+
+  document.getElementById('bulkMoveAllBtn').addEventListener('click', ()=>{
+    if(window.innerWidth > 760){ alert('نقل الكل بهذه الطريقة متاح على الموبايل حاليًا.'); return; }
+    openBulkEditPad('move');
+  });
+  document.getElementById('bulkRotateAllBtn').addEventListener('click', ()=>{
+    if(window.innerWidth > 760){ alert('تدوير الكل بهذه الطريقة متاح على الموبايل حاليًا.'); return; }
+    openBulkEditPad('rotate');
   });
 
   document.getElementById('bulkDeleteBtn').addEventListener('click', ()=>{
