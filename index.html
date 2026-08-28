@@ -94,12 +94,12 @@
     width:54px;height:52px;border-radius:12px;border:1px solid transparent;
     background:transparent;display:flex;flex-direction:column;align-items:center;
     justify-content:center;gap:2px;cursor:pointer;flex-shrink:0;
-    color:color-mix(in srgb,var(--tc,var(--text-muted)) 72%,transparent);
+    color:var(--tc, var(--text-muted));
     transition:all .2s cubic-bezier(.25,.8,.25,1);
   }
   .tool-btn svg{
     width:20px;height:20px;stroke:currentColor;fill:none;
-    stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:inherit;
+    stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:inherit;
   }
   .tool-btn span{font-size:7.5px;font-family:var(--sans);font-weight:500;letter-spacing:.01em;}
   .ribbon-group-row .tool-btn{width:46px;height:44px;}
