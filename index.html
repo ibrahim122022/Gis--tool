@@ -9872,7 +9872,9 @@
     if(dirLabel){ dirLabel.style.display = isFrontage ? 'none' : 'block'; }
     document.getElementById('divDir').style.display = isFrontage ? 'none' : 'block';
     document.getElementById('divCustomRow').style.display = (isFrontage || document.getElementById('divDir').value!=='custom') ? 'none' : 'block';
-    document.getElementById('divPickRow').style.display = 'none';
+    const curDirVal = document.getElementById('divDir').value;
+    const stillNeedsPick = !isFrontage && (curDirVal==='drawline' || curDirVal==='edge' || curDirVal==='edge_perp');
+    document.getElementById('divPickRow').style.display = stillNeedsPick ? 'block' : 'none';
   });
   document.getElementById('divFrontageAreaUnit').addEventListener('change', function(){
     const isFeddan = this.value==='feddan';
