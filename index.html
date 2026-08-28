@@ -6911,6 +6911,7 @@
     isMobileEnv = window.innerWidth <= 760;
     if(!isMobileEnv) return;
     mobileBulkTarget = true;
+    document.getElementById('bulkSelectHud').style.display = 'none';
 
     mobileCrosshair.style.display = 'block';
     mobileEditPad.style.display = 'flex';
@@ -6925,6 +6926,7 @@
   }
 
   function closeMobileEditPad() {
+    const wasBulkTarget = mobileBulkTarget;
     mobileCrosshair.style.display = 'none';
     mobileEditPad.style.display = 'none';
     mobileVertexRow.style.display = 'none';
@@ -6934,6 +6936,7 @@
     mobileBulkTarget = false;
     bulkMoveStep = 0; bulkMoveRef = null;
     bulkRotateStep = 0; bulkRotateCenter = null; bulkRotateHandle = null; bulkRotateSnapshots = null;
+    if(wasBulkTarget) renderBulkSelectPanel();
   }
 
   function setMobileEditMode(mode) {
@@ -7135,7 +7138,9 @@
             if(mf.type === 'rectangle' && snap.rect){
               const [newLat, newLng] = rotateCoordAroundPivot([snap.rect.lat, snap.rect.lng], bulkRotateCenter, deltaAngle);
               mf.rect.lat = newLat; mf.rect.lng = newLng;
-              mf.rect.rotation = Math.round((snap.rect.rotation + toDeg(deltaAngle)) % 360);
+              let newRotation = (snap.rect.rotation + toDeg(deltaAngle)) % 360;
+              if(newRotation < 0) newRotation += 360;
+              mf.rect.rotation = newRotation;
               syncRectCoords(mf);
             } else if(mf.type === 'circle' && snap.circle){
               const [newLat, newLng] = rotateCoordAroundPivot([snap.circle.lat, snap.circle.lng], bulkRotateCenter, deltaAngle);
@@ -7207,7 +7212,9 @@
         if(f.type === 'rectangle'){
           const [newLat, newLng] = rotateCoordAroundPivot([mobileRotateOrigRect.lat, mobileRotateOrigRect.lng], mobilePolyRotateCenter, deltaAngle);
           f.rect.lat = newLat; f.rect.lng = newLng;
-          f.rect.rotation = Math.round((mobileRotateOrigRect.rotation + toDeg(deltaAngle)) % 360);
+          let newRotation = (mobileRotateOrigRect.rotation + toDeg(deltaAngle)) % 360;
+          if(newRotation < 0) newRotation += 360;
+          f.rect.rotation = newRotation;
           syncRectCoords(f);
         } else {
           f.coords = mobileRotateOrigCoords.map(c=> rotateCoordAroundPivot(c, mobilePolyRotateCenter, deltaAngle));
@@ -7255,7 +7262,8 @@
       const w = haversine(anchor[0], anchor[1], anchor[0], centerLatLng.lng);
       const l = haversine(anchor[0], anchor[1], centerLatLng.lat, anchor[1]);
       f.rect.width = Math.max(1, parseFloat(w.toFixed(1)));
-      f.rect.length = Math.max(1, parseFloat(l.toFixed(1)));
+      const newLenAbs = Math.max(1, parseFloat(l.toFixed(1)));
+      f.rect.length = (f.rect.length < 0) ? -newLenAbs : newLenAbs;
       syncRectCoords(f);
     }
 
@@ -7530,7 +7538,7 @@
             const rotMarker = L.circleMarker(rotatePt, {radius:9, className:'rect-rotate-marker', color:'#2d3748', weight:1.5, fillColor:'#E8A432', fillOpacity:1});
             rotMarker.on('mousedown', (se)=>{
               L.DomEvent.stopPropagation(se); map.dragging.disable(); pushStateToUndo();
-              dragCtx = { mode:'rect-rotate', feature:f, center:[centerLat, centerLng], origRotation: f.rect.rotation, startAngle: metricAngleRad({lat:centerLat,lng:centerLng}, se.latlng) };
+              dragCtx = { mode:'rect-rotate', feature:f, center:[centerLat, centerLng], origRotation: f.rect.rotation, origLat: f.rect.lat, origLng: f.rect.lng, startAngle: metricAngleRad({lat:centerLat,lng:centerLng}, se.latlng) };
             });
             rotMarker.addTo(lg);
 
@@ -7653,8 +7661,17 @@
     }
     else if(dragCtx.mode==='rect-rotate'){
       const currentAngle = metricAngleRad({lat:dragCtx.center[0], lng:dragCtx.center[1]}, latlng);
-      const angleDiff = toDeg(currentAngle - dragCtx.startAngle);
-      dragCtx.feature.rect.rotation = Math.round((dragCtx.origRotation - angleDiff) % 360);
+      const deltaAngleRad = currentAngle - dragCtx.startAngle;
+      // بندوّر ركن المستطيل (rect.lat/lng) حوالين مركز الشكل بنفس زاوية السحب، عشان الدوران
+      // يحصل فعليًا حوالين المركز اللي المستخدم شايفه بصريًا (مش حوالين الركن الثابت لوحده،
+      // اللي كان بيخلي المستطيل يتزحلق لمكان تاني بدل ما يلف مكانه)، ومن غير تقريب الزاوية
+      // لعدد صحيح عشان الدقة تفضل متطابقة مع اللي إنت شايفه وانت بتسحب
+      const [newLat, newLng] = rotateCoordAroundPivot([dragCtx.origLat, dragCtx.origLng], dragCtx.center, deltaAngleRad);
+      dragCtx.feature.rect.lat = newLat;
+      dragCtx.feature.rect.lng = newLng;
+      let newRotation = (dragCtx.origRotation + toDeg(deltaAngleRad)) % 360;
+      if(newRotation < 0) newRotation += 360;
+      dragCtx.feature.rect.rotation = newRotation;
       syncRectCoords(dragCtx.feature);
     }
     else if(dragCtx.mode==='rect-scale'){
@@ -8037,15 +8054,16 @@
         const length = proj.distance;
         
         let angle = metricAngleRad(p1, p2);
-        let deg = Math.round(toDeg(angle) % 360); if(deg < 0) deg += 360;
+        let deg = toDeg(angle) % 360; if(deg < 0) deg += 360;
+        // ملحوظة: ما بنقرّبش الزاوية لعدد صحيح هنا؛ فرق كسر الدرجة ده بسيط لكن على طول
+        // ضلع كبير بيترجم لانحراف جانبي بالسنتيمترات، وهو اللي كان بيسبب فجوة/خط مزدوج
+        // بين المستطيل الجديد والمضلع المجاور اللي اتسند عليه.
 
-        // قفل مغناطيسي للزاوية في النقطة النهائية أيضاً
-        const snapThreshold = 2;
-        [0, 90, 180, 270, 360].forEach(targetAngle => {
-          if (Math.abs(deg - targetAngle) <= snapThreshold) {
-            deg = targetAngle === 360 ? 0 : targetAngle;
-          }
-        });
+        // ملحوظة: ما بنعيدش تقريب الزاوية هنا على أقرب اتجاه رئيسي (0/90/180/270°)؛
+        // النقطتان p1 وp2 خلاص ثابتتان من الخطوتين اللي فاتوا (ممكن يكونوا نتيجة إسناب
+        // حقيقي على مضلع/مستطيل تاني)، فأي تقريب إضافي هنا كان بيغيّر الزاوية المخزّنة
+        // من غير ما يغيّر إحداثيات p1/p2 نفسها، فيتبني المستطيل بزاوية مختلفة عن النقط
+        // الحقيقية اللي اتسندت عليها ويطلع غير متطابق مع العنصر المسنود عليه.
 
         const uxN = Math.sin(angle), uxE = Math.cos(angle);
         const dotProduct = (snapped.lng - p1.lng) * (-uxN) + (snapped.lat - p1.lat) * uxE;
@@ -8059,9 +8077,9 @@
           sideSign: sideSign
         };
 
-        document.getElementById('rWidth').value = width.toFixed(1);
-        document.getElementById('rLength').value = length.toFixed(1);
-        document.getElementById('rRotation').value = deg;
+        document.getElementById('rWidth').value = width.toFixed(2);
+        document.getElementById('rLength').value = length.toFixed(2);
+        document.getElementById('rRotation').value = deg.toFixed(3);
 
         if(tempLine){ map.removeLayer(tempLine); tempLine=null; }
         rect3Point.step = 0; 
@@ -8269,16 +8287,61 @@
   });
 
   /* ===== تبديل تبويبات الريبون (خريطة/إدراج/تحليل/عرض) — للابتوب والتابلت؛ في الموبايل كل الأدوات ظاهرة مع بعض ===== */
-  document.getElementById('ribbonTabs').addEventListener('click', e=>{
-    const tabBtn = e.target.closest('.ribbon-tab');
+  const ribbonTabOrder = ['map','insert','analysis','view']; // من اليمين للشمال (ترتيب العناصر في الصفحة نفسها)
+  function switchRibbonTab(key){
+    const tabBtn = document.querySelector('.ribbon-tab[data-ribbon-tab="'+key+'"]');
     if(!tabBtn) return;
-    const key = tabBtn.dataset.ribbonTab;
     document.querySelectorAll('.ribbon-tab').forEach(t=>t.classList.remove('active'));
     tabBtn.classList.add('active');
     document.querySelectorAll('.ribbon-panel').forEach(p=>{
       p.classList.toggle('active', p.dataset.ribbonPanel === key);
     });
+    // لو فتحنا أي تبويب غير "رسم وتحديد"، لازم نخبي لوحة نمط رسم الخط/المضلع عشان متتزنقش
+    // فوق باقي التبويبات على شاشة الموبايل الصغيرة. ولو رجعنا لتبويب "رسم وتحديد" تاني
+    // من غير ما نغيّر الأداة، اللوحة ترجع تظهر تلقائي لو الأداة لسه خط أو مضلع.
+    if(key !== 'map'){
+      drawStylePanel.classList.remove('show');
+    } else if(tool==='line' || tool==='polygon'){
+      drawStylePanel.classList.add('show');
+    }
+  }
+  document.getElementById('ribbonTabs').addEventListener('click', e=>{
+    const tabBtn = e.target.closest('.ribbon-tab');
+    if(!tabBtn) return;
+    switchRibbonTab(tabBtn.dataset.ribbonTab);
   });
+
+  /* ===== سحب باللمس بين تبويبات الريبون على الموبايل — زي التنقل بين صفحات التطبيقات ===== */
+  (function initRibbonSwipe(){
+    const swipeZone = document.getElementById('ribbonPanels');
+    if(!swipeZone) return;
+    let touchStartX = null, touchStartY = null;
+    const SWIPE_MIN_DIST = 45;     // أقل مسافة أفقية عشان نعتبرها سحب مقصود
+    const SWIPE_MAX_VERTICAL = 60; // لو السحب مايل عمودي أكتر من كده، نتجاهله (يبقى سكرول مش تبديل تبويب)
+    swipeZone.addEventListener('touchstart', e=>{
+      if(e.touches.length !== 1) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, {passive:true});
+    swipeZone.addEventListener('touchend', e=>{
+      if(touchStartX === null) return;
+      const touch = e.changedTouches[0];
+      const dx = touch.clientX - touchStartX;
+      const dy = touch.clientY - touchStartY;
+      touchStartX = null; touchStartY = null;
+      if(Math.abs(dx) < SWIPE_MIN_DIST || Math.abs(dy) > SWIPE_MAX_VERTICAL) return;
+      const activeTabBtn = document.querySelector('.ribbon-tab.active');
+      if(!activeTabBtn) return;
+      const curIdx = ribbonTabOrder.indexOf(activeTabBtn.dataset.ribbonTab);
+      if(curIdx === -1) return;
+      // dx سالب = سحب من اليمين للشمال → التبويب اللي على اليمين (الأصغر ترتيبًا) — دائري
+      // dx موجب = سحب من الشمال لليمين → التبويب اللي على الشمال (الأكبر ترتيبًا) — دائري
+      const nextIdx = dx < 0
+        ? (curIdx - 1 + ribbonTabOrder.length) % ribbonTabOrder.length
+        : (curIdx + 1) % ribbonTabOrder.length;
+      switchRibbonTab(ribbonTabOrder[nextIdx]);
+    }, {passive:true});
+  })();
 
   /* ===== الوضع الداكن / الفاتح — بيتحفظ في localStorage عشان يفضل مطبّق بين الجلسات ===== */
   (function initThemeToggle(){
@@ -8485,6 +8548,39 @@
   
   const sidebarEl = document.querySelector('.sidebar');
   const mobileQuickMenu = document.getElementById('mobileQuickMenu');
+
+  /* ===== سحب باللمس بين لوحات الطبقات/الخصائص/إخراج اللوحات/Bookmarks — نفس فكرة سحب تبويبات الريبون ===== */
+  (function initSidebarSwipe(){
+    const sidebarPanelOrder = ['layersPanel','attrPanel','layoutPanel','bookmarksPanel']; // من اليمين للشمال
+    const swipeZone = sidebarEl;
+    if(!swipeZone) return;
+    let touchStartX = null, touchStartY = null;
+    const SWIPE_MIN_DIST = 45;
+    const SWIPE_MAX_VERTICAL = 60;
+    swipeZone.addEventListener('touchstart', e=>{
+      if(e.touches.length !== 1) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, {passive:true});
+    swipeZone.addEventListener('touchend', e=>{
+      if(touchStartX === null || !sidebarEl.classList.contains('open')) return;
+      const touch = e.changedTouches[0];
+      const dx = touch.clientX - touchStartX;
+      const dy = touch.clientY - touchStartY;
+      touchStartX = null; touchStartY = null;
+      if(Math.abs(dx) < SWIPE_MIN_DIST || Math.abs(dy) > SWIPE_MAX_VERTICAL) return;
+      const activePanel = document.querySelector('.panel.active');
+      if(!activePanel) return;
+      const curIdx = sidebarPanelOrder.indexOf(activePanel.id);
+      if(curIdx === -1) return;
+      // dx سالب = سحب من اليمين للشمال → اللوحة اللي على اليمين (الأصغر ترتيبًا) — دائري
+      // dx موجب = سحب من الشمال لليمين → اللوحة اللي على الشمال (الأكبر ترتيبًا) — دائري
+      const nextIdx = dx < 0
+        ? (curIdx - 1 + sidebarPanelOrder.length) % sidebarPanelOrder.length
+        : (curIdx + 1) % sidebarPanelOrder.length;
+      activateTab(sidebarPanelOrder[nextIdx]);
+    }, {passive:true});
+  })();
   // زرار "تنسيق اللاب" العام ثابت فوق الشاشة كلها بـ z-index عالي، وده بيخليه يتراكب فوق
   // شريط تابات اللوحة الجانبية (الطبقات/الخصائص/إخراج اللوحات/Bookmarks) لما تتفتح بملء
   // الشاشة في وضع الموبايل — فبنخفيه طول ما اللوحة الجانبية مفتوحة على الموبايل
@@ -9262,6 +9358,12 @@
 
   function renderBulkSelectPanel(){
     const hud = document.getElementById('bulkSelectHud');
+    // لو لوحة نقل/تدوير الكل فاتحة دلوقتي على الموبايل، سيبها هي الظاهرة وخبي لوحة
+    // التحديد المتعدد لحد ما تتقفل، عشان الاتنين ميتزنقوش فوق بعض في مساحة شاشة صغيرة
+    if(mobileBulkTarget && mobileEditPad.style.display === 'flex'){
+      hud.style.display = 'none';
+      return;
+    }
     if(!multiSelectMode || multiSelect.length === 0){
       hud.style.display = 'none';
       return;
@@ -9313,7 +9415,7 @@
       }
       html += `<div class="rect-edit-grid">
         <div><label>العرض (م)</label><input type="number" id="edW" value="${f.rect.width}" step="0.1"></div>
-        <div><label>الطول (م)</label><input type="number" id="edL" value="${f.rect.length}" step="0.1"></div>
+        <div><label>الطول (م)</label><input type="number" id="edL" value="${Math.abs(f.rect.length)}" step="0.1"></div>
         <div style="grid-column: span 2"><label>الدوران (°)</label><input type="number" id="edR" value="${f.rect.rotation}"></div>
       </div>`;
     } 
@@ -9460,7 +9562,8 @@
         document.getElementById(id).addEventListener('focus', pushStateToUndo); 
         document.getElementById(id).addEventListener('input', ()=>{
           f.rect.width = Math.max(0.01, parseFloat(document.getElementById('edW').value)||10);
-          f.rect.length = Math.max(0.01, parseFloat(document.getElementById('edL').value)||20);
+          const newLenAbs = Math.max(0.01, parseFloat(document.getElementById('edL').value)||20);
+          f.rect.length = (f.rect.length < 0) ? -newLenAbs : newLenAbs;
           f.rect.rotation = parseFloat(document.getElementById('edR').value)||0;
           syncRectCoords(f); renderFeatures(); scheduleSave();
         });
@@ -9656,7 +9759,12 @@
     if(sSign < 0) { f.rect.length = l * sSign; }
 
     syncRectCoords(f);
-    f.rect.length = l; 
+    // ملحوظة: من قبل كان في سطر هنا بيرجّع f.rect.length لقيمة موجبة دايمًا بعد ما
+    // syncRectCoords بنى الإحداثيات الصح باستخدام القيمة (السالبة أحيانًا) — ده كان بيخلي
+    // rect.length المخزّنة تناقض شكل المستطيل الفعلي على الخريطة، فأول ما تتعمل عملية
+    // تاني بتعيد بناء الإحداثيات (زي التدوير) كانت بترجع تبني المستطيل من الجهة التانية
+    // للضلع الأول (يعني "يروح حتة تانية"). دلوقتي بنسيب rect.length بنفس القيمة اللي
+    // فعلاً استخدمناها في بناء الإحداثيات، عشان أي عملية لاحقة تفضل متسقة مع الشكل الظاهر.
 
     rectHud.style.display='none';
     rect3Point.finalRect = null;
