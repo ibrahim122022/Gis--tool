@@ -914,7 +914,14 @@
       bottom:14px;
     }
     .draw-style-panel{
-      bottom:calc(68px + env(safe-area-inset-bottom, 0px) + 16px + 14px);
+      bottom:56px;
+    }
+    /* قائمة أداة القطع (Split) في الموبايل: بتتحط فوق كارت الإحداثيات مباشرة بدل ما تتمركز
+       في نص الشاشة (الـ #splitHud بالتحديد عشان ياخد أولوية فوق تمركز .rect-hud العام) */
+    #splitHud{
+      position:fixed !important; top:auto !important; left:50% !important; transform:translateX(-50%) !important;
+      bottom:calc(68px + env(safe-area-inset-bottom, 0px) + 16px + 56px) !important;
+      max-height:calc(100vh - 260px) !important;
     }
     .float-search-cluster{ top:58px; }
     .ribbon-panels{ z-index:950 !important; }
