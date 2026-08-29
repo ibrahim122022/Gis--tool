@@ -6237,53 +6237,34 @@
     const VERTEX_R = 20; // بكسل — نطاق الإسناب على الفيرتكس
     const EDGE_R   = 12; // بكسل — نطاق الإسناب على الخط (يُفعَّل فقط إذا لم يوجد فيرتكس)
 
-    // ── مرحلة 1: الفيرتكس فقط (أولوية قصوى) ────────────────────────
+    // ── مرحلة 1: الفيرتكس فقط (أولوية قصوى) — بالبحث في الشبكة المكانية بدل فحص كل نقطة في كل الطبقات ────
     let bestVertex = null, bestVertexDist = VERTEX_R;
-
-    const checkVertex = (f) => {
-      f.coords.forEach(c=>{
-        const cp = map.latLngToContainerPoint(L.latLng(c[0],c[1]));
-        const d = Math.hypot(cp.x-pt.x, cp.y-pt.y);
-        if(d < bestVertexDist){ bestVertexDist=d; bestVertex=c; }
-      });
-    };
-
-    state.layers.forEach(layer=>{
-      if(!layer.visible) return;
-      layer.features.forEach(f=>{ if(f.id!==excludeFeatureId) checkVertex(f); });
-    });
-    friendLayers.forEach(layer=>{
-      if(layer.visible === false) return;
-      layer.features.forEach(f=> checkVertex(f));
+    const vertexRadiusDeg = degRadiusForPixels(latlng, VERTEX_R);
+    queryGrid(snapGrid.vertexCells, latlng.lat, latlng.lng, snapGrid.cellSize, vertexRadiusDeg).forEach(v=>{
+      if(v.featureId === excludeFeatureId) return;
+      const cp = map.latLngToContainerPoint(L.latLng(v.lat, v.lng));
+      const d = Math.hypot(cp.x-pt.x, cp.y-pt.y);
+      if(d < bestVertexDist){ bestVertexDist=d; bestVertex=[v.lat, v.lng]; }
     });
 
     // لو لقينا فيرتكس → أرجعه فوراً، ولا داعي لفحص الخطوط
     if(bestVertex) return { coord: bestVertex, type: 'vertex' };
 
-    // ── مرحلة 1.5: منتصف الضلع (لو مفعّل زر "منتصف الضلع") — عشان ترسم بداية من نص أي ضلع موجود ──
+    // ── مرحلة 1.5: منتصف الضلع (لو مفعّل زر "منتصف الضلع") — بنفس أسلوب الشبكة المكانية ──
     if(midSnapEnabled){
       let bestMid = null, bestMidDist = VERTEX_R;
-      const checkMid = (f) => {
-        if(f.type === 'point' || f.type === 'circle') return;
-        featureSnapSegments(f).forEach(seg=>{
-          const midLL = [(seg[0][0]+seg[1][0])/2, (seg[0][1]+seg[1][1])/2];
-          const cp = map.latLngToContainerPoint(L.latLng(midLL[0], midLL[1]));
-          const d = Math.hypot(cp.x-pt.x, cp.y-pt.y);
-          if(d < bestMidDist){ bestMidDist=d; bestMid=midLL; }
-        });
-      };
-      state.layers.forEach(layer=>{
-        if(!layer.visible) return;
-        layer.features.forEach(f=>{ if(f.id!==excludeFeatureId) checkMid(f); });
-      });
-      friendLayers.forEach(layer=>{
-        if(layer.visible === false) return;
-        layer.features.forEach(f=> checkMid(f));
+      const midRadiusDeg = degRadiusForPixels(latlng, VERTEX_R);
+      queryGrid(snapGrid.midCells, latlng.lat, latlng.lng, snapGrid.cellSize, midRadiusDeg).forEach(v=>{
+        if(v.featureId === excludeFeatureId) return;
+        const cp = map.latLngToContainerPoint(L.latLng(v.lat, v.lng));
+        const d = Math.hypot(cp.x-pt.x, cp.y-pt.y);
+        if(d < bestMidDist){ bestMidDist=d; bestMid=[v.lat, v.lng]; }
       });
       if(bestMid) return { coord: bestMid, type: 'midpoint' };
     }
 
     // ── مرحلة 2: أقرب نقطة على الضلع = إسناب "عمودي على ضلع" (فقط لو ما فيش فيرتكس قريب ومفعّل من لوحة السناب) ────
+    // ملحوظة: المرحلة دي لسه بتفحص كل الأضلاع (مش مفهرسة بالشبكة المكانية بعد) لأنها أقل استخدامًا من الفيرتكس والمنتصف
     if(!edgeSnapEnabled) return null;
     let bestEdge = null, bestEdgeDist = EDGE_R;
 
@@ -6857,41 +6838,174 @@
     closeGcpModal();
   });
 
-  /* ---------- Persistence ---------- */
-  function scheduleSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(doSave, 700); }
-  function doSave(){
-    try{
-      localStorage.setItem('gis-tool-state-v2', JSON.stringify({state}));
-      const ind=document.getElementById('saveIndicator'); ind.classList.add('show');
-      setTimeout(()=>ind.classList.remove('show'),1200);
-    }catch(e){
-      console.error('save failed', e);
-      if(e && (e.name === 'QuotaExceededError' || /quota/i.test(e.message||''))){
-        document.getElementById('stHint').textContent = '⚠️ مساحة التخزين المحلي امتلأت — قلل حجم/عدد خرائط الراستر أو لقطات لوحات الإخراج عشان يقدر يحفظ شغلك';
+  /* ---------- IndexedDB storage (replaces localStorage for the main app data) ---------- */
+  const IDB_NAME='gis-tool-db', IDB_STORE='kv';
+  let idbOpenPromise=null;
+  function idbOpen(){
+    if(idbOpenPromise) return idbOpenPromise;
+    idbOpenPromise = new Promise((resolve,reject)=>{
+      if(!window.indexedDB){ reject(new Error('IndexedDB غير مدعوم')); return; }
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = ()=>{ req.result.createObjectStore(IDB_STORE); };
+      req.onsuccess = ()=> resolve(req.result);
+      req.onerror = ()=> reject(req.error);
+    });
+    return idbOpenPromise;
+  }
+  function idbSet(key, value){
+    return idbOpen().then(db=> new Promise((resolve,reject)=>{
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(value, key);
+      tx.oncomplete = ()=> resolve();
+      tx.onerror = ()=> reject(tx.error);
+    }));
+  }
+  function idbGet(key){
+    return idbOpen().then(db=> new Promise((resolve,reject)=>{
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = ()=> resolve(req.result);
+      req.onerror = ()=> reject(req.error);
+    }));
+  }
+  function idbDelete(key){
+    return idbOpen().then(db=> new Promise((resolve,reject)=>{
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(key);
+      tx.oncomplete = ()=> resolve();
+      tx.onerror = ()=> reject(tx.error);
+    }));
+  }
+
+  /* ---------- Spatial grid index (لتسريع السناب بدل ما نفحص كل نقطة في كل الطبقات كل مرة) ---------- */
+  const snapGrid = { cellSize: 0.0015, vertexCells: new Map(), midCells: new Map() };
+  function gridKey(lat, lng, cellSize){ return Math.floor(lat/cellSize)+'_'+Math.floor(lng/cellSize); }
+  function gridAdd(map_, lat, lng, cellSize, item){
+    const k = gridKey(lat, lng, cellSize);
+    let arr = map_.get(k);
+    if(!arr){ arr=[]; map_.set(k, arr); }
+    arr.push(item);
+  }
+  function rebuildSnapGrid(){
+    const cellSize = snapGrid.cellSize;
+    const vCells = new Map(), mCells = new Map();
+    const indexFeature = (f, excludable) => {
+      f.coords.forEach(c=> gridAdd(vCells, c[0], c[1], cellSize, {lat:c[0], lng:c[1], featureId: excludable ? f.id : null}));
+      if(f.type !== 'point' && f.type !== 'circle'){
+        featureSnapSegments(f).forEach(seg=>{
+          const midLL = [(seg[0][0]+seg[1][0])/2, (seg[0][1]+seg[1][1])/2];
+          gridAdd(mCells, midLL[0], midLL[1], cellSize, {lat:midLL[0], lng:midLL[1], featureId: excludable ? f.id : null});
+        });
+      }
+    };
+    state.layers.forEach(layer=>{ if(layer.visible) layer.features.forEach(f=> indexFeature(f, true)); });
+    friendLayers.forEach(layer=>{ if(layer.visible !== false) layer.features.forEach(f=> indexFeature(f, false)); });
+    snapGrid.vertexCells = vCells; snapGrid.midCells = mCells;
+  }
+  // بيرجع نصف قطر البحث بالدرجات المكافئ لعدد بكسلات معين، حوالين نقطة معينة، في الزوم الحالي
+  function degRadiusForPixels(latlng, px){
+    const p0 = map.latLngToContainerPoint(latlng);
+    const ll1 = map.containerPointToLatLng(L.point(p0.x+px, p0.y));
+    const ll2 = map.containerPointToLatLng(L.point(p0.x, p0.y+px));
+    return Math.max(Math.abs(ll1.lng-latlng.lng), Math.abs(ll2.lat-latlng.lat));
+  }
+  function queryGrid(cellsMap, lat, lng, cellSize, radiusDeg){
+    const numCells = Math.max(1, Math.ceil(radiusDeg/cellSize));
+    const cx = Math.floor(lat/cellSize), cy = Math.floor(lng/cellSize);
+    let results = [];
+    for(let dx=-numCells; dx<=numCells; dx++){
+      for(let dy=-numCells; dy<=numCells; dy++){
+        const arr = cellsMap.get((cx+dx)+'_'+(cy+dy));
+        if(arr) results = results.concat(arr);
       }
     }
+    return results;
+  }
+
+  /* ---------- Persistence (تخزين مقسّم لكل طبقة على حدة — بيحفظ بس الطبقة اللي فعلاً اتغيرت) ---------- */
+  let lastSavedLayerJSON = {}; // layerId -> آخر نسخة JSON اتحفظت، عشان نعرف نتخطى الطبقات اللي ما اتغيرتش
+  function scheduleSave(){ clearTimeout(saveTimer); saveTimer=setTimeout(doSave, 700); }
+  function doSave(){
+    const currentIds = new Set(state.layers.map(l=>l.id));
+    const staleIds = Object.keys(lastSavedLayerJSON).filter(id=>!currentIds.has(id));
+    const writes = [];
+    state.layers.forEach(layer=>{
+      const json = JSON.stringify(layer);
+      if(lastSavedLayerJSON[layer.id] !== json){
+        writes.push(idbSet('layer:'+layer.id, layer).then(()=>{ lastSavedLayerJSON[layer.id] = json; }));
+      }
+    });
+    staleIds.forEach(id=>{
+      writes.push(idbDelete('layer:'+id).then(()=>{ delete lastSavedLayerJSON[id]; }));
+    });
+    const meta = Object.assign({}, state, {layers: undefined, layerOrder: state.layers.map(l=>l.id)});
+    delete meta.layers;
+    writes.push(idbSet('meta', meta));
+    Promise.all(writes).then(()=>{
+      const ind=document.getElementById('saveIndicator'); ind.classList.add('show');
+      setTimeout(()=>ind.classList.remove('show'),1200);
+    }).catch(e=>{
+      console.error('save failed', e);
+      document.getElementById('stHint').textContent = '⚠️ تعذر حفظ الشغل محليًا — جرّب تحرّر مساحة على الجهاز أو أعد تحميل الصفحة';
+    });
+  }
+  // بيحفظ الحالة الحالية بالكامل مقسّمة لأول مرة (مستخدم بعد أي عملية ترحيل من صيغة قديمة)
+  function saveAllLayersSplit(){
+    lastSavedLayerJSON = {};
+    return Promise.resolve().then(doSave);
   }
   function loadState(){
-    try{
-      const raw = localStorage.getItem('gis-tool-state-v2');
-      if(raw){ const parsed = JSON.parse(raw); if(parsed.state && parsed.state.layers) state=parsed.state; }
-    }catch(e){}
-    if(!Array.isArray(state.friendFileIds)) state.friendFileIds = state.friendFileId ? [state.friendFileId] : [];
-    if(!state.friendLastPulled) state.friendLastPulled = {};
-    if(!Array.isArray(state.notebookSketches)) state.notebookSketches = [];
-    if(!Array.isArray(state.layoutPages)) state.layoutPages = [];
-    if(!Array.isArray(state.sharedLayoutElements)) state.sharedLayoutElements = [];
-    if(!state.layoutSnapshots || typeof state.layoutSnapshots !== 'object') state.layoutSnapshots = {};
-    if(!Array.isArray(state.rasters)) state.rasters = [];
-    if(!Array.isArray(state.bookmarks)) state.bookmarks = [];
-    if(!state.domains || typeof state.domains !== 'object') state.domains = {};
-    state.layers.forEach(l=>{ if(!Array.isArray(l.fields)) l.fields = []; });
-    seedLegacyDomains();
-    renderLayerList(); renderFeatures(); renderPenStrokes(); renderLayoutPageList();
-    renderBookmarksList();
-    renderRasters();
-    const all=[]; state.layers.forEach(l=>l.features.forEach(f=>f.coords.forEach(c=>all.push(c))));
-    if(all.length) map.fitBounds(L.latLngBounds(all), {padding:[40,40]});
+    return idbGet('meta').then(meta=>{
+      if(meta && Array.isArray(meta.layerOrder)){
+        return Promise.all(meta.layerOrder.map(id=> idbGet('layer:'+id))).then(layers=>{
+          state = Object.assign({}, meta);
+          state.layers = layers.filter(Boolean);
+          delete state.layerOrder;
+          state.layers.forEach(l=>{ lastSavedLayerJSON[l.id] = JSON.stringify(l); });
+        });
+      }
+      // مفيش meta لسه — نتأكد مفيش نسخة قديمة (بلوب واحد) اتحفظت في IndexedDB من نسخة سابقة من الأداة
+      return idbGet('gis-tool-state-v2').then(oldIdbVal=>{
+        if(oldIdbVal && oldIdbVal.state && oldIdbVal.state.layers){
+          state = oldIdbVal.state;
+          return saveAllLayersSplit().then(()=> idbDelete('gis-tool-state-v2'));
+        }
+        // ولا نتأكد مفيش نسخة أقدم كمان في localStorage (قبل التحويل لـ IndexedDB خالص)
+        try{
+          const raw = localStorage.getItem('gis-tool-state-v2');
+          if(raw){
+            const parsed = JSON.parse(raw);
+            if(parsed.state && parsed.state.layers){
+              state = parsed.state;
+              return saveAllLayersSplit().then(()=>{ try{ localStorage.removeItem('gis-tool-state-v2'); }catch(e){} });
+            }
+          }
+        }catch(e){}
+      });
+    }).catch(e=>{
+      console.error('load failed, falling back to localStorage', e);
+      try{
+        const raw = localStorage.getItem('gis-tool-state-v2');
+        if(raw){ const parsed = JSON.parse(raw); if(parsed.state && parsed.state.layers) state = parsed.state; }
+      }catch(e2){}
+    }).then(()=>{
+      if(!Array.isArray(state.friendFileIds)) state.friendFileIds = state.friendFileId ? [state.friendFileId] : [];
+      if(!state.friendLastPulled) state.friendLastPulled = {};
+      if(!Array.isArray(state.notebookSketches)) state.notebookSketches = [];
+      if(!Array.isArray(state.layoutPages)) state.layoutPages = [];
+      if(!Array.isArray(state.sharedLayoutElements)) state.sharedLayoutElements = [];
+      if(!state.layoutSnapshots || typeof state.layoutSnapshots !== 'object') state.layoutSnapshots = {};
+      if(!Array.isArray(state.rasters)) state.rasters = [];
+      if(!Array.isArray(state.bookmarks)) state.bookmarks = [];
+      if(!state.domains || typeof state.domains !== 'object') state.domains = {};
+      state.layers.forEach(l=>{ if(!Array.isArray(l.fields)) l.fields = []; });
+      seedLegacyDomains();
+      renderLayerList(); renderFeatures(); renderPenStrokes(); renderLayoutPageList();
+      renderBookmarksList();
+      renderRasters();
+      const all=[]; state.layers.forEach(l=>l.features.forEach(f=>f.coords.forEach(c=>all.push(c))));
+      if(all.length) map.fitBounds(L.latLngBounds(all), {padding:[40,40]});
+    });
   }
 
   /* ---------- Mobile Control Pad ---------- */
@@ -7622,6 +7736,7 @@
     });
     renderLabels();
     renderDimensionLabels();
+    rebuildSnapGrid();
   }
 
   /* ---------- Rendering friend (read-only) layers ---------- */
@@ -7651,6 +7766,7 @@
         shape.addTo(lg);
       });
     });
+    rebuildSnapGrid();
   }
 
   /* ---------- Drag handling ---------- */
@@ -12119,27 +12235,109 @@
     return {type:'FeatureCollection', features};
   }
 
+  /* ========== ورشة عمل (Web Worker) لتحويل نقط CSV/توتال ستيشن الكبيرة في الخلفية بدون تجميد الواجهة ========== */
+  let csvImportWorker = null, csvImportWorkerFailed = false;
+  function getCsvImportWorker(){
+    if(csvImportWorker || csvImportWorkerFailed) return csvImportWorker;
+    try{
+      const workerSrc = `
+        importScripts('https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.20.9/proj4.min.js');
+        function detectCsvDelimiter(firstLine){
+          const candidates = [',', ';', '\\t'];
+          let best = ',', bestCount = -1;
+          candidates.forEach(d=>{ const count = firstLine.split(d).length; if(count > bestCount){ bestCount = count; best = d; } });
+          return best;
+        }
+        self.onmessage = function(e){
+          try{
+            const { text, order: orderStr, epsgKey, projDefString } = e.data;
+            if(projDefString && epsgKey && !proj4.defs(epsgKey)) proj4.defs(epsgKey, projDefString);
+            const order = orderStr.trim().toUpperCase().split('').filter(ch=>'PENZD'.includes(ch));
+            if(!order.includes('E') || !order.includes('N')) throw new Error('لازم يبقى فيه عمود E وعمود N على الأقل في الترتيب');
+            const rawLines = text.split(/\\r\\n|\\r|\\n/).map(l=>l.trim()).filter(l=>l.length>0);
+            if(!rawLines.length) throw new Error('الملف فاضي');
+            const delim = detectCsvDelimiter(rawLines[0]);
+            const features = [];
+            let skipped = 0;
+            rawLines.forEach(line=>{
+              const fields = line.split(delim).map(v=>v.trim().replace(/^"|"$/g,''));
+              const row = {};
+              order.forEach((ch,i)=>{ if(i < fields.length) row[ch] = fields[i]; });
+              const eVal = parseFloat(row.E), nVal = parseFloat(row.N);
+              if(!Number.isFinite(eVal) || !Number.isFinite(nVal)){ skipped++; return; }
+              let lat, lng;
+              if(!epsgKey){ lng = eVal; lat = nVal; }
+              else { const r = proj4(epsgKey, 'EPSG:4326', [eVal, nVal]); lng = r[0]; lat = r[1]; }
+              const props = {layer:'نقاط CSV', type:'point'};
+              if(row.P) props.name = row.P;
+              if(row.Z != null && row.Z !== '' && Number.isFinite(parseFloat(row.Z))) props.elevation = parseFloat(row.Z);
+              if(row.D) props.description = row.D;
+              features.push({type:'Feature', properties:props, geometry:{type:'Point', coordinates:[lng, lat]}});
+            });
+            if(!features.length) throw new Error('محدش لقيت أي صف بيانات صالح — تأكد من ترتيب الأعمدة');
+            self.postMessage({ok:true, geojson:{type:'FeatureCollection', features}, skipped});
+          }catch(err){
+            self.postMessage({ok:false, error: (err && err.message) || String(err)});
+          }
+        };
+      `;
+      const blob = new Blob([workerSrc], {type:'application/javascript'});
+      csvImportWorker = new Worker(URL.createObjectURL(blob));
+    }catch(e){
+      console.error('CSV import worker unavailable, will fall back to main thread', e);
+      csvImportWorkerFailed = true;
+    }
+    return csvImportWorker;
+  }
+  // نفس منطق EGY/UTM المستخدم في زرار التأكيد، بيرجع {epsgKey, projDefString} (كلاهما null لو جغرافي مباشر)
+  const EGY_PROJ4_DEFS = {
+    'EPSG:22992': '+proj=tmerc +lat_0=30 +lon_0=31 +k=1 +x_0=615000 +y_0=810000 +ellps=helmert +towgs84=-130,110,-13,0,0,0,0 +units=m +no_defs +type=crs',
+    'EPSG:22993': '+proj=tmerc +lat_0=30 +lon_0=27 +k=1 +x_0=700000 +y_0=200000 +ellps=helmert +towgs84=-130,110,-13,0,0,0,0 +units=m +no_defs +type=crs'
+  };
+
   document.getElementById('csvImportConfirmBtn').addEventListener('click', ()=>{
     if(!pendingCsvText) return;
     const colOrder = document.getElementById('csvColOrder').value;
     const crsType = csvCrsTypeSelect.value;
-    let crsCode = null; // null = جغرافي مباشر (بدون تحويل إسقاط)
+    let crsCode = null, projDefString = null; // null = جغرافي مباشر (بدون تحويل إسقاط)
     try{
       if(crsType==='UTM'){
         const zone = parseInt(document.getElementById('csvUtmZone').value, 10);
         const hemi = document.getElementById('csvUtmHemisphere').value;
         if(!zone || zone<1 || zone>60){ alert('رقم الزون لازم يكون بين 1 و 60'); return; }
         crsCode = 'EPSG:CSVUTM'+zone+hemi;
-        if(!proj4.defs(crsCode)){
-          proj4.defs(crsCode, '+proj=utm +zone='+zone+(hemi==='S'?' +south':'')+' +datum=WGS84 +units=m +no_defs');
-        }
+        projDefString = '+proj=utm +zone='+zone+(hemi==='S'?' +south':'')+' +datum=WGS84 +units=m +no_defs';
+        if(!proj4.defs(crsCode)) proj4.defs(crsCode, projDefString);
       } else if(crsType==='EGY'){
         crsCode = document.getElementById('csvEgyBelt').value;
+        projDefString = EGY_PROJ4_DEFS[crsCode] || null;
       }
-      const geojson = csvTextToGeoJSON(pendingCsvText, colOrder, crsCode);
-      document.getElementById('csvImportModal').style.display = 'none';
-      pendingCsvText = null;
-      importGeoJSON(geojson);
+      const confirmBtn = document.getElementById('csvImportConfirmBtn');
+      const worker = getCsvImportWorker();
+      if(worker){
+        const origLabel = confirmBtn.textContent;
+        confirmBtn.disabled = true; confirmBtn.textContent = '⏳ جارِ التحويل...';
+        const onMsg = (e)=>{
+          worker.removeEventListener('message', onMsg);
+          confirmBtn.disabled = false; confirmBtn.textContent = origLabel;
+          if(e.data.ok){
+            if(e.data.skipped) console.warn('تم تجاهل '+e.data.skipped+' سطر (على الأغلب صف عناوين أو بيانات ناقصة)');
+            document.getElementById('csvImportModal').style.display = 'none';
+            pendingCsvText = null;
+            importGeoJSON(e.data.geojson);
+          } else {
+            alert('فشل استيراد ملف CSV:\n'+e.data.error);
+          }
+        };
+        worker.addEventListener('message', onMsg);
+        worker.postMessage({text: pendingCsvText, order: colOrder, epsgKey: crsCode, projDefString});
+      } else {
+        // فولباك: لو الورشة مش متاحة (متصفح قديم/بيئة محدودة)، بنشتغل في الـ thread الرئيسي زي الأول
+        const geojson = csvTextToGeoJSON(pendingCsvText, colOrder, crsCode);
+        document.getElementById('csvImportModal').style.display = 'none';
+        pendingCsvText = null;
+        importGeoJSON(geojson);
+      }
     }catch(err){ alert('فشل استيراد ملف CSV:\n'+err.message); }
   });
 
@@ -12963,8 +13161,7 @@
     if(driveConnected){ clearTimeout(drivePushTimer); drivePushTimer=setTimeout(pushToDrive, 1200); }
   };
 
-  loadState();
-  initDriveAuth(); // بعد loadState — التحميل الفعلي من Drive بيحصل بعد ما المستخدم يضغط "اتصال بـ Drive"
+  loadState().then(initDriveAuth); // بعد ما التحميل من IndexedDB يخلص — التحميل الفعلي من Drive بيحصل بعد ما المستخدم يضغط "اتصال بـ Drive"
 
   // ── Search Place (Nominatim) ──────────────────────────────────────────
   const searchPlaceHud    = document.getElementById('searchPlaceHud');
